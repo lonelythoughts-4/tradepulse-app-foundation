@@ -73,10 +73,18 @@ function TierScreen() { return <div className="account-screen"><div className="s
 function AccountSection() {
   const [modal, setModal] = useState<'code' | 'notifications' | 'whitelist' | 'reset' | ''>('')
   const [saved, setSaved] = useState(false)
-  const [notifications, setNotifications] = useState(true)
+  const [codeDigits, setCodeDigits] = useState<string[]>(Array(6).fill(''))
+  const [notifications, setNotifications] = useState<Record<string, boolean>>({
+    'Trade fills': true,
+    'Fees charged': true,
+    Deposits: true,
+    'Tank low': true,
+    'HWM break': true,
+  })
   const [reset, setReset] = useState(false)
   return <div className="account-screen">
     <div className="screen-title"><div><span className="eyebrow">ACCOUNT / SECURITY</span><h2>Desk controls</h2></div><div className="security-chip">SECURE</div></div>
+    {reset && <div className="account-feedback" role="status"><span className="status-chip running"><i />Desk reset applied</span><small>Active desk settings were cleared. Financial records remain intact.</small></div>}
     <GradientPanel className="profile-card"><div className="top-avatar">JD</div><div><strong>Jordan Davis</strong><small>Pro account · verified email</small></div><span className="status-chip running"><i />protected</span></GradientPanel>
     <div className="account-actions">
       <button className="account-action" onClick={() => setModal('code')}><span><ShieldCheck /></span><div><strong>Withdrawal security code</strong><small>{saved ? 'Active · tap to change' : 'Not set · protect approvals'}</small></div><ChevronRight /></button>
@@ -86,11 +94,10 @@ function AccountSection() {
     </div>
     {modal && <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setModal('') }}><GradientPanel className="confirm-modal account-modal" onPointerDown={event => event.stopPropagation()}>
       <button className="modal-close" aria-label="Close" onClick={() => setModal('')}><X /></button>
-      {modal === 'code' && <><span className="eyebrow">SECURITY / WITHDRAWALS</span><h2>{saved ? 'Change security code' : 'Set security code'}</h2><p>{saved ? 'Enter a new 6-digit code to replace the current one.' : 'This code is required before approving withdrawals. Keep it private.'}</p><div className="code-boxes">{Array.from({length: 6}, (_, i) => <input key={i} type="password" inputMode="numeric" maxLength={1} aria-label={`Security digit ${i + 1}`} onChange={event => { if (event.target.value) (event.currentTarget.nextElementSibling as HTMLInputElement | null)?.focus() }} />)}</div><button className="primary-action" onClick={() => { setSaved(true); setModal('') }}>Save code <ShieldCheck /></button></>}
-      {modal === 'notifications' && <><span className="eyebrow">ACCOUNT / ALERTS</span><h2>Notification settings</h2><p>Choose which desk events reach you.</p>{['Trade fills','Fees charged','Deposits','Tank low','HWM break'].map(label => <label className="toggle-row" key={label}><span>{label}<small>Push and in-app alert</small></span><input type="checkbox" defaultChecked={notifications} onChange={() => setNotifications(value => !value)} /><i /></label>)}<button className="primary-action" onClick={() => setModal('')}>Done <ChevronRight /></button></>}
+      {modal === 'code' && <><span className="eyebrow">SECURITY / WITHDRAWALS</span><h2>{saved ? 'Change security code' : 'Set security code'}</h2><p>{saved ? 'Enter a new 6-digit code to replace the current one.' : 'This code is required before approving withdrawals. Keep it private.'}</p><div className="code-boxes">{Array.from({length: 6}, (_, i) => <input key={i} type="password" inputMode="numeric" maxLength={1} value={codeDigits[i]} aria-label={`Security digit ${i + 1}`} onChange={event => { const digit = event.target.value.replace(/[^0-9]/g, '').slice(-1); setCodeDigits(previous => previous.map((value, index) => index === i ? digit : value)); if (digit) (event.currentTarget.nextElementSibling as HTMLInputElement | null)?.focus() }} onKeyDown={event => { if (event.key === 'Backspace' && !codeDigits[i] && i > 0) (event.currentTarget.previousElementSibling as HTMLInputElement | null)?.focus() }} />)}</div><button className="primary-action" disabled={codeDigits.some(digit => !digit)} onClick={() => { setSaved(true); setCodeDigits(Array(6).fill('')); setModal('') }}>Save code <ShieldCheck /></button></>}
+      {modal === 'notifications' && <><span className="eyebrow">ACCOUNT / ALERTS</span><h2>Notification settings</h2><p>Choose which desk events reach you.</p>{['Trade fills','Fees charged','Deposits','Tank low','HWM break'].map(label => <label className="toggle-row" key={label}><span>{label}<small>Push and in-app alert</small></span><input type="checkbox" checked={notifications[label]} onChange={() => setNotifications(previous => ({ ...previous, [label]: !previous[label] }))} /><i /></label>)}<button className="primary-action" onClick={() => setModal('')}>Done <ChevronRight /></button></>}
       {modal === 'whitelist' && <><span className="eyebrow">WALLET / DESTINATIONS</span><h2>Withdrawal whitelist</h2><p>Destinations are held for 24 hours before first use.</p><div className="whitelist-item"><span className="network-mark" /><div><strong>Jordan · Base</strong><small className="mono">0x71F4...9aC28D</small></div><span className="status-chip running"><i />saved</span></div><input className="modal-input" placeholder="Chain · e.g. Base" /><input className="modal-input" placeholder="Wallet address" /><input className="modal-input" placeholder="Nickname" /><button className="primary-action" onClick={() => setModal('')}>Add destination <Plus /></button></>}
       {modal === 'reset' && <><span className="eyebrow">DANGER / DESK RESET</span><h2>Reset this desk?</h2><p className="danger-copy">This clears active desk settings and bots. All financial records, ledger history, and withdrawal records are retained.</p><label className="confirm-check"><input type="checkbox" /> I understand this cannot be undone.</label><button className="danger-action" onClick={() => { setReset(true); setModal('') }}>Reset desk</button></>}
-      {reset && <span className="status-chip running"><i />Desk reset applied</span>}
     </GradientPanel></div>}
   </div>
 }
