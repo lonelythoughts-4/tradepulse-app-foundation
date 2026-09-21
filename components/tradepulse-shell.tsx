@@ -2,16 +2,33 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, BellOff, ChevronRight, CircleHelp, Coins, Copy, Download, Fuel, History, LayoutDashboard, MoreHorizontal, Plus, Send, Settings, ShieldCheck, Wallet, X, Zap } from 'lucide-react'
+import { Bell, BellOff, ChevronRight, Copy, Download, Fuel, History, Plus, Send, Settings, ShieldCheck, Wallet, X, Zap } from 'lucide-react'
 
 const ease = [0.16, 1, 0.3, 1] as const
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'Bots', icon: Zap },
-  { label: 'Wallet', icon: Wallet },
-  { label: 'Earn', icon: Coins },
-  { label: 'Account', icon: Settings },
-]
+  { label: 'Dashboard', icon: 'dashboard' },
+  { label: 'Bots', icon: 'bots' },
+  { label: 'Wallet', icon: 'wallet' },
+  { label: 'Earn', icon: 'earn' },
+  { label: 'Account', icon: 'account' },
+] as const
+
+type NavIconName = 'dashboard' | 'bots' | 'wallet' | 'earn' | 'account' | 'desk' | 'community' | 'help' | 'more' | 'admin'
+
+const navIconMarkup: Record<NavIconName, string> = {
+  dashboard: '<path d="M4.6 4.5 L10.1 4.2 Q10.7 4.2 10.7 4.8 L10.9 9.7 Q10.9 10.3 10.3 10.3 L5 10.5 Q4.4 10.5 4.4 9.9 L4.3 5.1 Q4.3 4.6 4.6 4.5 Z"/><path d="M14.2 4 L19.5 4.3 Q20.1 4.3 20 4.9 L19.8 9.8 Q19.8 10.4 19.2 10.4 L14.1 10.2 Q13.5 10.2 13.6 9.6 L13.8 4.7 Q13.8 4.1 14.2 4 Z"/><path d="M4.5 14 L9.8 13.8 Q10.4 13.8 10.4 14.4 L10.6 19.2 Q10.6 19.8 10 19.8 L4.8 19.6 Q4.2 19.6 4.3 19 L4.1 14.6 Q4.1 14.1 4.5 14 Z"/><path d="M13.9 14.3 L19.3 14.1 Q19.9 14.1 19.9 14.7 L19.7 19.4 Q19.7 20 19.1 20 L14.2 20.2 Q13.6 20.2 13.7 19.6 L13.5 15 Q13.5 14.4 13.9 14.3 Z"/>',
+  bots: '<path d="M5.1 8.6 Q4.8 7.1 6.4 7 L17.5 7.3 Q19.1 7.4 18.9 8.9 L18.7 15.3 Q18.6 16.9 17 16.8 L6.9 16.6 Q5.3 16.5 5.3 14.9 Z"/><circle cx="8.4" cy="11.5" r="1.05" transform="rotate(-3 8.4 11.5)"/><circle cx="15.5" cy="11.4" r="0.95" transform="rotate(2 15.5 11.4)"/><path d="M9.4 14.1 Q12 15.2 14.6 14"/><path d="M12.1 7 L12.3 4.8"/><circle cx="12.4" cy="3.9" r="0.85"/>',
+  wallet: '<path d="M3.9 7.3 Q3.7 6.2 5 6.1 L18.8 6.4 Q20.3 6.5 20.2 7.9 L20 16.2 Q19.9 17.6 18.5 17.5 L5.1 17.3 Q3.8 17.2 3.9 15.9 Z"/><path d="M4 9.6 L20.1 9.4"/><circle cx="16.6" cy="13.4" r="1.25"/><path d="M7.2 13.2 L11.5 13.4"/>',
+  earn: '<path d="M7 7.6 C7 6.6 9.2 5.8 12 5.9 C14.8 6 17 6.9 17 7.9 C17 8.9 14.8 9.7 12 9.6 C9.2 9.5 7 8.6 7 7.6 Z"/><path d="M7 7.6 L7.1 11.4 C7.1 12.4 9.3 13.3 12.1 13.4 C14.9 13.5 17.1 12.7 17.1 11.7 L17 7.9"/><path d="M7.1 11.4 L7.2 15 C7.2 16 9.4 16.9 12.2 17 C15 17.1 17.2 16.3 17.2 15.3 L17.1 11.7"/><path d="M18.7 4.3 L18.95 5.3 L19.9 5.55 L18.95 5.8 L18.7 6.8 L18.45 5.8 L17.5 5.55 L18.45 5.3 Z"/>',
+  account: '<path d="M9.1 9.3 Q9 6.9 12 6.7 Q15.1 6.6 15.2 8.9 Q15.3 10.7 13.5 11.4 Q12.2 11.9 12.1 13.2 L12 14.2"/><circle cx="12" cy="17" r="1.1"/>',
+  desk: '<path d="M3.4 13.2 L6.9 13 L8.4 8.6 L10.9 17 L12.9 6.9 L14.6 13.1 L20.6 12.9"/><path d="M6.9 13 L6.9 15.4"/><path d="M12.9 6.9 L12.9 4.6"/><path d="M17.4 13 L17.4 15.2"/>',
+  community: '<circle cx="12" cy="8.6" r="3.4" transform="rotate(-2 12 8.6)"/><path d="M5.3 19.5 Q5.5 15.7 9.1 15 Q12 14.4 15.1 15.1 Q18.6 15.9 18.7 19.6"/>',
+  help: '<circle cx="12" cy="8.2" r="2.55"/><path d="M8.5 18 Q8.7 13.9 12 13.6 Q15.3 13.9 15.5 18"/><circle cx="4.9" cy="9.4" r="1.85"/><path d="M2.5 17.7 Q2.7 14.7 4.9 14.5 Q7.1 14.8 7.2 17.8"/><circle cx="19.1" cy="9.3" r="1.85"/><path d="M16.9 17.8 Q17.1 14.7 19.2 14.5 Q21.4 14.8 21.5 17.7"/>',
+  more: '<circle cx="5.5" cy="12" r="1.15" transform="rotate(-4 5.5 12)"/><circle cx="12" cy="11.8" r="1.2" transform="rotate(3 12 11.8)"/><circle cx="18.4" cy="12.1" r="1.1" transform="rotate(-2 18.4 12.1)"/>',
+  admin: '<path d="M12 3.5 L18.4 5.7 Q19 5.9 18.9 6.6 L18.6 11.9 Q18.3 16.3 12.2 19.2 Q12 19.3 11.8 19.2 Q5.7 16.2 5.4 11.9 L5.1 6.6 Q5 5.9 5.7 5.7 Z"/><path d="M8.2 12.1 L10.1 12 L11 9.9 L12.8 13.9 L13.7 12.1 L15.8 12"/>',
+}
+
+function NavIcon({ name, size = 22, className = '' }: { name: NavIconName; size?: number; className?: string }) { return <svg className={`custom-nav-icon ${className}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: navIconMarkup[name] }} /> }
 
 function PulseMark({ size = 34 }: { size?: number }) {
   return <svg aria-label="TradePulse mark" role="img" width={size} height={size} viewBox="0 0 40 40" fill="none"><path d="M3 21h7l3-9 6 18 5-14 3 5h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="37" cy="21" r="1.7" fill="#34D399" /></svg>
@@ -26,10 +43,10 @@ function BootScreen({ onComplete }: { onComplete: () => void }) {
   return <motion.div className="boot-screen" exit={{ opacity: 0 }} transition={{ duration: .65, ease }}><div className="boot-mark"><PulseMark size={76} /></div><div className="boot-line" /><div className="boot-copy"><strong>TRADE<span>PULSE</span></strong><div className="boot-status"><span className="status-dot" />{steps[step]}</div></div></motion.div>
 }
 
-function Sidebar({ active, setActive }: { active: string; setActive: (value: string) => void }) { return <aside className="sidebar"><div className="brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><div className="desk-label">WORKSPACE</div><nav className="side-nav">{navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><Icon size={18} /><span>{label}</span></button>)}<button className={`nav-item ${active === 'Live Desk' ? 'active' : ''}`} onClick={() => setActive('Live Desk')}><Zap size={18} /><span>Live Desk</span></button><button className={`nav-item ${active === 'Admin' ? 'active' : ''}`} onClick={() => setActive('Admin')}><ShieldCheck size={18} /><span>Control room</span></button></nav><div className="sidebar-bottom"><button className="nav-item"><CircleHelp size={18} /><span>Help center</span></button><div className="profile"><div className="avatar">JD</div><div><strong>Jordan Davis</strong><small>Pro account</small></div><MoreHorizontal size={17} /></div></div></aside> }
-function BottomNav({ active, setActive }: { active: string; setActive: (value: string) => void }) { return <nav className="bottom-nav">{navItems.map(({ label, icon: Icon }) => <button key={label} className={`bottom-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><span className="bottom-icon">{active === label && <i /> }<Icon size={19} /></span>{active === label && <span>{label}</span>}</button>)}</nav> }
+function Sidebar({ active, setActive }: { active: string; setActive: (value: string) => void }) { return <aside className="sidebar"><div className="brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><div className="desk-label">WORKSPACE</div><nav className="side-nav">{navItems.map(({ label, icon }) => <button key={label} className={`nav-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><NavIcon name={icon} /><span>{label}</span></button>)}<button className={`nav-item ${active === 'Live Desk' ? 'active' : ''}`} onClick={() => setActive('Live Desk')}><NavIcon name="desk" /><span>Live Desk</span></button><button className={`nav-item ${active === 'Admin' ? 'active' : ''}`} onClick={() => setActive('Admin')}><NavIcon name="admin" /><span>Control room</span></button></nav><div className="sidebar-bottom"><button className="nav-item"><NavIcon name="help" /><span>Help center</span></button><div className="profile"><div className="avatar">JD</div><div><strong>Jordan Davis</strong><small>Pro account</small></div><NavIcon name="more" size={22} /></div></div></aside> }
+function BottomNav({ active, setActive }: { active: string; setActive: (value: string) => void }) { return <nav className="bottom-nav">{navItems.map(({ label, icon }) => <button key={label} className={`bottom-item ${active === label ? 'active' : ''}`} onClick={() => setActive(label)}><span className="bottom-icon">{active === label && <i /> }<NavIcon name={icon} /></span>{active === label && <span>{label}</span>}</button>)}</nav> }
 
-function Header({ setActive }: { setActive: (view: string) => void }) { return <header className="topbar"><div className="mobile-brand"><PulseMark size={27} /><span>TRADE<span>PULSE</span></span></div><div className="page-heading"><span className="eyebrow">WORKSPACE / OVERVIEW</span><h1>Dashboard</h1></div><div className="welcome"><span className="eyebrow">GOOD MORNING</span><strong>Jordan</strong></div><div className="top-actions"><div className="live-indicator"><i />LIVE</div><button className="icon-button admin-shortcut" aria-label="Open control room" onClick={() => setActive('Admin')}><ShieldCheck size={18} /></button><button className="icon-button notification" aria-label="3 notifications"><Bell size={18} /><b>3</b></button><div className="top-avatar" aria-label="Jordan Davis avatar">JD</div></div></header> }
+function Header({ setActive }: { setActive: (view: string) => void }) { return <header className="topbar"><div className="mobile-brand"><PulseMark size={27} /><span>TRADE<span>PULSE</span></span></div><div className="page-heading"><span className="eyebrow">WORKSPACE / OVERVIEW</span><h1>Dashboard</h1></div><div className="welcome"><span className="eyebrow">GOOD MORNING</span><strong>Jordan</strong></div><div className="top-actions"><div className="live-indicator"><i />LIVE</div><button className="icon-button admin-shortcut" aria-label="Open control room" onClick={() => setActive('Admin')}><NavIcon name="admin" /></button><button className="icon-button notification" aria-label="3 notifications"><Bell size={18} /><b>3</b></button><div className="top-avatar" aria-label="Jordan Davis avatar">JD</div></div></header> }
 
 function CountUp({ value, decimals = 2, prefix = '$' }: { value: number; decimals?: number; prefix?: string }) { const [current, setCurrent] = useState(0); useEffect(() => { let frame = 0; const start = performance.now(); const tick = (now: number) => { const progress = Math.min((now - start) / 900, 1); setCurrent(value * (1 - Math.pow(1 - progress, 3))); if (progress < 1) frame = requestAnimationFrame(tick) }; frame = requestAnimationFrame(tick); return () => cancelAnimationFrame(frame) }, [value]); return <>{prefix}{current.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}</> }
 
