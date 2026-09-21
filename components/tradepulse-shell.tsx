@@ -2,7 +2,35 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, BellOff, ChevronRight, Copy, Download, Fuel, History, Plus, Send, Settings, ShieldCheck, Wallet, X, Zap } from 'lucide-react'
+type FunctionalIconProps = { size?: number; className?: string }
+const functionalIconMarkup = {
+  bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
+  chevronRight: '<path d="M9.6 5.4 Q10.1 5.9 14.4 11.6 Q15 12.2 14.3 12.8 L9.4 18.5"/>',
+  copy: '<path d="M9.4 9.3 L17.2 9.1 Q17.8 9.1 17.8 9.7 L18 16.9 Q18 17.5 17.4 17.5 L10.1 17.7 Q9.5 17.7 9.5 17.1 Z"/><path d="M6.4 6.1 L14.2 6.3 Q14.8 6.3 14.8 6.9 L14.6 13.8 Q14.6 14.4 14 14.4 L7.1 14.2 Q6.5 14.2 6.5 13.6 Z"/><path d="M8.3 9.3 L12.2 9.4"/>',
+  download: '<path d="M12 4.3 L12.1 14.3"/><path d="M8.9 11.4 L12.1 14.5 L15.2 11.3"/><path d="M5.1 15.7 L5.3 18.2 Q5.4 18.9 6.1 18.9 L17.9 18.7 Q18.6 18.7 18.6 18 L18.8 15.5"/>',
+  fuel: '<path d="M5.2 4.7 L11.9 4.5 Q12.5 4.5 12.5 5.1 L12.7 16.8 Q12.7 17.4 12.1 17.4 L5.5 17.6 Q4.9 17.6 4.9 17 Z"/><path d="M7.1 6.7 L10.6 6.6 Q11.2 6.6 11.2 7.2 L11.3 10 Q11.3 10.6 10.7 10.6 L7.3 10.7 Q6.7 10.7 6.7 10.1 Z"/><path d="M12.6 8.1 L15.3 8.4 Q17.2 8.7 17 10.6 L16.8 14.3 Q16.7 15.9 15.3 15.8 L15 15.8 Q13.9 15.7 14 14.6 L14.1 13.4"/><path d="M14.1 13.4 L15.7 13.6"/><path d="M4 19.4 L13.9 19.2"/>',
+  history: '<circle cx="12" cy="12" r="6.6" transform="rotate(-2 12 12)"/><path d="M12 8.3 L12 12.1 L14.9 13.7"/><path d="M6.1 5.6 L7.5 5.9 L6.6 7"/>',
+  plus: '<path d="M12.1 5 L11.9 18.9"/><path d="M5.2 11.9 L18.9 12.1"/>',
+  send: '<path d="M4.1 11.7 L19.4 4.4 Q20.1 4.1 19.8 4.9 L13.6 19.3 Q13.3 20 12.8 19.4 L9.6 13.6 L4.3 12.7 Q3.7 12.5 4.1 11.7 Z"/><path d="M9.6 13.6 L19.2 4.7"/>',
+  shieldCheck: '<path d="M12 3.5 L18.4 5.7 Q19 5.9 18.9 6.6 L18.6 11.9 Q18.3 16.3 12.2 19.2 Q12 19.3 11.8 19.2 Q5.7 16.2 5.4 11.9 L5.1 6.6 Q5 5.9 5.7 5.7 Z"/><path d="M8.7 12.1 L10.9 14.2 L15.2 9.9"/>',
+  x: '<path d="M6.1 6.3 L18 17.8"/><path d="M17.9 6.1 L6.3 18"/>',
+} as const
+function FunctionalIcon({ name, size = 18, className = '' }: FunctionalIconProps & { name: keyof typeof functionalIconMarkup }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true" dangerouslySetInnerHTML={{ __html: functionalIconMarkup[name] }} /> }
+const Bell = (props: FunctionalIconProps) => <FunctionalIcon name="bell" {...props} />
+const BellOff = (props: FunctionalIconProps) => <FunctionalIcon name="bell" {...props} className={`${props.className ?? ''} icon-off`} />
+const ChevronRight = (props: FunctionalIconProps) => <FunctionalIcon name="chevronRight" {...props} />
+const Copy = (props: FunctionalIconProps) => <FunctionalIcon name="copy" {...props} />
+const Download = (props: FunctionalIconProps) => <FunctionalIcon name="download" {...props} />
+const Fuel = (props: FunctionalIconProps) => <FunctionalIcon name="fuel" {...props} />
+const History = (props: FunctionalIconProps) => <FunctionalIcon name="history" {...props} />
+const Plus = (props: FunctionalIconProps) => <FunctionalIcon name="plus" {...props} />
+const Send = (props: FunctionalIconProps) => <FunctionalIcon name="send" {...props} />
+const ShieldCheck = (props: FunctionalIconProps) => <FunctionalIcon name="shieldCheck" {...props} />
+const X = (props: FunctionalIconProps) => <FunctionalIcon name="x" {...props} />
+const Settings = (props: FunctionalIconProps) => <NavIcon name="account" {...props} />
+const Wallet = (props: FunctionalIconProps) => <NavIcon name="wallet" {...props} />
+const Zap = (props: FunctionalIconProps) => <NavIcon name="desk" {...props} />
+const Coins = (props: FunctionalIconProps) => <NavIcon name="earn" {...props} />
 
 const ease = [0.16, 1, 0.3, 1] as const
 const navItems = [
