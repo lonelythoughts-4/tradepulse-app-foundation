@@ -1,6 +1,6 @@
 export type ApiError = Error & { status: number; details?: unknown }
 
-const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').replace(/\/$/, '')
+const apiBaseUrl = '/api'
 
 export class TradepulseApiError extends Error {
   status: number
@@ -15,16 +15,17 @@ export class TradepulseApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  if (!apiBaseUrl) {
-    throw new TradepulseApiError('TradePulse API is not configured yet.', 503)
-  }
-
+  const telegramInitData = typeof window !== 'undefined'
+    ? (globalThis as typeof globalThis & { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? ''
+    : ''
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      'Content-Type': 'application/json',
+      'X-Telegram-Init-Data': telegramInitData,
+      'X-TradePulse-Environment': 'mainnet',
       ...init.headers,
     },
   })
