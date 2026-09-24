@@ -251,7 +251,7 @@ function telegramInitData() { return telegramWebApp()?.initData || '' }
 async function waitForTelegramWebApp() {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const webApp = telegramWebApp()
-    if (webApp) return webApp
+    if (webApp?.initData) return webApp
     await new Promise(resolve => window.setTimeout(resolve, 100))
   }
   return undefined
