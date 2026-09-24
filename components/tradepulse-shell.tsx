@@ -248,6 +248,14 @@ const TELEGRAM_BOT_USERNAME = 'demo1vbot'
 type TelegramWebApp = { initData?: string; ready?: () => void; expand?: () => void }
 function telegramWebApp() { return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp }
 function telegramInitData() { return telegramWebApp()?.initData || '' }
+async function waitForTelegramWebApp() {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const webApp = telegramWebApp()
+    if (webApp) return webApp
+    await new Promise(resolve => window.setTimeout(resolve, 100))
+  }
+  return undefined
+}
 function BrowserTelegramLogin() {
   const container = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -314,8 +322,8 @@ function LiveTradePulse() {
   const [synthetic, setSynthetic] = useState<{ market: string; latest: { price?: number }; ticks: Array<{ price: number }>; account?: { available_usd: number; locked_usd: number; realised_pnl_usd: number }; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string }> } | null>(null)
   const [admin, setAdmin] = useState<{ environment: string; members: Array<{ user_id: number; first_name?: string; username?: string }>; engine: Array<{ event_key: string; bot_name: string; net_realized: number; status: string }>; settings: Array<{ key: string; value: string }>; withdrawals: Array<{ id: string; user_id: number; amount_usd: number; asset: string; chain: string; status: string }>; recovery_cases: Array<{ id: number; status: string; asset: string; network: string; user_id: number }>; sweep_queue: Array<{ id: string; asset: string; chain: string; status: string }>; chains: Array<{ id: string; name: string; watcher_ready: boolean }>; sweeps_enabled: boolean } | null>(null)
   const headers = (targetEnvironment = webEnvironment) => ({ 'Content-Type': 'application/json', 'X-Telegram-Init-Data': telegramInitData(), 'X-TradePulse-Environment': targetEnvironment })
-  const request = async (path: string, options: RequestInit = {}, targetEnvironment = webEnvironment) => { const response = await fetch(`/api${path}`, { ...options, headers: { ...headers(targetEnvironment), ...(options.headers || {}) } }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || 'Request failed.'); return body }
-  const load = async (targetEnvironment = webEnvironment) => { setLoading(true); try { telegramWebApp()?.ready?.(); telegramWebApp()?.expand?.(); const next = await request('/v1/dashboard', {}, targetEnvironment); setData(next); setWebEnvironment(next.environment) } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to load your desk.') } finally { setLoading(false) } }
+  const request = async (path: string, options: RequestInit = {}, targetEnvironment = webEnvironment) => { const controller = new AbortController(); const timeout = window.setTimeout(() => controller.abort(), 15_000); try { const response = await fetch(`/api${path}`, { ...options, signal: controller.signal, headers: { ...headers(targetEnvironment), ...(options.headers || {}) } }); const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error || 'Request failed.'); return body } finally { window.clearTimeout(timeout) } }
+  const load = async (targetEnvironment = webEnvironment) => { setLoading(true); try { const webApp = await waitForTelegramWebApp(); webApp?.ready?.(); webApp?.expand?.(); const next = await request('/v1/dashboard', {}, targetEnvironment); setData(next); setWebEnvironment(next.environment) } catch (error) { setNotice(error instanceof DOMException && error.name === 'AbortError' ? 'The desk took too long to respond. Please retry from Telegram.' : error instanceof Error ? error.message : 'Unable to load your desk.') } finally { setLoading(false) } }
   useEffect(() => { void load() }, [])
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 6500); return () => window.clearTimeout(timer) }, [notice])
   useEffect(() => { if (!data || notice || !data.notices?.length) return; const key = 'tradepulse.web-notices'; const now = Date.now(); let seen: Record<string, number> = {}; try { seen = JSON.parse(window.localStorage.getItem(key) || '{}') } catch { /* storage is optional */ }; const next = data.notices.find(item => !seen[item.id] || seen[item.id] < now); if (!next) return; seen[next.id] = now + Math.max(30, data.popup_ttl_seconds || 600) * 1000; try { window.localStorage.setItem(key, JSON.stringify(seen)) } catch { /* the in-memory toast still works */ }; setNotice(`${next.title} — ${next.body}`) }, [data, notice])
