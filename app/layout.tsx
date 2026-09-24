@@ -1,4 +1,5 @@
 import { Analytics } from '@vercel/analytics/next'
+import Script from 'next/script'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
@@ -41,6 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
