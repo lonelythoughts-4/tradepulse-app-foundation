@@ -32,6 +32,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const body = await response.json().catch(() => null)
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.location.assign('/')
+    }
     const message = typeof body?.message === 'string' ? body.message : `TradePulse API request failed (${response.status})`
     throw new TradepulseApiError(message, response.status, body)
   }
@@ -43,7 +46,12 @@ const post = <T>(path: string, body: unknown) => request<T>(path, { method: 'POS
 
 export const tradepulseApi = {
   dashboard: () => request('/v1/dashboard'),
-  createDeposit: (body: { asset: string; chain: string; expected_amount?: number }) => post('/v1/deposits', body),
+  acceptOnboarding: () => post('/v1/onboarding/accept', {}),
+  startDemo: () => post('/v1/demo/start', {}),
+  createBot: (body: { product: 'memecoin' | 'synthetic'; amount: number }) => post('/v1/bots', body),
+  botAction: (botId: string, body: { action: 'toggle' | 'close' | 'compound'; percent?: 0 | 50 | 100 }) => post(`/v1/bots/${encodeURIComponent(botId)}/actions`, body),
+  createDeposit: (body: { asset: string; chain: string; expected_amount?: number | null }) => post('/v1/deposits/routes', body),
+  confirmDepositSent: (intentId: string) => post(`/v1/deposits/${encodeURIComponent(intentId)}/watch`, {}),
   watchDeposit: (intentId: string) => post(`/v1/deposits/${intentId}/watch`, {}),
   createWithdrawal: (body: { asset: string; chain: string; address: string; amount: number; security_code: string }) => post('/v1/withdrawals', body),
   tankAction: (body: { action: 'topup' | 'autofill'; amount?: number }) => post('/v1/tank/actions', body),
@@ -60,7 +68,22 @@ export const tradepulseApi = {
   setSecurityCode: (code: string) => post('/v1/account/security-code', { code }),
   createSupportTicket: (body: { topic: string; message: string }) => post('/v1/support/tickets', body),
   submitRecovery: (body: { network: string; asset: string; tx_hash: string; destination: string; details: string }) => post('/v1/recovery', body),
+  synthetic: (market: 'SYN-25' | 'SYN-50') => request(`/v1/synthetic/${market}`),
+  syntheticAction: (body: { action: 'open' | 'close' | 'reset'; market?: 'SYN-25' | 'SYN-50'; direction?: 'long' | 'short'; amount?: number; position_id?: string }) => post('/v1/synthetic/actions', body),
   adminOverview: () => request('/v1/admin/overview'),
+  addAdmin: (user_id: number) => post('/v1/admin/members', { user_id }),
+  fundAccount: (body: { user_id: number; amount: number; reason: string }) => post('/v1/admin/fund', body),
+  resetUserOnboarding: (user_id: number) => post('/v1/admin/onboarding/reset', { user_id }),
+  reissueDemo: (user_id?: number) => post('/v1/admin/demo/reissue', user_id === undefined ? {} : { user_id }),
+  switchEnvironment: (environment: 'mainnet' | 'testnet') => post('/v1/admin/environment', { environment }),
+  updateAdminSetting: (key: string, value: unknown) => post('/v1/admin/settings', { key, value }),
+  vaults: () => request('/v1/admin/vaults'),
+  saveVault: (body: { chain: string; asset: string; address: string }) => post('/v1/admin/vaults', body),
+  toggleSweeps: () => post('/v1/admin/sweeps/toggle', {}),
+  sweepAction: (intentId: string, action: 'retry' | 'manual' | 'quarantine') => post(`/v1/admin/sweeps/${encodeURIComponent(intentId)}`, { action }),
+  withdrawalDecision: (withdrawalId: string, action: 'approve' | 'reject') => post(`/v1/admin/withdrawals/${encodeURIComponent(withdrawalId)}`, { action }),
+  recoveryDecision: (caseId: string, status: 'verified' | 'rejected' | 'treasury_review') => post(`/v1/admin/recovery/${encodeURIComponent(caseId)}`, { status }),
+  broadcast: (body: { scope: 'all' | 'user' | 'channel' | 'group'; target?: string; message: string; confirmation?: 'SEND ALL' }) => post('/v1/admin/broadcast', body),
 }
 
 export function getApiErrorMessage(error: unknown): string {
