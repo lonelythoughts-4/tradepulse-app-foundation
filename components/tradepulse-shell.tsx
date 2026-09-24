@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 type FunctionalIconProps = { size?: number; className?: string }
 const functionalIconMarkup = {
@@ -244,9 +244,28 @@ function AdminRoom() { const [env,setEnv]=useState('Mainnet'); const [modal,setM
 type LiveDashboard = { user: { id: number; first_name?: string; username?: string; tier: string; fee_credit_usd: number; is_admin: boolean; onboarding_complete: boolean }; environment: string; wallet: { available: number; locked: number; equity: number; hwm: number; tank: number; tank_capacity: number; tank_autofill: boolean }; bots: Array<{ id: number; name: string; product: string; state: string; capital_usd: number; compound_percent: number }>; deposits: Array<{ id: string; asset: string; chain: string; address: string; status: string; expected_amount?: string }>; withdrawals: Array<{ id: string; asset: string; chain: string; address: string; amount_usd: number; status: string }>; ledger: Array<{ kind: string; asset: string; amount_usd: number; status: string; created_at: number }>; engine: Array<{ net_realized: number; status: string; created_at: number }>; alerts: Array<{ id: number; asset: string; operator: string; threshold: number }>; notifications: Record<string, boolean>; demo: { state?: string; grant_usd?: number } | null; popup_ttl_seconds: number; notices: Array<{ id: string; kind: string; title: string; body: string }>; referral: { count: number; accrued_usd: number; bot_username: string }; tier_config: Array<{ name: string; monthly: number; rate: number }>; referral_rates: number[]; community_url: string; quotes: Record<string, number>; quote_age: number; quote_fresh: boolean }
 
 const TELEGRAM_BOT_URL = 'https://t.me/demo1vbot'
+const TELEGRAM_BOT_USERNAME = 'demo1vbot'
 type TelegramWebApp = { initData?: string; ready?: () => void; expand?: () => void }
 function telegramWebApp() { return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp }
 function telegramInitData() { return telegramWebApp()?.initData || '' }
+function BrowserTelegramLogin() {
+  const container = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const target = container.current
+    if (!target) return
+    const widget = document.createElement('script')
+    widget.src = 'https://telegram.org/js/telegram-widget.js?22'
+    widget.async = true
+    widget.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME)
+    widget.setAttribute('data-size', 'large')
+    widget.setAttribute('data-radius', '10')
+    widget.setAttribute('data-auth-url', `${window.location.origin}/api/v1/auth/telegram`)
+    widget.setAttribute('data-request-access', 'write')
+    target.replaceChildren(widget)
+    return () => { target.replaceChildren() }
+  }, [])
+  return <div className="telegram-login" ref={container} aria-label="Sign in with Telegram" />
+}
 function money(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0)) }
 function chartPath(points: Array<{ price: number }>) { const values = points.map(point => Number(point.price)).filter(Number.isFinite); if (!values.length) return ''; const low = Math.min(...values), high = Math.max(...values), range = Math.max(high - low, .000001); return values.map((value, index) => `${index ? 'L' : 'M'} ${(index / Math.max(values.length - 1, 1)) * 600} ${92 - ((value - low) / range) * 84}`).join(' ') }
 
@@ -305,7 +324,7 @@ function LiveTradePulse() {
   useEffect(() => { if (tab !== 'Dashboard' || !data) return; const active = [...new Set(data.bots.filter(bot => ['memecoin', 'synthetic'].includes(bot.product) && ['running', 'paused'].includes(bot.state)).map(bot => bot.product))]; if (!active.length) return; let cancelled = false; const refresh = () => Promise.all(active.map(product => request(`/v1/charts/${product}`).then(value => ({ product, value })).catch(() => null))).then(results => { if (cancelled) return; setCharts(current => ({ ...current, ...Object.fromEntries(results.filter(Boolean).map(item => [item!.product, item!.value])) })) }); void refresh(); const timer = window.setInterval(refresh, 30000); return () => { cancelled = true; window.clearInterval(timer) } }, [tab, data?.bots])
   const act = async (path: string, payload: object) => { try { const response = await request(path, { method: 'POST', body: JSON.stringify(payload) }); setNotice(response.message || 'Saved successfully.'); await load(); if (tab === 'Synthetic') setSynthetic(await request('/v1/synthetic/SYN-25')); } catch (error) { setNotice(error instanceof Error ? error.message : 'Action failed.') } }
   if (loading) return <div className="boot-screen"><div className="boot-copy"><strong>TRADE<span>PULSE</span></strong><div className="boot-status"><span className="status-dot" />Loading your desk…</div></div></div>
-  if (!data) return <div className="onboarding-screen"><img src="/illustrations/session-door.png" alt="Secure Telegram session required" className="onboarding-hero" /><div className="onboarding-copy"><span className="eyebrow">SECURE ACCESS</span><h1>Open this desk from Telegram.</h1><p>{notice || 'Your Telegram session is required before account data can be shown.'}</p><a className="primary-action" href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer">Proceed to Telegram <ChevronRight /></a><small>Telegram signs your session when you launch the desk from the bot. This browser page never asks for a password, seed phrase, or security code.</small></div></div>
+  if (!data) return <div className="onboarding-screen"><img src="/illustrations/session-door.png" alt="Secure Telegram session required" className="onboarding-hero" /><div className="onboarding-copy"><span className="eyebrow">SECURE ACCESS</span><h1>Sign in with Telegram.</h1><p>{notice || 'Use Telegram to securely open your own TradePulse desk.'}</p><BrowserTelegramLogin /><a className="primary-action" href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer">Open in Telegram <ChevronRight /></a><small>Telegram signs this session directly. TradePulse never asks for a password, seed phrase, or security code to sign in.</small></div></div>
   if (!data.user.onboarding_complete) return <div className="onboarding-screen"><img src="/illustrations/onboarding-welcome.png" alt="TradePulse welcome" className="onboarding-hero" /><div className="onboarding-copy"><span className="eyebrow">WELCOME TO TRADEPULSE</span><h1>Before you start</h1><p>By continuing, you accept the same Terms and risk disclosures required in Telegram. Deposits require on-chain confirmation; trading and demo results are not guaranteed; virtual demo funds are not withdrawable.</p><button className="primary-action" onClick={async () => { try { await request('/v1/onboarding/accept', { method: 'POST', body: '{}' }); await load() } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not save your acceptance.') } }}>Accept terms and continue</button></div></div>
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * .25
   const chart = synthetic?.ticks?.slice(-80).map(t => t.price) || []
