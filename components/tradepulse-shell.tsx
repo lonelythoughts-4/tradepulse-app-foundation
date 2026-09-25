@@ -365,4 +365,32 @@ function LiveTradePulse() {
   {tab === 'Admin' && <div className="admin-screen">{admin ? <><GradientPanel className="admin-hero"><div><span className="eyebrow">ADMIN CONTROL ROOM</span><h2>{admin.environment.toUpperCase()} operations</h2><p className="mono">SWEEPS · {admin.sweeps_enabled ? 'ENABLED' : 'DISABLED'}</p></div><button className="small-action" onClick={async () => { await act('/v1/admin/sweeps/toggle', {}); setAdmin(await request('/v1/admin/overview')) }}>Toggle sweeps</button></GradientPanel><div className="admin-grid"><GradientPanel className="admin-table"><span className="eyebrow">WITHDRAWAL APPROVALS</span><h2>Pending review</h2>{admin.withdrawals.map(row => <div className="admin-row" key={row.id}><div><strong>{money(row.amount_usd)} {row.asset} · {row.chain}</strong><small className="mono">USER {row.user_id} · {row.status}</small></div><button className="danger-action" onClick={async () => { await act(`/v1/admin/withdrawals/${row.id}`, { action: 'approve' }); setAdmin(await request('/v1/admin/overview')) }}>Approve</button><button className="small-action" onClick={async () => { await act(`/v1/admin/withdrawals/${row.id}`, { action: 'reject' }); setAdmin(await request('/v1/admin/overview')) }}>Reject</button></div>)}</GradientPanel><GradientPanel className="admin-table"><span className="eyebrow">RECOVERY CASES</span><h2>Manual recovery</h2>{admin.recovery_cases.map(row => <div className="admin-row" key={row.id}><div><strong>RC-{row.id} · {row.asset} / {row.network}</strong><small className="mono">USER {row.user_id} · {row.status}</small></div><button className="small-action" onClick={async () => { await act(`/v1/admin/recovery/${row.id}`, { status: 'verified' }); setAdmin(await request('/v1/admin/overview')) }}>Verify</button><button className="danger-action" onClick={async () => { await act(`/v1/admin/recovery/${row.id}`, { status: 'rejected' }); setAdmin(await request('/v1/admin/overview')) }}>Reject</button></div>)}</GradientPanel><GradientPanel className="admin-table"><span className="eyebrow">CHAIN MAINTENANCE</span><h2>Route health</h2>{admin.chains.map(chain => <div className="admin-row" key={chain.id}><strong>{chain.name}</strong><span className={`status-chip ${chain.watcher_ready ? 'running' : 'paused'}`}>{chain.watcher_ready ? 'watcher ready' : 'maintenance'}</span></div>)}</GradientPanel></div></> : <p>Loading admin controls…</p>}</div>}</main></div>
 }
 
-export default function TradePulseShell() { return <LiveTradePulse /> }
+function OriginalDeskShell() {
+  const [active, setActive] = useState('Dashboard')
+  const [fleet, setFleet] = useState(bots)
+  const [securityCode, setSecurityCode] = useState('')
+
+  const toggleBot = (name: string) => {
+    setFleet(current => current.map(bot => bot.name === name ? { ...bot, state: bot.state === 'running' ? 'paused' : 'running' } : bot))
+  }
+
+  const content = active === 'Dashboard' ? <Dashboard bots={fleet} />
+    : active === 'Bots' ? <BotsScreen bots={fleet} onToggle={toggleBot} />
+    : active === 'Wallet' ? <WalletScreen securityCode={securityCode} onSetCode={() => setActive('Account')} />
+    : active === 'Earn' ? <EarnScreen />
+    : active === 'Account' ? <AccountScreen securityCode={securityCode} onStoredCodeChange={setSecurityCode} />
+    : active === 'Live Desk' ? <LiveDeskFinal />
+    : active === 'Admin' ? <AdminControlRoomFinal />
+    : <GradientPanel className="announcements"><span className="eyebrow">COMMUNITY & HELP</span><h2>TradePulse support</h2><p>Use the Telegram bot for account-specific help and support requests.</p></GradientPanel>
+
+  return <div className="app-shell">
+    <Sidebar active={active} setActive={setActive} />
+    <main className="main-content">
+      <Header setActive={setActive} />
+      <div className="content-wrap">{content}</div>
+    </main>
+    <BottomNav active={active} setActive={setActive} />
+  </div>
+}
+
+export default function TradePulseShell() { return <OriginalDeskShell /> }
