@@ -248,6 +248,7 @@ const TELEGRAM_BOT_USERNAME = 'demo1vbot'
 type TelegramWebApp = { initData?: string; ready?: () => void; expand?: () => void }
 function telegramWebApp() { return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp }
 function telegramInitData() { return telegramWebApp()?.initData || '' }
+function openedInsideTelegram() { return Boolean(telegramWebApp()) }
 async function waitForTelegramWebApp() {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const webApp = telegramWebApp()
@@ -256,23 +257,33 @@ async function waitForTelegramWebApp() {
   }
   return undefined
 }
-function BrowserTelegramLogin() {
-  const container = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const target = container.current
-    if (!target) return
-    const widget = document.createElement('script')
-    widget.src = 'https://telegram.org/js/telegram-widget.js?22'
-    widget.async = true
-    widget.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME)
-    widget.setAttribute('data-size', 'large')
-    widget.setAttribute('data-radius', '10')
-    widget.setAttribute('data-auth-url', `${window.location.origin}/api/v1/auth/telegram`)
-    widget.setAttribute('data-request-access', 'write')
-    target.replaceChildren(widget)
-    return () => { target.replaceChildren() }
-  }, [])
-  return <div className="telegram-login" ref={container} aria-label="Sign in with Telegram" />
+function BrowserBotHandoff() {
+  const [state, setState] = useState<'idle' | 'waiting' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+  const timer = useRef<number | null>(null)
+  useEffect(() => () => { if (timer.current) window.clearInterval(timer.current) }, [])
+  const connect = async () => {
+    setState('waiting'); setMessage('Opening Telegram to confirm this browser…')
+    try {
+      const start = await fetch('/api/v1/auth/handoff/start', { method: 'POST' })
+      const handoff = await start.json()
+      if (!start.ok || !handoff.token || !handoff.bot_url) throw new Error(handoff.error || 'Could not start a secure browser connection.')
+      window.location.assign(handoff.bot_url)
+      const deadline = Date.now() + Number(handoff.expires_in || 300) * 1000
+      timer.current = window.setInterval(async () => {
+        if (Date.now() >= deadline) { if (timer.current) window.clearInterval(timer.current); timer.current = null; setState('error'); setMessage('That connection expired. Start again from this browser.'); return }
+        try {
+          const response = await fetch(`/api/v1/auth/handoff/complete?token=${encodeURIComponent(handoff.token)}`, { credentials: 'same-origin' })
+          if (response.status === 202) return
+          const result = await response.json()
+          if (!response.ok || !result.ready) throw new Error(result.error || 'Could not finish browser connection.')
+          if (timer.current) window.clearInterval(timer.current)
+          timer.current = null; window.location.replace('/')
+        } catch (error) { if (error instanceof Error && error.message.includes('finish')) { setState('error'); setMessage(error.message) } }
+      }, 1500)
+    } catch (error) { setState('error'); setMessage(error instanceof Error ? error.message : 'Could not start a secure browser connection.') }
+  }
+  return <div className="browser-handoff"><button className="primary-action" onClick={connect} disabled={state === 'waiting'}>{state === 'waiting' ? 'Confirming in Telegram…' : 'Continue with Telegram'} <ChevronRight /></button>{message && <small role="status">{message}</small>}</div>
 }
 function money(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0)) }
 function chartPath(points: Array<{ price: number }>) { const values = points.map(point => Number(point.price)).filter(Number.isFinite); if (!values.length) return ''; const low = Math.min(...values), high = Math.max(...values), range = Math.max(high - low, .000001); return values.map((value, index) => `${index ? 'L' : 'M'} ${(index / Math.max(values.length - 1, 1)) * 600} ${92 - ((value - low) / range) * 84}`).join(' ') }
@@ -332,7 +343,7 @@ function LiveTradePulse() {
   useEffect(() => { if (tab !== 'Dashboard' || !data) return; const active = [...new Set(data.bots.filter(bot => ['memecoin', 'synthetic'].includes(bot.product) && ['running', 'paused'].includes(bot.state)).map(bot => bot.product))]; if (!active.length) return; let cancelled = false; const refresh = () => Promise.all(active.map(product => request(`/v1/charts/${product}`).then(value => ({ product, value })).catch(() => null))).then(results => { if (cancelled) return; setCharts(current => ({ ...current, ...Object.fromEntries(results.filter(Boolean).map(item => [item!.product, item!.value])) })) }); void refresh(); const timer = window.setInterval(refresh, 30000); return () => { cancelled = true; window.clearInterval(timer) } }, [tab, data?.bots])
   const act = async (path: string, payload: object) => { try { const response = await request(path, { method: 'POST', body: JSON.stringify(payload) }); setNotice(response.message || 'Saved successfully.'); await load(); if (tab === 'Synthetic') setSynthetic(await request('/v1/synthetic/SYN-25')); } catch (error) { setNotice(error instanceof Error ? error.message : 'Action failed.') } }
   if (loading) return <div className="boot-screen"><div className="boot-copy"><strong>TRADE<span>PULSE</span></strong><div className="boot-status"><span className="status-dot" />Loading your desk…</div></div></div>
-  if (!data) return <div className="onboarding-screen"><img src="/illustrations/session-door.png" alt="Secure Telegram session required" className="onboarding-hero" /><div className="onboarding-copy"><span className="eyebrow">SECURE ACCESS</span><h1>Sign in with Telegram.</h1><p>{notice || 'Use Telegram to securely open your own TradePulse desk.'}</p><BrowserTelegramLogin /><a className="primary-action" href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer">Open in Telegram <ChevronRight /></a><small>Telegram signs this session directly. TradePulse never asks for a password, seed phrase, or security code to sign in.</small></div></div>
+  if (!data) return <div className="onboarding-screen"><img src="/illustrations/session-door.png" alt="Secure Telegram session required" className="onboarding-hero" /><div className="onboarding-copy"><span className="eyebrow">SECURE ACCESS</span><h1>{openedInsideTelegram() ? 'Telegram session unavailable.' : 'Open TradePulse with Telegram.'}</h1><p>{notice || (openedInsideTelegram() ? 'Close this Mini App, return to @demo1vbot, and open TradePulse again from its menu button.' : 'Continue once in Telegram. When your identity is confirmed, this browser returns to your desk automatically.')}</p>{openedInsideTelegram() ? <a className="primary-action" href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer">Return to TradePulse <ChevronRight /></a> : <BrowserBotHandoff />}<small>TradePulse never asks for a password, seed phrase, or security code to connect a browser.</small></div></div>
   if (!data.user.onboarding_complete) return <div className="onboarding-screen"><img src="/illustrations/onboarding-welcome.png" alt="TradePulse welcome" className="onboarding-hero" /><div className="onboarding-copy"><span className="eyebrow">WELCOME TO TRADEPULSE</span><h1>Before you start</h1><p>By continuing, you accept the same Terms and risk disclosures required in Telegram. Deposits require on-chain confirmation; trading and demo results are not guaranteed; virtual demo funds are not withdrawable.</p><button className="primary-action" onClick={async () => { try { await request('/v1/onboarding/accept', { method: 'POST', body: '{}' }); await load() } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not save your acceptance.') } }}>Accept terms and continue</button></div></div>
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * .25
   const chart = synthetic?.ticks?.slice(-80).map(t => t.price) || []
