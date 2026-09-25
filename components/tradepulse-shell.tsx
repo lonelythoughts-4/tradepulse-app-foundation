@@ -404,4 +404,10 @@ function OriginalDeskShell() {
   </div>
 }
 
-export default function TradePulseShell() { return <OriginalDeskShell /> }
+/**
+ * The original shell above is retained as the visual reference for the v0
+ * composition.  The application entry must use the live desk: unlike the
+ * reference shell it never renders sample users, balances, bots, deposits or
+ * withdrawals and routes every action through the shared TradePulse API.
+ */
+export default function TradePulseShell() { return <LiveTradePulse /> }
