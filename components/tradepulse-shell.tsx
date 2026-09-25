@@ -248,7 +248,10 @@ const TELEGRAM_BOT_USERNAME = 'demo1vbot'
 type TelegramWebApp = { initData?: string; ready?: () => void; expand?: () => void }
 function telegramWebApp() { return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp }
 function telegramInitData() { return telegramWebApp()?.initData || '' }
-function openedInsideTelegram() { return Boolean(telegramWebApp()) }
+// Telegram can expose a WebApp object in an in-app browser without mounting a
+// signed Mini App. Only signed init data means the desk has a usable Telegram
+// identity; otherwise the browser handoff must remain available.
+function openedInsideTelegram() { return Boolean(telegramInitData()) }
 async function waitForTelegramWebApp() {
   // The Mini App bridge is injected asynchronously on some Android and iOS
   // clients. Give it a real chance to arrive before making an unauthenticated
