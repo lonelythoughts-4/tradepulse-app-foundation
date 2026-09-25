@@ -250,7 +250,10 @@ function telegramWebApp() { return (window as unknown as { Telegram?: { WebApp?:
 function telegramInitData() { return telegramWebApp()?.initData || '' }
 function openedInsideTelegram() { return Boolean(telegramWebApp()) }
 async function waitForTelegramWebApp() {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  // The Mini App bridge is injected asynchronously on some Android and iOS
+  // clients. Give it a real chance to arrive before making an unauthenticated
+  // dashboard request.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     const webApp = telegramWebApp()
     if (webApp?.initData) return webApp
     await new Promise(resolve => window.setTimeout(resolve, 100))
@@ -260,15 +263,22 @@ async function waitForTelegramWebApp() {
 function BrowserBotHandoff() {
   const [state, setState] = useState<'idle' | 'waiting' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const [botUrl, setBotUrl] = useState('')
   const timer = useRef<number | null>(null)
   useEffect(() => () => { if (timer.current) window.clearInterval(timer.current) }, [])
   const connect = async () => {
-    setState('waiting'); setMessage('Opening Telegram to confirm this browser…')
+    // Opening a blank tab must happen during the click itself. Waiting for the
+    // network response first makes most browsers block the Telegram window.
+    // Keeping this page open is essential: it polls for the confirmed session.
+    const telegramWindow = window.open('', '_blank')
+    setState('waiting'); setMessage('Confirm this browser in Telegram, then return here…'); setBotUrl('')
     try {
       const start = await fetch('/api/v1/auth/handoff/start', { method: 'POST' })
       const handoff = await start.json()
       if (!start.ok || !handoff.token || !handoff.bot_url) throw new Error(handoff.error || 'Could not start a secure browser connection.')
-      window.location.assign(handoff.bot_url)
+      setBotUrl(handoff.bot_url)
+      if (telegramWindow) telegramWindow.location.replace(handoff.bot_url)
+      else setMessage('Open Telegram with the secure link below, then return to this tab…')
       const deadline = Date.now() + Number(handoff.expires_in || 300) * 1000
       timer.current = window.setInterval(async () => {
         if (Date.now() >= deadline) { if (timer.current) window.clearInterval(timer.current); timer.current = null; setState('error'); setMessage('That connection expired. Start again from this browser.'); return }
@@ -281,9 +291,9 @@ function BrowserBotHandoff() {
           timer.current = null; window.location.replace('/')
         } catch (error) { if (error instanceof Error && error.message.includes('finish')) { setState('error'); setMessage(error.message) } }
       }, 1500)
-    } catch (error) { setState('error'); setMessage(error instanceof Error ? error.message : 'Could not start a secure browser connection.') }
+    } catch (error) { telegramWindow?.close(); setState('error'); setMessage(error instanceof Error ? error.message : 'Could not start a secure browser connection.') }
   }
-  return <div className="browser-handoff"><button className="primary-action" onClick={connect} disabled={state === 'waiting'}>{state === 'waiting' ? 'Confirming in Telegram…' : 'Continue with Telegram'} <ChevronRight /></button>{message && <small role="status">{message}</small>}</div>
+  return <div className="browser-handoff"><button className="primary-action" onClick={connect} disabled={state === 'waiting'}>{state === 'waiting' ? 'Confirming in Telegram…' : 'Continue with Telegram'} <ChevronRight /></button>{botUrl && <a className="ghost-action" href={botUrl} target="_blank" rel="noreferrer">Open Telegram</a>}{message && <small role="status">{message}</small>}</div>
 }
 function money(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0)) }
 function chartPath(points: Array<{ price: number }>) { const values = points.map(point => Number(point.price)).filter(Number.isFinite); if (!values.length) return ''; const low = Math.min(...values), high = Math.max(...values), range = Math.max(high - low, .000001); return values.map((value, index) => `${index ? 'L' : 'M'} ${(index / Math.max(values.length - 1, 1)) * 600} ${92 - ((value - low) / range) * 84}`).join(' ') }
