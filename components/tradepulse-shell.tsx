@@ -179,15 +179,18 @@ function GradientPanel({
   children,
   className = "",
   onPointerDown,
+  onClick,
 }: {
   children: React.ReactNode;
   className?: string;
   onPointerDown?: React.PointerEventHandler<HTMLDivElement>;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
 }) {
   return (
     <div
       className={`gradient-panel ${className}`}
       onPointerDown={onPointerDown}
+      onClick={onClick}
     >
       {children}
     </div>
@@ -325,9 +328,11 @@ const mobileNavItems: { label: string; icon: NavIconName }[] = [
 function BottomNav({
   active,
   setActive,
+  isAdmin = true,
 }: {
   active: string;
   setActive: (value: string) => void;
+  isAdmin?: boolean;
 }) {
   const [compact, setCompact] = useState(false);
   return (
@@ -343,7 +348,9 @@ function BottomNav({
       >
         {compact ? "＋" : "−"}
       </button>
-      {mobileNavItems.map(({ label, icon }) => (
+      {mobileNavItems
+        .filter((item) => item.label !== "Admin" || isAdmin)
+        .map(({ label, icon }) => (
         <button
           key={label}
           className={`bottom-item ${active === label ? "active" : ""}`}
@@ -355,7 +362,7 @@ function BottomNav({
           </span>
           <span className="bottom-label">{label}</span>
         </button>
-      ))}
+        ))}
     </nav>
   );
 }
@@ -603,9 +610,18 @@ function MiniSparkline({ negative = false }: { negative?: boolean }) {
     </svg>
   );
 }
-function BotCard({ bot }: { bot: (typeof bots)[number] }) {
+function BotCard({
+  bot,
+  onOpen,
+}: {
+  bot: (typeof bots)[number];
+  onOpen?: () => void;
+}) {
   return (
-    <GradientPanel className="bot-card reveal-card">
+    <GradientPanel
+      className={`bot-card reveal-card ${onOpen ? "bot-card-openable" : ""}`}
+      onClick={onOpen}
+    >
       {bot.state === "paused" && (
         <img
           src="/illustrations/engine-paused.png"
@@ -701,7 +717,13 @@ function PriceStrip({ quotes }: { quotes?: Record<string, number> }) {
     </div>
   );
 }
-function Activity({ ledger }: { ledger?: VisualDeskModel["ledger"] }) {
+function Activity({
+  ledger,
+  onViewAll,
+}: {
+  ledger?: VisualDeskModel["ledger"];
+  onViewAll?: () => void;
+}) {
   const items = ledger
     ? ledger.length
       ? ledger
@@ -734,7 +756,7 @@ function Activity({ ledger }: { ledger?: VisualDeskModel["ledger"] }) {
           <span className="eyebrow">RECENT ACTIVITY</span>
           <h2>Activity</h2>
         </div>
-        <button className="view-all">
+        <button className="view-all" onClick={onViewAll}>
           View all <ChevronRight size={14} />
         </button>
       </div>
@@ -798,7 +820,7 @@ function DemoBanner({
     </GradientPanel>
   );
 }
-function EmptyBots() {
+function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
   return (
     <GradientPanel className="empty-bots">
       <img
@@ -818,7 +840,7 @@ function EmptyBots() {
         />
       </svg>
       <p>No bots are running yet.</p>
-      <button>
+      <button onClick={onLaunch}>
         Launch your first bot <ChevronRight size={14} />
       </button>
     </GradientPanel>
@@ -2237,12 +2259,14 @@ function Dashboard({
   onManage,
   onTopUp,
   onStartDemo,
+  onViewActivity,
 }: {
   bots: Bot[];
   model?: VisualDeskModel;
   onManage?: () => void;
   onTopUp?: () => void;
   onStartDemo?: () => void;
+  onViewActivity?: () => void;
 }) {
   const gasLow = model && model.wallet.tank < model.wallet.tank_capacity * 0.25;
   return (
@@ -2263,7 +2287,7 @@ function Dashboard({
         </div>
         <div className="bot-grid">
           {bots.map((bot) => (
-            <BotCard key={bot.name} bot={bot} />
+            <BotCard key={bot.name} bot={bot} onOpen={onManage} />
           ))}
         </div>
       </section>
@@ -2288,10 +2312,10 @@ function Dashboard({
           </button>
         </div>
       )}
-      <Activity ledger={model?.ledger} />
+      <Activity ledger={model?.ledger} onViewAll={onViewActivity} />
       {model?.demo && <DemoBanner demo={model.demo} onStart={onStartDemo} />}
       <div className="sync-time">
-        LAST SYNCED 09:42:18 UTC · ALL SYSTEMS NOMINAL
+        ACCOUNT SNAPSHOT · LIVE DATA
       </div>
     </div>
   );
@@ -4289,6 +4313,8 @@ function LiveHelpScreen({
   const [asset, setAsset] = useState("");
   const [hash, setHash] = useState("");
   const [address, setAddress] = useState("");
+  const [details, setDetails] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
   return (
     <div className="account-screen">
       <div className="screen-title">
@@ -4362,6 +4388,12 @@ function LiveHelpScreen({
           onChange={(e) => setAddress(e.target.value)}
           placeholder="Address sent to"
         />
+        <textarea
+          value={details}
+          onChange={(e) => setDetails(e.target.value)}
+          placeholder="What happened? Include the asset, amount, and any relevant details."
+          rows={3}
+        />
         <button
           className="primary-action"
           disabled={!network || !asset || !hash || !address}
@@ -4374,8 +4406,14 @@ function LiveHelpScreen({
                   asset,
                   tx_hash: hash,
                   destination: address,
+                  details,
                 }),
               });
+              setNetwork("");
+              setAsset("");
+              setHash("");
+              setAddress("");
+              setDetails("");
               onNotice("Recovery case submitted for review.");
             } catch (error) {
               onNotice(
@@ -4387,6 +4425,44 @@ function LiveHelpScreen({
           }}
         >
           Submit recovery case <Send />
+        </button>
+      </GradientPanel>
+      <GradientPanel className="flow-card">
+        <span className="eyebrow">SUPPORT</span>
+        <h2>Need help with something else?</h2>
+        <p>
+          Open a tracked request for account, bot, deposit, or withdrawal help.
+        </p>
+        <textarea
+          value={supportMessage}
+          onChange={(event) => setSupportMessage(event.target.value)}
+          placeholder="Describe the issue without sharing a security code or private key."
+          rows={3}
+        />
+        <button
+          className="primary-action"
+          disabled={!supportMessage.trim()}
+          onClick={async () => {
+            try {
+              const result = await request("/v1/support/tickets", {
+                method: "POST",
+                body: JSON.stringify({
+                  topic: "Web help center",
+                  message: supportMessage.trim(),
+                }),
+              });
+              setSupportMessage("");
+              onNotice(`Support ticket #${result.ticket_id} opened.`);
+            } catch (error) {
+              onNotice(
+                error instanceof Error
+                  ? error.message
+                  : "Could not open a support ticket.",
+              );
+            }
+          }}
+        >
+          Open support ticket <Send />
         </button>
       </GradientPanel>
     </div>
@@ -4419,6 +4495,25 @@ function LiveAdminScreen({
   const [settingValue, setSettingValue] = useState("");
   const [broadcast, setBroadcast] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [adminMember, setAdminMember] = useState("");
+  const [vaultChain, setVaultChain] = useState("");
+  const [vaultAsset, setVaultAsset] = useState("USDT");
+  const [vaultAddress, setVaultAddress] = useState("");
+  const [vaults, setVaults] = useState<
+    Array<{ chain: string; asset: string; address: string }>
+  >([]);
+  useEffect(() => {
+    setVaultChain((current) =>
+      admin.chains.some((chain) => chain.id === current)
+        ? current
+        : admin.chains[0]?.id || "",
+    );
+    request("/v1/admin/vaults")
+      .then((response) => setVaults(response.vaults || []))
+      .catch(() => setVaults([]));
+  }, [environment]);
+  const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
+  const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
   const post = async (path: string, body: object, message: string) => {
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
@@ -4627,6 +4722,7 @@ function LiveAdminScreen({
           <div className="admin-actions">
             <button
               className="small-action"
+              disabled={!validFunding}
               onClick={() =>
                 post(
                   "/v1/admin/fund",
@@ -4639,6 +4735,7 @@ function LiveAdminScreen({
             </button>
             <button
               className="danger-action"
+              disabled={!/^\d+$/.test(target)}
               onClick={() =>
                 post(
                   "/v1/admin/onboarding/reset",
@@ -4651,6 +4748,7 @@ function LiveAdminScreen({
             </button>
             <button
               className="small-action"
+              disabled={!/^\d+$/.test(target)}
               onClick={() =>
                 post(
                   "/v1/admin/demo/reissue",
@@ -4683,6 +4781,7 @@ function LiveAdminScreen({
           />
           <button
             className="primary-action"
+            disabled={!settingValue.trim()}
             onClick={() =>
               post(
                 "/v1/admin/settings",
@@ -4715,6 +4814,7 @@ function LiveAdminScreen({
           />
           <button
             className="primary-action"
+            disabled={!broadcast.trim() || confirm !== "SEND ALL"}
             onClick={() =>
               post(
                 "/v1/admin/broadcast",
@@ -4742,6 +4842,102 @@ function LiveAdminScreen({
               </small>
             </div>
           ))}
+          <input
+            value={adminMember}
+            onChange={(event) => setAdminMember(event.target.value.trim())}
+            placeholder="Telegram user ID or @username"
+          />
+          <small>
+            A username must belong to someone who has already started the bot.
+          </small>
+          <button
+            className="primary-action"
+            disabled={!validTarget}
+            onClick={() =>
+              post(
+                "/v1/admin/members",
+                { user_id: adminMember },
+                "Administrator access updated.",
+              ).then(() => setAdminMember(""))
+            }
+          >
+            Add administrator <ShieldCheck />
+          </button>
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">APPROVED VAULT DESTINATIONS</span>
+          <h2>Environment-scoped treasury routes</h2>
+          <p>
+            {environment.toUpperCase()} only. Saving a route here cannot modify
+            the other workspace.
+          </p>
+          <select
+            value={vaultChain}
+            onChange={(event) => setVaultChain(event.target.value)}
+          >
+            {admin.chains.map((chain) => (
+              <option key={chain.id} value={chain.id}>
+                {chain.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={vaultAsset}
+            onChange={(event) => setVaultAsset(event.target.value)}
+          >
+            <option value="USDT">USDT</option>
+            <option value="USDC">USDC</option>
+          </select>
+          <input
+            value={vaultAddress}
+            onChange={(event) =>
+              setVaultAddress(event.target.value.replace(/\s/g, ""))
+            }
+            placeholder="Approved vault address"
+          />
+          <button
+            className="primary-action"
+            disabled={!vaultChain || !vaultAsset || !vaultAddress}
+            onClick={async () => {
+              try {
+                await request("/v1/admin/vaults", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    chain: vaultChain,
+                    asset: vaultAsset,
+                    address: vaultAddress,
+                  }),
+                });
+                setVaultAddress("");
+                const response = await request("/v1/admin/vaults");
+                setVaults(response.vaults || []);
+                onNotice("Approved vault destination saved.");
+              } catch (error) {
+                onNotice(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not save vault destination.",
+                );
+              }
+            }}
+          >
+            Save vault route <ShieldCheck />
+          </button>
+          {vaults.length ? (
+            vaults
+              .filter((vault) => admin.chains.some((chain) => chain.id === vault.chain))
+              .map((vault) => (
+                <div className="admin-row" key={`${vault.chain}-${vault.asset}`}>
+                  <div>
+                    <strong>{vault.asset} / {vault.chain}</strong>
+                    <small className="mono">{vault.address}</small>
+                  </div>
+                  <span className="status-chip running">approved</span>
+                </div>
+              ))
+          ) : (
+            <p>No approved routes in this workspace.</p>
+          )}
         </GradientPanel>
       </div>
     </div>
@@ -5364,11 +5560,13 @@ function LiveBotsScreen({
   request,
   reload,
   onNotice,
+  onOpenDemo,
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
+  onOpenDemo: () => void;
 }) {
   const [view, setView] = useState<"fleet" | "create" | "detail">("fleet");
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
@@ -5671,7 +5869,7 @@ function LiveBotsScreen({
           ))}
         </div>
       ) : (
-        <EmptyBots />
+        <EmptyBots onLaunch={() => setView("create")} />
       )}
       {data.bots.some((bot) => bot.state === "paused") && (
         <GradientPanel className="bot-card">
@@ -5694,9 +5892,7 @@ function LiveBotsScreen({
       {data.demo && (
         <button
           className="demo-link"
-          onClick={() =>
-            onNotice("Your virtual demo is available from the dashboard.")
-          }
+          onClick={onOpenDemo}
         >
           Explore the {money(data.demo.grant_usd || 50)} virtual demo{" "}
           <ChevronRight />
@@ -5711,15 +5907,20 @@ function LiveWalletScreen({
   request,
   reload,
   onNotice,
+  initialView = "overview",
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
+  initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
 }) {
   const [view, setView] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
   const [step, setStep] = useState(0);
   const [asset, setAsset] = useState("USDT");
   const [chain, setChain] = useState("ERC20");
@@ -6560,6 +6761,9 @@ function LiveTradePulse() {
     | "Synthetic"
     | "Admin"
   >("Dashboard");
+  const [walletEntry, setWalletEntry] = useState<
+    "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
+  >("overview");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("20");
@@ -6910,7 +7114,14 @@ function LiveTradePulse() {
   const chromeActive = tab === "Desk" ? "Live Desk" : tab;
   const selectChromeTab = (value: string) => {
     if (value === "Live Desk") return setTab("Desk");
-    if (value === "Community" || value === "More") return setTab("Help");
+    if (value === "Community") {
+      window.open(data.community_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (value === "More") {
+      setNotice("Profile controls are available in Account.");
+      return setTab("Account");
+    }
     if (value === "Admin" && !data.user.is_admin) return;
     if (
       [
@@ -7096,8 +7307,15 @@ function LiveTradePulse() {
               bots={visualBots}
               model={visualModel}
               onManage={() => setTab("Bots")}
-              onTopUp={() => setTab("Wallet")}
+              onTopUp={() => {
+                setWalletEntry("gas");
+                setTab("Wallet");
+              }}
               onStartDemo={() => act("/v1/demo/start", {})}
+              onViewActivity={() => {
+                setWalletEntry("activity");
+                setTab("Wallet");
+              }}
             />
           )}
           {tab === "Dashboard" &&
@@ -7229,6 +7447,7 @@ function LiveTradePulse() {
               request={request}
               reload={load}
               onNotice={setNotice}
+              onOpenDemo={() => setTab("Dashboard")}
             />
           )}
           {false && tab === "Bots" && (
@@ -7343,6 +7562,7 @@ function LiveTradePulse() {
               request={request}
               reload={load}
               onNotice={setNotice}
+              initialView={walletEntry}
             />
           )}
           {false && tab === "Wallet" && (
@@ -8794,7 +9014,11 @@ function LiveTradePulse() {
           )}
         </div>
       </main>
-      <BottomNav active={chromeActive} setActive={selectChromeTab} />
+      <BottomNav
+        active={chromeActive}
+        setActive={selectChromeTab}
+        isAdmin={data.user.is_admin}
+      />
     </div>
   );
 }
