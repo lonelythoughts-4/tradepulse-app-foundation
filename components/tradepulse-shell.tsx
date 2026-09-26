@@ -4234,6 +4234,123 @@ function chartPath(points: Array<{ price: number }>) {
     .join(" ");
 }
 
+function LiveHelpScreen({
+  data,
+  request,
+  onNotice,
+}: {
+  data: LiveDashboard;
+  request: (path: string, options?: RequestInit) => Promise<any>;
+  onNotice: (message: string) => void;
+}) {
+  const [network, setNetwork] = useState("");
+  const [asset, setAsset] = useState("");
+  const [hash, setHash] = useState("");
+  const [address, setAddress] = useState("");
+  return (
+    <div className="account-screen">
+      <div className="screen-title">
+        <div>
+          <span className="eyebrow">HELP / SUPPORT</span>
+          <h2>Help center</h2>
+        </div>
+        <button
+          className="share-action"
+          onClick={() =>
+            window.open(data.community_url, "_blank", "noopener,noreferrer")
+          }
+        >
+          Community
+        </button>
+      </div>
+      <GradientPanel className="levels-card">
+        <span className="eyebrow">COMMON QUESTIONS</span>
+        <h2>Clear answers, fast</h2>
+        {[
+          [
+            "Below-minimum deposit",
+            "Send the remainder to the same active address.",
+          ],
+          [
+            "Deposit not showing",
+            "Use I made this deposit after sending; credit follows on-chain confirmation.",
+          ],
+          [
+            "Withdrawal pending",
+            "Funds remain locked until released or rejected.",
+          ],
+          ["Wrong network", "Do not send more. Submit the transaction below."],
+        ].map(([title, body]) => (
+          <div className="level-row" key={title}>
+            <b>?</b>
+            <span>
+              <strong>{title}</strong>
+              <small>{body}</small>
+            </span>
+          </div>
+        ))}
+      </GradientPanel>
+      <GradientPanel className="flow-card">
+        <img
+          src="/illustrations/recovery-lifebuoy.png"
+          alt="Recovery support"
+          className="recovery-art"
+        />
+        <span className="eyebrow">WRONG-NETWORK RECOVERY</span>
+        <h2>Submit for manual review</h2>
+        <div className="alert-fields">
+          <input
+            value={network}
+            onChange={(e) => setNetwork(e.target.value)}
+            placeholder="Network"
+          />
+          <input
+            value={asset}
+            onChange={(e) => setAsset(e.target.value)}
+            placeholder="Asset"
+          />
+        </div>
+        <input
+          value={hash}
+          onChange={(e) => setHash(e.target.value)}
+          placeholder="Transaction hash"
+        />
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="Address sent to"
+        />
+        <button
+          className="primary-action"
+          disabled={!network || !asset || !hash || !address}
+          onClick={async () => {
+            try {
+              await request("/v1/recovery", {
+                method: "POST",
+                body: JSON.stringify({
+                  network,
+                  asset,
+                  tx_hash: hash,
+                  destination: address,
+                }),
+              });
+              onNotice("Recovery case submitted for review.");
+            } catch (error) {
+              onNotice(
+                error instanceof Error
+                  ? error.message
+                  : "Could not submit recovery case.",
+              );
+            }
+          }}
+        >
+          Submit recovery case <Send />
+        </button>
+      </GradientPanel>
+    </div>
+  );
+}
+
 function LiveDeskScreen({
   data,
   request,
@@ -7077,6 +7194,13 @@ function LiveTradePulse() {
             </GradientPanel>
           )}
           {tab === "Help" && (
+            <LiveHelpScreen
+              data={data}
+              request={request}
+              onNotice={setNotice}
+            />
+          )}
+          {false && tab === "Help" && (
             <div className="desk-screen">
               <GradientPanel className="announcements">
                 <span className="eyebrow">HELP CENTER</span>
