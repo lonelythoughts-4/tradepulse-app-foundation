@@ -5718,7 +5718,7 @@ function LiveWalletScreen({
   onNotice: (message: string) => void;
 }) {
   const [view, setView] = useState<
-    "overview" | "deposit" | "withdraw" | "history"
+    "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
   const [step, setStep] = useState(0);
   const [asset, setAsset] = useState("USDT");
@@ -5734,6 +5734,9 @@ function LiveWalletScreen({
   const [withdrawCode, setWithdrawCode] = useState("");
   const [reviewWithdrawal, setReviewWithdrawal] = useState(false);
   const [tankAmount, setTankAmount] = useState("20");
+  const [historyFilter, setHistoryFilter] = useState<
+    "all" | "deposit" | "withdraw" | "bot"
+  >("all");
   const networks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -5746,6 +5749,16 @@ function LiveWalletScreen({
     setStep(0);
     setReviewWithdrawal(false);
   };
+  const isEvmAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value);
+  const filteredLedger = data.ledger.filter((entry) => {
+    if (historyFilter === "all") return true;
+    const kind = entry.kind.toLowerCase();
+    if (historyFilter === "deposit") return kind.includes("deposit");
+    if (historyFilter === "withdraw") return kind.includes("withdraw");
+    return (
+      kind.includes("bot") || kind.includes("trade") || kind.includes("engine")
+    );
+  });
   const createRoute = async () => {
     try {
       const result = await request("/v1/deposits/routes", {
@@ -5919,9 +5932,79 @@ function LiveWalletScreen({
               >
                 I made this deposit <ChevronRight />
               </button>
+              <div className="timeline">
+                <span className="eyebrow">DEPOSIT STATUS</span>
+                {["Detected", "Verified", "Credited"].map((label, index) => {
+                  const status = intent.status.toLowerCase();
+                  const complete =
+                    index === 0
+                      ? !["watching", "pending"].includes(status)
+                      : index === 1
+                        ? [
+                            "confirmed_pending_sweep",
+                            "sweeping",
+                            "sweep_confirming",
+                            "credited_and_closed",
+                          ].includes(status)
+                        : status === "credited_and_closed";
+                  return (
+                    <div className="timeline-row" key={label}>
+                      <i className={complete ? "active" : ""}>
+                        {complete ? "✓" : index + 1}
+                      </i>
+                      <div>
+                        <strong>{label}</strong>
+                        <small>
+                          {index === 0
+                            ? "Waiting for the selected route to detect your transaction."
+                            : index === 1
+                              ? "On-chain confirmation is required before a balance credit."
+                              : "Your available balance updates after the route is fully settled."}
+                        </small>
+                      </div>
+                      <span
+                        className={`status-chip ${complete ? "running" : "review"}`}
+                      >
+                        {complete ? "complete" : "pending"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </GradientPanel>
+        {data.deposits.length > 0 && (
+          <GradientPanel className="ledger-card">
+            <span className="eyebrow">MY DEPOSIT ROUTES</span>
+            {data.deposits.map((route) => (
+              <div className="ledger-row" key={route.id}>
+                <div>
+                  <strong>
+                    {route.asset} / {route.chain}
+                  </strong>
+                  <small>{route.address}</small>
+                </div>
+                <span
+                  className={`activity-status ${route.status.includes("fail") ? "review" : "complete"}`}
+                >
+                  {route.status}
+                </span>
+                <button
+                  className="small-action"
+                  onClick={() => {
+                    setIntent(route);
+                    setAsset(route.asset);
+                    setChain(route.chain);
+                    setStep(2);
+                  }}
+                >
+                  Open
+                </button>
+              </div>
+            ))}
+          </GradientPanel>
+        )}
       </div>
     );
   if (view === "withdraw")
@@ -5989,6 +6072,34 @@ function LiveWalletScreen({
               autoComplete="off"
             />
           </label>
+          {data.whitelist.filter((route) => route.chain === withdrawChain)
+            .length > 0 && (
+            <div className="saved-destinations">
+              <span className="field-caption">SAVED DESTINATIONS</span>
+              {data.whitelist
+                .filter((route) => route.chain === withdrawChain)
+                .map((route) => {
+                  const cooling =
+                    Number(route.cooling_until || 0) * 1000 > Date.now();
+                  return (
+                    <button
+                      type="button"
+                      className="saved-destination"
+                      key={route.id}
+                      disabled={cooling}
+                      onClick={() => setWithdrawAddress(route.address)}
+                    >
+                      <span>{route.nickname}</span>
+                      <small>
+                        {route.address.slice(0, 8)}…{route.address.slice(-6)}{" "}
+                        {cooling ? "· cooling" : ""}
+                      </small>
+                      <ChevronRight />
+                    </button>
+                  );
+                })}
+            </div>
+          )}
           <label className="amount-field">
             <span>AMOUNT / USD</span>
             <input
@@ -6018,6 +6129,7 @@ function LiveWalletScreen({
             className="primary-action"
             disabled={
               !withdrawAddress ||
+              !isEvmAddress(withdrawAddress) ||
               Number(withdrawAmount) <= 0 ||
               Number(withdrawAmount) > data.wallet.available ||
               withdrawCode.length !== 6
@@ -6070,14 +6182,25 @@ function LiveWalletScreen({
           </button>
         </div>
         <div className="filter-chips">
-          <button className="active">All</button>
-          <button>Deposits</button>
-          <button>Withdrawals</button>
-          <button>Bot activity</button>
+          {(["all", "deposit", "withdraw", "bot"] as const).map((filter) => (
+            <button
+              key={filter}
+              className={historyFilter === filter ? "active" : ""}
+              onClick={() => setHistoryFilter(filter)}
+            >
+              {filter === "all"
+                ? "All"
+                : filter === "deposit"
+                  ? "Deposits"
+                  : filter === "withdraw"
+                    ? "Withdrawals"
+                    : "Bot activity"}
+            </button>
+          ))}
         </div>
         <GradientPanel className="ledger-card">
-          {data.ledger.length ? (
-            data.ledger.map((entry, index) => (
+          {filteredLedger.length ? (
+            filteredLedger.map((entry, index) => (
               <div className="ledger-row" key={`${entry.created_at}-${index}`}>
                 <div>
                   <strong>{entry.kind.replace(/_/g, " ")}</strong>
@@ -6106,6 +6229,165 @@ function LiveWalletScreen({
               </small>
             </div>
           )}
+        </GradientPanel>
+      </div>
+    );
+  if (view === "activity")
+    return (
+      <div className="ledger-screen">
+        <div className="ledger-header">
+          <div>
+            <span className="eyebrow">WALLET / ACTIVITY</span>
+            <h2>Activity</h2>
+          </div>
+          <button className="view-all" onClick={showOverview}>
+            Overview <ChevronRight />
+          </button>
+        </div>
+        <GradientPanel className="ledger-card">
+          {[...data.engine, ...data.ledger].length ? (
+            [
+              ...data.engine.map((entry) => ({
+                kind: entry.status,
+                asset: "Engine",
+                amount_usd: entry.net_realized,
+                status: entry.status,
+                created_at: entry.created_at,
+              })),
+              ...data.ledger,
+            ]
+              .sort((a, b) => b.created_at - a.created_at)
+              .map((entry, index) => (
+                <div
+                  className="ledger-row"
+                  key={`${entry.created_at}-${index}`}
+                >
+                  <div>
+                    <strong>{entry.kind.replace(/_/g, " ")}</strong>
+                    <small>
+                      {entry.asset} / {entry.status}
+                    </small>
+                  </div>
+                  <span
+                    className={`activity-status ${entry.status === "failed" ? "review" : "complete"}`}
+                  >
+                    {entry.status}
+                  </span>
+                  <code className={entry.amount_usd >= 0 ? "mint" : ""}>
+                    {entry.amount_usd >= 0 ? "+" : ""}
+                    {money(entry.amount_usd)}
+                  </code>
+                </div>
+              ))
+          ) : (
+            <div className="empty-wallet-state">
+              <img
+                src="/illustrations/empty-wallet.png"
+                alt="No wallet activity"
+              />
+              <strong>No activity yet</strong>
+              <small>Verified transfers and bot events will appear here.</small>
+            </div>
+          )}
+        </GradientPanel>
+      </div>
+    );
+  if (view === "gas")
+    return (
+      <div className="wallet-flow">
+        <button className="back-action" onClick={showOverview}>
+          ← Wallet overview
+        </button>
+        <GradientPanel className="gas-card">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">NETWORK GAS TANK</span>
+              <h2>Keep actions moving</h2>
+            </div>
+            <Fuel size={18} />
+          </div>
+          <div className="gas-meter">
+            <div>
+              <strong>
+                {Math.round(
+                  (data.wallet.tank / Math.max(data.wallet.tank_capacity, 1)) *
+                    100,
+                )}
+                %
+              </strong>
+              <small>
+                {money(data.wallet.tank)} of {money(data.wallet.tank_capacity)}
+              </small>
+            </div>
+            <div className="gas-track">
+              <i
+                style={{
+                  width: `${Math.min(100, (data.wallet.tank / Math.max(data.wallet.tank_capacity, 1)) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+          <label className="toggle-row">
+            <span>
+              Auto-fill when low<small>Uses available balance</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={data.wallet.tank_autofill}
+              onChange={async () => {
+                try {
+                  await request("/v1/tank/actions", {
+                    method: "POST",
+                    body: JSON.stringify({ action: "autofill" }),
+                  });
+                  await reload();
+                } catch (error) {
+                  onNotice(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not update auto-fill.",
+                  );
+                }
+              }}
+            />
+            <i />
+          </label>
+          <label className="amount-field">
+            <span>TOP UP TANK / USD</span>
+            <input
+              value={tankAmount}
+              onChange={(e) => setTankAmount(e.target.value)}
+              inputMode="decimal"
+            />
+          </label>
+          <button
+            className="primary-action"
+            disabled={
+              Number(tankAmount) <= 0 ||
+              Number(tankAmount) > data.wallet.available
+            }
+            onClick={async () => {
+              try {
+                await request("/v1/tank/actions", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    action: "topup",
+                    amount: Number(tankAmount),
+                  }),
+                });
+                await reload();
+                onNotice("Gas tank top-up applied.");
+              } catch (error) {
+                onNotice(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not top up gas tank.",
+                );
+              }
+            }}
+          >
+            Top up gas tank <Fuel />
+          </button>
         </GradientPanel>
       </div>
     );
@@ -6229,11 +6511,25 @@ function LiveWalletScreen({
           <strong>Withdraw</strong>
           <ChevronRight />
         </button>
+        <button onClick={() => setView("gas")}>
+          <span>
+            <Fuel />
+          </span>
+          <strong>Gas tank</strong>
+          <ChevronRight />
+        </button>
         <button onClick={() => setView("history")}>
           <span>
             <History />
           </span>
           <strong>History</strong>
+          <ChevronRight />
+        </button>
+        <button onClick={() => setView("activity")}>
+          <span>
+            <Zap />
+          </span>
+          <strong>Activity</strong>
           <ChevronRight />
         </button>
       </div>
