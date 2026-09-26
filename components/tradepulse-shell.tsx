@@ -279,9 +279,8 @@ function BrowserBotHandoff() {
       const start = await fetch('/api/v1/auth/handoff/start', { method: 'POST' })
       const handoff = await start.json()
       if (!start.ok || !handoff.token || !handoff.bot_url) throw new Error(handoff.error || 'Could not start a secure browser connection.')
-      setBotUrl(handoff.bot_url)
       if (telegramWindow) telegramWindow.location.replace(handoff.bot_url)
-      else setMessage('Open Telegram with the secure link below, then return to this tab…')
+      else { setBotUrl(handoff.bot_url); setMessage('Your browser blocked the Telegram tab. Open Telegram with the secure link below, then return here…') }
       const deadline = Date.now() + Number(handoff.expires_in || 300) * 1000
       timer.current = window.setInterval(async () => {
         if (Date.now() >= deadline) { if (timer.current) window.clearInterval(timer.current); timer.current = null; setState('error'); setMessage('That connection expired. Start again from this browser.'); return }
