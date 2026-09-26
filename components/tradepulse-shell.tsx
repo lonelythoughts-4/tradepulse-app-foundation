@@ -4234,6 +4234,551 @@ function chartPath(points: Array<{ price: number }>) {
     .join(" ");
 }
 
+function LiveWalletScreen({
+  data,
+  request,
+  reload,
+  onNotice,
+}: {
+  data: LiveDashboard;
+  request: (path: string, options?: RequestInit) => Promise<any>;
+  reload: () => Promise<void>;
+  onNotice: (message: string) => void;
+}) {
+  const [view, setView] = useState<
+    "overview" | "deposit" | "withdraw" | "history"
+  >("overview");
+  const [step, setStep] = useState(0);
+  const [asset, setAsset] = useState("USDT");
+  const [chain, setChain] = useState("ERC20");
+  const [expectedAmount, setExpectedAmount] = useState("");
+  const [intent, setIntent] = useState<
+    LiveDashboard["deposits"][number] | null
+  >(null);
+  const [withdrawAsset, setWithdrawAsset] = useState("USDT");
+  const [withdrawChain, setWithdrawChain] = useState("ERC20");
+  const [withdrawAddress, setWithdrawAddress] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawCode, setWithdrawCode] = useState("");
+  const [reviewWithdrawal, setReviewWithdrawal] = useState(false);
+  const [tankAmount, setTankAmount] = useState("20");
+  const networks = [
+    ["ERC20", "Ethereum"],
+    ["BEP20", "BNB Chain"],
+    ["BASE", "Base"],
+    ["ARBITRUM", "Arbitrum"],
+    ["POLYGON", "Polygon"],
+  ];
+  const showOverview = () => {
+    setView("overview");
+    setStep(0);
+    setReviewWithdrawal(false);
+  };
+  const createRoute = async () => {
+    try {
+      const result = await request("/v1/deposits/routes", {
+        method: "POST",
+        body: JSON.stringify({
+          asset,
+          chain,
+          expected_amount: expectedAmount || null,
+        }),
+      });
+      setIntent(result.intent);
+      setStep(2);
+      onNotice(
+        "Deposit route created. Send only the selected asset on the selected network.",
+      );
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : "Could not create the deposit route.",
+      );
+    }
+  };
+  const submitWithdrawal = async () => {
+    try {
+      const result = await request("/v1/withdrawals", {
+        method: "POST",
+        body: JSON.stringify({
+          asset: withdrawAsset,
+          chain: withdrawChain,
+          address: withdrawAddress,
+          amount: Number(withdrawAmount),
+          security_code: withdrawCode,
+        }),
+      });
+      onNotice(
+        `Withdrawal ${String(result.withdrawal_id || "request").slice(0, 8)} is queued for review.`,
+      );
+      setWithdrawAddress("");
+      setWithdrawAmount("");
+      setWithdrawCode("");
+      setReviewWithdrawal(false);
+      await reload();
+      showOverview();
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : "Could not create the withdrawal request.",
+      );
+    }
+  };
+  if (view === "deposit")
+    return (
+      <div className="wallet-flow">
+        <button className="back-action" onClick={showOverview}>
+          ← Wallet overview
+        </button>
+        <StepRail current={step} />
+        <GradientPanel className="flow-card">
+          <div className="flow-title">
+            <div>
+              <span className="eyebrow">DEPOSIT / ONE-TIME ROUTE</span>
+              <h2>
+                {step === 0
+                  ? "Choose an asset"
+                  : step === 1
+                    ? "Choose a network"
+                    : `Send ${asset} to TradePulse`}
+              </h2>
+            </div>
+            <span className="secure-chip">
+              <ShieldCheck /> SECURE
+            </span>
+          </div>
+          {step === 0 && (
+            <div className="choice-grid">
+              {["USDT", "USDC"].map((item) => (
+                <button
+                  key={item}
+                  className={asset === item ? "selected" : ""}
+                  onClick={() => {
+                    setAsset(item);
+                    setStep(1);
+                  }}
+                >
+                  <span className="coin-mark">{item[0]}</span>
+                  <strong>{item}</strong>
+                  <small>{item === "USDT" ? "Tether USD" : "USD Coin"}</small>
+                  <ChevronRight />
+                </button>
+              ))}
+            </div>
+          )}
+          {step === 1 && (
+            <>
+              <div className="choice-grid">
+                {networks.map(([value, label]) => (
+                  <button
+                    key={value}
+                    className={chain === value ? "selected" : ""}
+                    onClick={() => setChain(value)}
+                  >
+                    <span className="network-mark" />
+                    <strong>{label}</strong>
+                    <small>Use only this matching network</small>
+                    <ChevronRight />
+                  </button>
+                ))}
+              </div>
+              <label className="amount-field">
+                <span>EXPECTED AMOUNT / OPTIONAL</span>
+                <input
+                  value={expectedAmount}
+                  onChange={(event) => setExpectedAmount(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                />
+              </label>
+              <button className="primary-action" onClick={createRoute}>
+                Create secure route <ChevronRight />
+              </button>
+            </>
+          )}
+          {step === 2 && intent && (
+            <>
+              <div className="qr-placeholder">
+                <div className="qr-grid" />
+                <small>
+                  SCAN TO DEPOSIT {intent.asset} ON {intent.chain}
+                </small>
+              </div>
+              <div className="copy-field">
+                <code>{intent.address}</code>
+                <button
+                  aria-label="Copy deposit address"
+                  onClick={() => navigator.clipboard?.writeText(intent.address)}
+                >
+                  <Copy />
+                </button>
+              </div>
+              <div className="warning-block">
+                <strong>
+                  Send {intent.asset} on {intent.chain} only
+                </strong>
+                <span>
+                  This is a one-time route. Another asset or network cannot be
+                  credited automatically.
+                </span>
+              </div>
+              <button
+                className="primary-action"
+                onClick={async () => {
+                  try {
+                    const result = await request(
+                      `/v1/deposits/${intent.id}/watch`,
+                      { method: "POST", body: "{}" },
+                    );
+                    onNotice(
+                      `Deposit monitoring started / ${result.status}. Credit happens after confirmation.`,
+                    );
+                    await reload();
+                  } catch (error) {
+                    onNotice(
+                      error instanceof Error
+                        ? error.message
+                        : "Could not start deposit monitoring.",
+                    );
+                  }
+                }}
+              >
+                I made this deposit <ChevronRight />
+              </button>
+            </>
+          )}
+        </GradientPanel>
+      </div>
+    );
+  if (view === "withdraw")
+    return (
+      <div className="wallet-flow">
+        <button className="back-action" onClick={showOverview}>
+          ← Wallet overview
+        </button>
+        <StepRail current={2} />
+        <GradientPanel className="flow-card">
+          <div className="flow-title">
+            <div>
+              <span className="eyebrow">WITHDRAW / CROSS-CHECK</span>
+              <h2>Send funds safely</h2>
+            </div>
+            <span className="secure-chip">
+              <ShieldCheck /> SECURE
+            </span>
+          </div>
+          <div className="withdrawable-summary">
+            <div>
+              <span>Withdrawable now</span>
+              <strong>{money(data.wallet.available)}</strong>
+            </div>
+            <div>
+              <span>Locked in bots</span>
+              <strong>{money(data.wallet.locked)}</strong>
+            </div>
+            <small>
+              Only available wallet balance can be withdrawn. Check every
+              destination character before continuing.
+            </small>
+          </div>
+          <label className="amount-field">
+            <span>ASSET</span>
+            <select
+              value={withdrawAsset}
+              onChange={(event) => setWithdrawAsset(event.target.value)}
+            >
+              <option>USDT</option>
+              <option>USDC</option>
+            </select>
+          </label>
+          <label className="amount-field">
+            <span>NETWORK</span>
+            <select
+              value={withdrawChain}
+              onChange={(event) => setWithdrawChain(event.target.value)}
+            >
+              {networks.map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="amount-field">
+            <span>DESTINATION ADDRESS</span>
+            <input
+              value={withdrawAddress}
+              onChange={(event) =>
+                setWithdrawAddress(event.target.value.replace(/\s/g, ""))
+              }
+              placeholder="Paste the full destination address"
+              autoComplete="off"
+            />
+          </label>
+          <label className="amount-field">
+            <span>AMOUNT / USD</span>
+            <input
+              value={withdrawAmount}
+              onChange={(event) =>
+                setWithdrawAmount(event.target.value.replace(/[^0-9.]/g, ""))
+              }
+              inputMode="decimal"
+              placeholder="0.00"
+            />
+          </label>
+          <label className="amount-field">
+            <span>SIX-DIGIT SECURITY CODE</span>
+            <input
+              type="password"
+              value={withdrawCode}
+              onChange={(event) =>
+                setWithdrawCode(
+                  event.target.value.replace(/\D/g, "").slice(0, 6),
+                )
+              }
+              inputMode="numeric"
+              placeholder="••••••"
+            />
+          </label>
+          <button
+            className="primary-action"
+            disabled={
+              !withdrawAddress ||
+              Number(withdrawAmount) <= 0 ||
+              Number(withdrawAmount) > data.wallet.available ||
+              withdrawCode.length !== 6
+            }
+            onClick={() => setReviewWithdrawal(true)}
+          >
+            Review withdrawal <ChevronRight />
+          </button>
+        </GradientPanel>
+        {reviewWithdrawal && (
+          <div className="modal-backdrop">
+            <GradientPanel className="confirm-modal">
+              <span className="eyebrow">FINAL CROSS-CHECK</span>
+              <h2>Verify before sending</h2>
+              <div className="mono-review">
+                <span>
+                  {withdrawAsset} / {withdrawChain}
+                </span>
+                <code>{withdrawAddress}</code>
+                <span>AMOUNT / {money(Number(withdrawAmount))}</span>
+              </div>
+              <p>
+                Withdrawal requests are reviewed before release. Confirm only
+                when the address and network are correct.
+              </p>
+              <button className="primary-action" onClick={submitWithdrawal}>
+                Confirm withdrawal <Send />
+              </button>
+              <button
+                className="ghost-action"
+                onClick={() => setReviewWithdrawal(false)}
+              >
+                Go back
+              </button>
+            </GradientPanel>
+          </div>
+        )}
+      </div>
+    );
+  if (view === "history")
+    return (
+      <div className="ledger-screen">
+        <div className="ledger-header">
+          <div>
+            <span className="eyebrow">WALLET / HISTORY</span>
+            <h2>Ledger history</h2>
+          </div>
+          <button className="view-all" onClick={showOverview}>
+            Overview <ChevronRight />
+          </button>
+        </div>
+        <div className="filter-chips">
+          <button className="active">All</button>
+          <button>Deposits</button>
+          <button>Withdrawals</button>
+          <button>Bot activity</button>
+        </div>
+        <GradientPanel className="ledger-card">
+          {data.ledger.length ? (
+            data.ledger.map((entry, index) => (
+              <div className="ledger-row" key={`${entry.created_at}-${index}`}>
+                <div>
+                  <strong>{entry.kind.replace(/_/g, " ")}</strong>
+                  <small>
+                    {entry.asset} / {entry.status}
+                  </small>
+                </div>
+                <span
+                  className={`activity-status ${entry.status === "failed" ? "review" : "complete"}`}
+                >
+                  {entry.status}
+                </span>
+                <code className={entry.amount_usd >= 0 ? "mint" : ""}>
+                  {entry.amount_usd >= 0 ? "+" : ""}
+                  {money(entry.amount_usd)}
+                </code>
+              </div>
+            ))
+          ) : (
+            <div className="empty-wallet-state">
+              <img src="/illustrations/empty-wallet.png" alt="Empty wallet" />
+              <strong>No wallet activity yet</strong>
+              <small>
+                Your verified deposits, withdrawals, and bot allocations will
+                appear here.
+              </small>
+            </div>
+          )}
+        </GradientPanel>
+      </div>
+    );
+  const tankPercent = Math.min(
+    100,
+    (data.wallet.tank / Math.max(data.wallet.tank_capacity, 1)) * 100,
+  );
+  return (
+    <div className="wallet-grid">
+      <div className="wallet-stat-grid">
+        <WalletCard
+          label="AVAILABLE"
+          value={money(data.wallet.available)}
+          detail="Ready to deploy or withdraw"
+          accent="mint"
+        />
+        <WalletCard
+          label="LOCKED"
+          value={money(data.wallet.locked)}
+          detail="Allocated to active bots"
+        />
+        <WalletCard
+          label="TOTAL EQUITY"
+          value={money(data.wallet.equity)}
+          detail="Account value"
+          accent="mint"
+        />
+        <WalletCard
+          label="HIGH-WATER MARK"
+          value={money(data.wallet.hwm)}
+          detail="Performance fee reference"
+        />
+      </div>
+      <GradientPanel className="gas-card">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">NETWORK GAS TANK</span>
+            <h2>Keep actions moving</h2>
+          </div>
+          <Fuel size={18} />
+        </div>
+        <div className="gas-meter">
+          <div>
+            <strong>{Math.round(tankPercent)}%</strong>
+            <small>{money(data.wallet.tank)} remaining</small>
+          </div>
+          <div className="gas-track">
+            <i style={{ width: `${tankPercent}%` }} />
+          </div>
+        </div>
+        <label className="toggle-row">
+          <span>
+            Auto-fill when low<small>Uses available balance</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={data.wallet.tank_autofill}
+            onChange={async () => {
+              try {
+                await request("/v1/tank/actions", {
+                  method: "POST",
+                  body: JSON.stringify({ action: "autofill" }),
+                });
+                await reload();
+              } catch (error) {
+                onNotice(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not update auto-fill.",
+                );
+              }
+            }}
+          />
+          <i />
+        </label>
+        <label className="amount-field">
+          <span>TOP UP TANK / USD</span>
+          <input
+            value={tankAmount}
+            onChange={(event) => setTankAmount(event.target.value)}
+            inputMode="decimal"
+          />
+        </label>
+        <button
+          className="small-action"
+          onClick={async () => {
+            try {
+              await request("/v1/tank/actions", {
+                method: "POST",
+                body: JSON.stringify({
+                  action: "topup",
+                  amount: Number(tankAmount),
+                }),
+              });
+              await reload();
+              onNotice("Gas tank top-up applied.");
+            } catch (error) {
+              onNotice(
+                error instanceof Error
+                  ? error.message
+                  : "Could not top up the gas tank.",
+              );
+            }
+          }}
+        >
+          Top up gas tank <Fuel />
+        </button>
+      </GradientPanel>
+      <div className="wallet-actions">
+        <button onClick={() => setView("deposit")}>
+          <span>
+            <Download />
+          </span>
+          <strong>Deposit</strong>
+          <ChevronRight />
+        </button>
+        <button onClick={() => setView("withdraw")}>
+          <span>
+            <Send />
+          </span>
+          <strong>Withdraw</strong>
+          <ChevronRight />
+        </button>
+        <button onClick={() => setView("history")}>
+          <span>
+            <History />
+          </span>
+          <strong>History</strong>
+          <ChevronRight />
+        </button>
+      </div>
+      <GradientPanel className="wallet-promo">
+        <ShieldCheck />
+        <div>
+          <span className="eyebrow">CUSTODY CONTROL</span>
+          <h2>Your funds stay yours.</h2>
+          <p>
+            Every movement is recorded, verified, and visible in your ledger.
+          </p>
+        </div>
+      </GradientPanel>
+    </div>
+  );
+}
+
 function LiveTradePulse() {
   const [data, setData] = useState<LiveDashboard | null>(null);
   const [tab, setTab] = useState<
@@ -5024,6 +5569,14 @@ function LiveTradePulse() {
             </div>
           )}
           {tab === "Wallet" && (
+            <LiveWalletScreen
+              data={data}
+              request={request}
+              reload={load}
+              onNotice={setNotice}
+            />
+          )}
+          {false && tab === "Wallet" && (
             <div className="wallet-grid">
               <div className="wallet-stat-grid">
                 {[
@@ -5282,7 +5835,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Wallet" && (
+          {false && tab === "Wallet" && (
             <div className="wallet-grid">
               <GradientPanel className="ledger-card">
                 <span className="eyebrow">MY DEPOSITS</span>
