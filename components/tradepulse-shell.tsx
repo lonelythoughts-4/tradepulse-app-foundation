@@ -4080,6 +4080,41 @@ type LiveDashboard = {
   quote_fresh: boolean;
 };
 
+type LiveTradePulseAdmin = {
+  environment: string;
+  members: Array<{ user_id: number; first_name?: string; username?: string }>;
+  engine: Array<{
+    event_key: string;
+    bot_name: string;
+    net_realized: number;
+    status: string;
+  }>;
+  settings: Array<{ key: string; value: string }>;
+  withdrawals: Array<{
+    id: string;
+    user_id: number;
+    amount_usd: number;
+    asset: string;
+    chain: string;
+    status: string;
+  }>;
+  recovery_cases: Array<{
+    id: number;
+    status: string;
+    asset: string;
+    network: string;
+    user_id: number;
+  }>;
+  sweep_queue: Array<{
+    id: string;
+    asset: string;
+    chain: string;
+    status: string;
+  }>;
+  chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
+  sweeps_enabled: boolean;
+};
+
 const TELEGRAM_BOT_URL = "https://t.me/demo1vbot";
 const TELEGRAM_BOT_USERNAME = "demo1vbot";
 type TelegramWebApp = {
@@ -4347,6 +4382,361 @@ function LiveHelpScreen({
           Submit recovery case <Send />
         </button>
       </GradientPanel>
+    </div>
+  );
+}
+
+function LiveAdminScreen({
+  admin,
+  environment,
+  request,
+  reload,
+  onEnvironment,
+  onNotice,
+}: {
+  admin: NonNullable<LiveTradePulseAdmin>;
+  environment: "mainnet" | "testnet";
+  request: (
+    path: string,
+    options?: RequestInit,
+    environment?: "mainnet" | "testnet",
+  ) => Promise<any>;
+  reload: () => Promise<void>;
+  onEnvironment: (environment: "mainnet" | "testnet") => Promise<void>;
+  onNotice: (message: string) => void;
+}) {
+  const [target, setTarget] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [settingKey, setSettingKey] = useState("deposit_min_usd");
+  const [settingValue, setSettingValue] = useState("");
+  const [broadcast, setBroadcast] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const post = async (path: string, body: object, message: string) => {
+    try {
+      await request(path, { method: "POST", body: JSON.stringify(body) });
+      onNotice(message);
+      await reload();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Admin action failed.");
+    }
+  };
+  return (
+    <div className="admin-screen">
+      <div className="admin-head">
+        <div>
+          <span className="eyebrow">ADMIN / CONTROL ROOM</span>
+          <h2>Operations desk</h2>
+          <small className="mono">SEPARATE ADMIN WORKSPACE</small>
+        </div>
+        <div className="env-toggle">
+          {(["mainnet", "testnet"] as const).map((item) => (
+            <button
+              className={environment === item ? "active" : ""}
+              key={item}
+              onClick={() => onEnvironment(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+      <GradientPanel className="admin-hero">
+        <div>
+          <span className="eyebrow">SYSTEM STATUS</span>
+          <h2>{environment.toUpperCase()} operations</h2>
+          <p className="mono">
+            SWEEPS / {admin.sweeps_enabled ? "ENABLED" : "DISABLED"} / ADMIN
+            ONLY
+          </p>
+        </div>
+        <button
+          className="small-action"
+          onClick={() =>
+            post("/v1/admin/sweeps/toggle", {}, "Sweep policy updated.")
+          }
+        >
+          Toggle sweeps
+        </button>
+      </GradientPanel>
+      <div className="admin-grid">
+        <GradientPanel className="admin-table">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">TREASURY SWEEP QUEUE</span>
+              <h2>Pending movement</h2>
+            </div>
+            <span className="mono">{admin.sweep_queue.length} ROWS</span>
+          </div>
+          {admin.sweep_queue.length ? (
+            admin.sweep_queue.map((row) => (
+              <div className="admin-row" key={row.id}>
+                <div>
+                  <strong>
+                    {row.asset} / {row.chain}
+                  </strong>
+                  <small className="mono">
+                    {row.id.slice(0, 8)} / {row.status}
+                  </small>
+                </div>
+                <button
+                  className="small-action"
+                  onClick={() =>
+                    post(
+                      `/v1/admin/sweeps/${row.id}`,
+                      { action: "retry" },
+                      "Sweep retry requested.",
+                    )
+                  }
+                >
+                  Retry
+                </button>
+                <button
+                  className="small-action"
+                  onClick={() =>
+                    post(
+                      `/v1/admin/sweeps/${row.id}`,
+                      { action: "manual" },
+                      "Manual sweep requested.",
+                    )
+                  }
+                >
+                  Manual
+                </button>
+              </div>
+            ))
+          ) : (
+            <p>No queued deposits.</p>
+          )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">WITHDRAWAL APPROVALS</span>
+          <h2>High-friction review</h2>
+          {admin.withdrawals.length ? (
+            admin.withdrawals.map((row) => (
+              <div className="admin-row" key={row.id}>
+                <div>
+                  <strong>
+                    {money(row.amount_usd)} {row.asset} / {row.chain}
+                  </strong>
+                  <small className="mono">
+                    USER {row.user_id} / {row.status}
+                  </small>
+                </div>
+                <button
+                  className="danger-action"
+                  onClick={() =>
+                    post(
+                      `/v1/admin/withdrawals/${row.id}`,
+                      { action: "approve" },
+                      "Withdrawal approved and logged.",
+                    )
+                  }
+                >
+                  Approve
+                </button>
+                <button
+                  className="small-action"
+                  onClick={() =>
+                    post(
+                      `/v1/admin/withdrawals/${row.id}`,
+                      { action: "reject" },
+                      "Withdrawal rejected.",
+                    )
+                  }
+                >
+                  Reject
+                </button>
+              </div>
+            ))
+          ) : (
+            <p>No pending withdrawals.</p>
+          )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">RECOVERY CASES</span>
+          <h2>Manual recovery</h2>
+          {admin.recovery_cases.length ? (
+            admin.recovery_cases.map((row) => (
+              <div className="admin-row" key={row.id}>
+                <div>
+                  <strong>
+                    RC-{row.id} / {row.asset} / {row.network}
+                  </strong>
+                  <small className="mono">
+                    USER {row.user_id} / {row.status}
+                  </small>
+                </div>
+                <button
+                  className="small-action"
+                  onClick={() =>
+                    post(
+                      `/v1/admin/recovery/${row.id}`,
+                      { status: "verified" },
+                      "Recovery marked verified.",
+                    )
+                  }
+                >
+                  Verify
+                </button>
+                <button
+                  className="small-action"
+                  onClick={() =>
+                    post(
+                      `/v1/admin/recovery/${row.id}`,
+                      { status: "rejected" },
+                      "Recovery rejected.",
+                    )
+                  }
+                >
+                  Reject
+                </button>
+              </div>
+            ))
+          ) : (
+            <p>No recovery cases.</p>
+          )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">ACCOUNT OPERATIONS</span>
+          <h2>Fund or reset a user</h2>
+          <input
+            value={target}
+            onChange={(e) => setTarget(e.target.value.replace(/\D/g, ""))}
+            placeholder="Telegram user ID"
+            inputMode="numeric"
+          />
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Credit amount / USD"
+            inputMode="decimal"
+          />
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Funding reason"
+          />
+          <div className="admin-actions">
+            <button
+              className="small-action"
+              onClick={() =>
+                post(
+                  "/v1/admin/fund",
+                  { user_id: Number(target), amount: Number(amount), reason },
+                  "User funded.",
+                )
+              }
+            >
+              Fund user
+            </button>
+            <button
+              className="danger-action"
+              onClick={() =>
+                post(
+                  "/v1/admin/onboarding/reset",
+                  { user_id: Number(target) },
+                  "Onboarding reset.",
+                )
+              }
+            >
+              Reset onboarding
+            </button>
+            <button
+              className="small-action"
+              onClick={() =>
+                post(
+                  "/v1/admin/demo/reissue",
+                  { user_id: Number(target) },
+                  "Test demo reissued.",
+                )
+              }
+            >
+              Reissue demo
+            </button>
+          </div>
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">SETTINGS EDITOR</span>
+          <h2>Runtime controls</h2>
+          <select
+            value={settingKey}
+            onChange={(e) => setSettingKey(e.target.value)}
+          >
+            <option value="min_bot_investment_usd">Bot minimum</option>
+            <option value="deposit_min_usd">Deposit minimum</option>
+            <option value="withdraw_min_usd">Withdrawal minimum</option>
+            <option value="demo_active_days">Demo duration</option>
+            <option value="popup_ttl_seconds">Popup cleanup seconds</option>
+          </select>
+          <input
+            value={settingValue}
+            onChange={(e) => setSettingValue(e.target.value)}
+            placeholder="New value"
+          />
+          <button
+            className="primary-action"
+            onClick={() =>
+              post(
+                "/v1/admin/settings",
+                { key: settingKey, value: settingValue },
+                "Runtime setting saved.",
+              )
+            }
+          >
+            Save rule
+          </button>
+          {admin.settings.slice(0, 5).map((row) => (
+            <div className="admin-row" key={row.key}>
+              <strong>{row.key}</strong>
+              <small className="mono">{row.value}</small>
+            </div>
+          ))}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">BROADCAST COMPOSER</span>
+          <h2>Send a desk notice</h2>
+          <textarea
+            value={broadcast}
+            onChange={(e) => setBroadcast(e.target.value)}
+            placeholder="Operational message"
+          />
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="Type SEND ALL to send all users"
+          />
+          <button
+            className="primary-action"
+            onClick={() =>
+              post(
+                "/v1/admin/broadcast",
+                {
+                  scope: "all",
+                  target: "",
+                  message: broadcast,
+                  confirmation: confirm,
+                },
+                "Broadcast sent and logged.",
+              )
+            }
+          >
+            Send broadcast <Send />
+          </button>
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">ADMIN MEMBERS</span>
+          <h2>Current access</h2>
+          {admin.members.map((member) => (
+            <div className="admin-row" key={member.user_id}>
+              <strong>{member.first_name || "Telegram user"}</strong>
+              <small className="mono">
+                {member.username ? `@${member.username}` : member.user_id}
+              </small>
+            </div>
+          ))}
+        </GradientPanel>
+      </div>
     </div>
   );
 }
@@ -5923,40 +6313,7 @@ function LiveTradePulse() {
       status: string;
     }>;
   } | null>(null);
-  const [admin, setAdmin] = useState<{
-    environment: string;
-    members: Array<{ user_id: number; first_name?: string; username?: string }>;
-    engine: Array<{
-      event_key: string;
-      bot_name: string;
-      net_realized: number;
-      status: string;
-    }>;
-    settings: Array<{ key: string; value: string }>;
-    withdrawals: Array<{
-      id: string;
-      user_id: number;
-      amount_usd: number;
-      asset: string;
-      chain: string;
-      status: string;
-    }>;
-    recovery_cases: Array<{
-      id: number;
-      status: string;
-      asset: string;
-      network: string;
-      user_id: number;
-    }>;
-    sweep_queue: Array<{
-      id: string;
-      asset: string;
-      chain: string;
-      status: string;
-    }>;
-    chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
-    sweeps_enabled: boolean;
-  } | null>(null);
+  const [admin, setAdmin] = useState<LiveTradePulseAdmin | null>(null);
   const headers = (targetEnvironment = webEnvironment) => ({
     "Content-Type": "application/json",
     "X-Telegram-Init-Data": telegramInitData(),
@@ -6238,6 +6595,32 @@ function LiveTradePulse() {
     ) {
       setTab(value as typeof tab);
     }
+  };
+  const switchAdminEnvironment = async (
+    nextEnvironment: "mainnet" | "testnet",
+  ) => {
+    try {
+      await request("/v1/admin/environment", {
+        method: "POST",
+        body: JSON.stringify({ environment: nextEnvironment }),
+      });
+      setWebEnvironment(nextEnvironment);
+      await load(nextEnvironment);
+      setAdmin(await request("/v1/admin/overview", {}, nextEnvironment));
+      setNotice(
+        `Admin workspace switched to ${nextEnvironment}. Other admins and users are unaffected.`,
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Could not switch the admin workspace.",
+      );
+    }
+  };
+  const refreshAdmin = async () => {
+    setAdmin(await request("/v1/admin/overview"));
+    await load();
   };
   return (
     <div className="app-shell">
@@ -7618,7 +8001,22 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Admin" && (
+          {tab === "Admin" && admin && (
+            <LiveAdminScreen
+              admin={admin}
+              environment={webEnvironment}
+              request={request}
+              reload={refreshAdmin}
+              onEnvironment={switchAdminEnvironment}
+              onNotice={setNotice}
+            />
+          )}
+          {tab === "Admin" && !admin && (
+            <div className="empty-state">
+              <strong>Loading control room…</strong>
+            </div>
+          )}
+          {false && tab === "Admin" && (
             <div className="admin-grid">
               <GradientPanel className="admin-table">
                 <span className="eyebrow">ADMINISTRATOR ACCESS</span>
@@ -7765,7 +8163,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Admin" && (
+          {false && tab === "Admin" && (
             <div className="admin-grid">
               <GradientPanel className="admin-table">
                 <span className="eyebrow">TREASURY QUEUE</span>
@@ -7903,7 +8301,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Admin" && (
+          {false && tab === "Admin" && (
             <div className="admin-grid">
               <GradientPanel className="admin-table">
                 <span className="eyebrow">ADMIN MEMBERS</span>
@@ -7942,7 +8340,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Admin" && (
+          {false && tab === "Admin" && (
             <div className="admin-screen">
               {admin ? (
                 <>
