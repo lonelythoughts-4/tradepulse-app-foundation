@@ -4947,10 +4947,12 @@ function LiveAdminScreen({
 function LiveDeskScreen({
   data,
   request,
+  reload,
   onNotice,
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
+  reload: () => Promise<void>;
   onNotice: (message: string) => void;
 }) {
   const [asset, setAsset] = useState("BTC");
@@ -4962,6 +4964,8 @@ function LiveDeskScreen({
         method: "POST",
         body: JSON.stringify({ asset, operator, threshold: Number(threshold) }),
       });
+      setThreshold("");
+      await reload();
       onNotice("Price alert created.");
     } catch (error) {
       onNotice(
@@ -5084,6 +5088,7 @@ function LiveDeskScreen({
                       method: "POST",
                       body: "{}",
                     });
+                    await reload();
                     onNotice("Alert removed.");
                   } catch (error) {
                     onNotice(
@@ -7879,6 +7884,7 @@ function LiveTradePulse() {
             <LiveDeskScreen
               data={data}
               request={request}
+              reload={load}
               onNotice={setNotice}
             />
           )}
