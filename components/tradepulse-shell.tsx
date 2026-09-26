@@ -4068,6 +4068,13 @@ type LiveDashboard = {
     threshold: number;
   }>;
   notifications: Record<string, boolean>;
+  whitelist: Array<{
+    id: number;
+    chain: string;
+    address: string;
+    nickname: string;
+    cooling_until: number;
+  }>;
   demo: { state?: string; grant_usd?: number } | null;
   popup_ttl_seconds: number;
   notices: Array<{ id: string; kind: string; title: string; body: string }>;
@@ -5218,6 +5225,33 @@ function LiveAccountScreen({
                   Save a trusted destination. Always verify the entire address
                   before a withdrawal.
                 </p>
+                {data.whitelist.length ? (
+                  data.whitelist.map((route) => {
+                    const cooling =
+                      Number(route.cooling_until || 0) * 1000 > Date.now();
+                    return (
+                      <div className="whitelist-item" key={route.id}>
+                        <ShieldCheck />
+                        <div>
+                          <strong>{route.nickname}</strong>
+                          <small>
+                            {route.chain} · {route.address}
+                          </small>
+                        </div>
+                        <span
+                          className={`status-chip ${cooling ? "paused" : "running"}`}
+                        >
+                          {cooling ? "cooling" : "ready"}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="empty-wallet-state">
+                    <strong>No saved destinations</strong>
+                    <small>Add a trusted withdrawal destination below.</small>
+                  </div>
+                )}
                 <label className="amount-field">
                   <span>NETWORK</span>
                   <select
@@ -5242,7 +5276,7 @@ function LiveAccountScreen({
                   />
                 </label>
                 <label className="amount-field">
-                  <span>LABEL / OPTIONAL</span>
+                  <span>ROUTE LABEL</span>
                   <input
                     value={nickname}
                     onChange={(event) => setNickname(event.target.value)}
@@ -5251,7 +5285,7 @@ function LiveAccountScreen({
                 </label>
                 <button
                   className="primary-action"
-                  disabled={!address}
+                  disabled={!address || !nickname.trim()}
                   onClick={() =>
                     post(
                       "/v1/account/whitelist",
