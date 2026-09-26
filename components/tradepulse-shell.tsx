@@ -4234,6 +4234,335 @@ function chartPath(points: Array<{ price: number }>) {
     .join(" ");
 }
 
+function LiveAccountScreen({
+  data,
+  request,
+  reload,
+  onNotice,
+}: {
+  data: LiveDashboard;
+  request: (path: string, options?: RequestInit) => Promise<any>;
+  reload: () => Promise<void>;
+  onNotice: (message: string) => void;
+}) {
+  const [modal, setModal] = useState<
+    "" | "code" | "notifications" | "whitelist" | "reset" | "support"
+  >("");
+  const [code, setCode] = useState("");
+  const [chain, setChain] = useState("ERC20");
+  const [nickname, setNickname] = useState("");
+  const [address, setAddress] = useState("");
+  const [support, setSupport] = useState("");
+  const initials = (data.user.first_name || data.user.username || "U")
+    .slice(0, 1)
+    .toUpperCase();
+  const post = async (path: string, body: object, message: string) => {
+    try {
+      await request(path, { method: "POST", body: JSON.stringify(body) });
+      onNotice(message);
+      await reload();
+      setModal("");
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : "Action could not be completed.",
+      );
+    }
+  };
+  return (
+    <div className="account-screen">
+      <div className="screen-title">
+        <div>
+          <span className="eyebrow">ACCOUNT / SECURITY</span>
+          <h2>Desk controls</h2>
+        </div>
+        <div className="security-chip">SECURE</div>
+      </div>
+      <GradientPanel className="profile-card">
+        <div className="top-avatar">{initials}</div>
+        <div>
+          <strong>{data.user.first_name || "Telegram user"}</strong>
+          <small>
+            {data.user.username ? `@${data.user.username}` : "No username"} /{" "}
+            {data.user.tier}
+          </small>
+        </div>
+        <span className="status-chip running">
+          <i />
+          protected
+        </span>
+      </GradientPanel>
+      <div className="account-actions">
+        <button className="account-action" onClick={() => setModal("code")}>
+          <span>
+            <ShieldCheck />
+          </span>
+          <div>
+            <strong>Withdrawal security code</strong>
+            <small>Set or change your approval code</small>
+          </div>
+          <ChevronRight />
+        </button>
+        <button
+          className="account-action"
+          onClick={() => setModal("notifications")}
+        >
+          <span>
+            <Bell />
+          </span>
+          <div>
+            <strong>Notifications</strong>
+            <small>
+              {Object.values(data.notifications).filter(Boolean).length} alerts
+              enabled
+            </small>
+          </div>
+          <ChevronRight />
+        </button>
+        <button
+          className="account-action"
+          onClick={() => setModal("whitelist")}
+        >
+          <span>
+            <Wallet />
+          </span>
+          <div>
+            <strong>Withdrawal whitelist</strong>
+            <small>Save a verified destination</small>
+          </div>
+          <ChevronRight />
+        </button>
+        <button className="account-action" onClick={() => setModal("support")}>
+          <span>
+            <NavIcon name="help" />
+          </span>
+          <div>
+            <strong>Help & support</strong>
+            <small>Open a tracked support request</small>
+          </div>
+          <ChevronRight />
+        </button>
+        <button
+          className="account-action danger-row"
+          onClick={() => setModal("reset")}
+        >
+          <span>
+            <Settings />
+          </span>
+          <div>
+            <strong>Reset desk preferences</strong>
+            <small>Never changes balances or financial history</small>
+          </div>
+          <ChevronRight />
+        </button>
+      </div>
+      {modal && (
+        <div
+          className="modal-backdrop"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) setModal("");
+          }}
+        >
+          <GradientPanel
+            className="confirm-modal account-modal"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              aria-label="Close"
+              onClick={() => setModal("")}
+            >
+              <X />
+            </button>
+            {modal === "code" && (
+              <>
+                <img
+                  src="/illustrations/security-key.png"
+                  alt="Security key"
+                  className="security-key-art"
+                  decoding="async"
+                />
+                <span className="eyebrow">SECURITY / WITHDRAWALS</span>
+                <h2>Set security code</h2>
+                <p>
+                  This six-digit code is required to request a withdrawal. Never
+                  share it with support or an administrator.
+                </p>
+                <label className="amount-field">
+                  <span>SIX-DIGIT CODE</span>
+                  <input
+                    type="password"
+                    value={code}
+                    onChange={(event) =>
+                      setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    inputMode="numeric"
+                    placeholder="••••••"
+                  />
+                </label>
+                <button
+                  className="primary-action"
+                  disabled={code.length !== 6}
+                  onClick={() =>
+                    post(
+                      "/v1/account/security-code",
+                      { code },
+                      "Withdrawal security code saved.",
+                    )
+                  }
+                >
+                  Save security code <ShieldCheck />
+                </button>
+              </>
+            )}
+            {modal === "notifications" && (
+              <>
+                <span className="eyebrow">ACCOUNT / NOTIFICATIONS</span>
+                <h2>Keep me informed</h2>
+                {[
+                  ["fills", "Trade fills"],
+                  ["fees", "Fees charged"],
+                  ["deposits", "Deposits"],
+                  ["tank_low", "Tank low"],
+                  ["hwm_breaks", "High-water mark"],
+                ].map(([key, label]) => (
+                  <label className="toggle-row" key={key}>
+                    <span>
+                      {label}
+                      <small>Send this alert through Telegram</small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(data.notifications[key])}
+                      onChange={() =>
+                        post(
+                          "/v1/account/notifications",
+                          { name: key },
+                          `${label} notification updated.`,
+                        )
+                      }
+                    />
+                    <i />
+                  </label>
+                ))}
+              </>
+            )}
+            {modal === "whitelist" && (
+              <>
+                <span className="eyebrow">WALLET / DESTINATIONS</span>
+                <h2>Withdrawal whitelist</h2>
+                <p>
+                  Save a trusted destination. Always verify the entire address
+                  before a withdrawal.
+                </p>
+                <label className="amount-field">
+                  <span>NETWORK</span>
+                  <select
+                    value={chain}
+                    onChange={(event) => setChain(event.target.value)}
+                  >
+                    <option value="ERC20">Ethereum</option>
+                    <option value="BEP20">BNB Chain</option>
+                    <option value="BASE">Base</option>
+                    <option value="ARBITRUM">Arbitrum</option>
+                    <option value="POLYGON">Polygon</option>
+                  </select>
+                </label>
+                <label className="amount-field">
+                  <span>DESTINATION ADDRESS</span>
+                  <input
+                    value={address}
+                    onChange={(event) =>
+                      setAddress(event.target.value.replace(/\s/g, ""))
+                    }
+                    placeholder="Full wallet address"
+                  />
+                </label>
+                <label className="amount-field">
+                  <span>LABEL / OPTIONAL</span>
+                  <input
+                    value={nickname}
+                    onChange={(event) => setNickname(event.target.value)}
+                    placeholder="e.g. Personal wallet"
+                  />
+                </label>
+                <button
+                  className="primary-action"
+                  disabled={!address}
+                  onClick={() =>
+                    post(
+                      "/v1/account/whitelist",
+                      { chain, nickname, address },
+                      "Destination saved with the configured cooling period.",
+                    )
+                  }
+                >
+                  Save destination <ShieldCheck />
+                </button>
+              </>
+            )}
+            {modal === "support" && (
+              <>
+                <span className="eyebrow">HELP / SUPPORT</span>
+                <h2>How can we help?</h2>
+                <p>
+                  Include the transaction reference and network if your request
+                  concerns a transfer.
+                </p>
+                <textarea
+                  value={support}
+                  onChange={(event) => setSupport(event.target.value)}
+                  placeholder="Describe the issue"
+                />
+                <button
+                  className="primary-action"
+                  disabled={!support.trim()}
+                  onClick={() =>
+                    post(
+                      "/v1/support/tickets",
+                      { topic: "Web desk support", message: support },
+                      "Support request opened.",
+                    )
+                  }
+                >
+                  Open support request <Send />
+                </button>
+              </>
+            )}
+            {modal === "reset" && (
+              <>
+                <span className="eyebrow">DESK RESET</span>
+                <h2>Reset desk preferences?</h2>
+                <p>
+                  This clears personal desk preferences and alerts only. It
+                  cannot change your balance, bots, deposits, withdrawals,
+                  security code, trial history, or fee credit.
+                </p>
+                <button
+                  className="danger-action"
+                  onClick={() =>
+                    post(
+                      "/v1/account/reset",
+                      {},
+                      "Desk preferences reset. Financial records remain intact.",
+                    )
+                  }
+                >
+                  Reset preferences <X />
+                </button>
+                <button className="ghost-action" onClick={() => setModal("")}>
+                  Keep my settings
+                </button>
+              </>
+            )}
+          </GradientPanel>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LiveBotsScreen({
   data,
   request,
@@ -6563,6 +6892,14 @@ function LiveTradePulse() {
             </div>
           )}
           {tab === "Account" && (
+            <LiveAccountScreen
+              data={data}
+              request={request}
+              reload={load}
+              onNotice={setNotice}
+            />
+          )}
+          {false && tab === "Account" && (
             <div className="account-screen">
               <GradientPanel className="profile-card">
                 <div className="top-avatar">
@@ -6694,7 +7031,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Account" && (
+          {false && tab === "Account" && (
             <GradientPanel className="reset-card">
               <span className="eyebrow">DESK RESET</span>
               <h2>Restore desk preferences</h2>
@@ -6711,7 +7048,7 @@ function LiveTradePulse() {
               </button>
             </GradientPanel>
           )}
-          {tab === "Account" && (
+          {false && tab === "Account" && (
             <GradientPanel className="reset-card">
               <span className="eyebrow">WITHDRAWAL SECURITY</span>
               <h2>Set or change six-digit code</h2>
