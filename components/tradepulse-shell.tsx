@@ -4234,6 +4234,261 @@ function chartPath(points: Array<{ price: number }>) {
     .join(" ");
 }
 
+function LiveDeskScreen({
+  data,
+  request,
+  onNotice,
+}: {
+  data: LiveDashboard;
+  request: (path: string, options?: RequestInit) => Promise<any>;
+  onNotice: (message: string) => void;
+}) {
+  const [asset, setAsset] = useState("BTC");
+  const [operator, setOperator] = useState("above");
+  const [threshold, setThreshold] = useState("");
+  const createAlert = async () => {
+    try {
+      await request("/v1/alerts", {
+        method: "POST",
+        body: JSON.stringify({ asset, operator, threshold: Number(threshold) }),
+      });
+      onNotice("Price alert created.");
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : "Could not create the alert.",
+      );
+    }
+  };
+  return (
+    <div className="desk-screen">
+      <div className="screen-title">
+        <div>
+          <span className="eyebrow">LIVE DESK / MARKET DATA</span>
+          <h2>Price board</h2>
+        </div>
+        <span className="live-indicator">
+          <i />
+          {data.quote_fresh ? "LIVE" : "CACHED"}
+        </span>
+      </div>
+      <GradientPanel className="price-board">
+        {Object.entries(data.quotes).map(([name, price]) => (
+          <div className="asset-row" key={name}>
+            <span className="asset-ident">{name[0]}</span>
+            <div>
+              <strong>{name}/USD</strong>
+              <small>Market reference</small>
+            </div>
+            <strong className="asset-price">{money(price)}</strong>
+            <Spark />
+          </div>
+        ))}
+      </GradientPanel>
+      <div className="desk-columns">
+        <GradientPanel className="pulse-feed">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">MARKET PULSE</span>
+              <h2>What is moving</h2>
+            </div>
+            <span className="mono">{data.quote_age}s</span>
+          </div>
+          <div className="audit-row">
+            <span className="status-dot" />
+            <div>
+              <strong>
+                {data.quote_fresh
+                  ? "Price feed connected"
+                  : "Using the latest cached quote"}
+              </strong>
+              <small>
+                Quotes are informational and do not create a trade signal.
+              </small>
+            </div>
+          </div>
+        </GradientPanel>
+        <GradientPanel className="alert-card">
+          <span className="eyebrow">ALERT COMPOSER</span>
+          <h2>Get the signal first.</h2>
+          <div className="alert-fields">
+            <select
+              value={asset}
+              onChange={(event) => setAsset(event.target.value)}
+            >
+              {Object.keys(data.quotes).map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+            <select
+              value={operator}
+              onChange={(event) => setOperator(event.target.value)}
+            >
+              <option>above</option>
+              <option>below</option>
+            </select>
+            <input
+              value={threshold}
+              onChange={(event) => setThreshold(event.target.value)}
+              inputMode="decimal"
+              placeholder="Price"
+            />
+          </div>
+          <div className="parsed-preview">
+            <span>PARSED PREVIEW</span>
+            <code>
+              {asset} {operator} {threshold || "…"}
+            </code>
+          </div>
+          <button
+            className="primary-action"
+            disabled={!Number(threshold)}
+            onClick={createAlert}
+          >
+            Create alert <Bell />
+          </button>
+        </GradientPanel>
+      </div>
+      <GradientPanel className="active-alerts">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">ACTIVE ALERTS</span>
+            <h2>Desk signals</h2>
+          </div>
+        </div>
+        {data.alerts.length ? (
+          data.alerts.map((alert) => (
+            <div className="audit-row" key={alert.id}>
+              <span className="alert-pip" />
+              <div>
+                <strong>
+                  {alert.asset} {alert.operator} {alert.threshold}
+                </strong>
+                <small>Push enabled</small>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="Remove alert"
+                onClick={async () => {
+                  try {
+                    await request(`/v1/alerts/${alert.id}/remove`, {
+                      method: "POST",
+                      body: "{}",
+                    });
+                    onNotice("Alert removed.");
+                  } catch (error) {
+                    onNotice(
+                      error instanceof Error
+                        ? error.message
+                        : "Could not remove alert.",
+                    );
+                  }
+                }}
+              >
+                <X />
+              </button>
+            </div>
+          ))
+        ) : (
+          <div className="empty-alerts">
+            <img
+              src="/illustrations/alert-bell.png"
+              alt="Alert bell"
+              className="alert-bell-art"
+            />
+            <strong>No active alerts</strong>
+            <small>Create an alert to monitor a market condition.</small>
+          </div>
+        )}
+      </GradientPanel>
+    </div>
+  );
+}
+
+function LiveEarnScreen({ data }: { data: LiveDashboard }) {
+  const [copied, setCopied] = useState(false);
+  const link = `https://t.me/${data.referral.bot_username}?start=ref_${data.user.id}`;
+  return (
+    <div className="account-screen">
+      <div className="screen-title">
+        <div>
+          <span className="eyebrow">EARN / REFERRALS</span>
+          <h2>Referrals</h2>
+        </div>
+        <button
+          className="share-action"
+          onClick={() => navigator.share?.({ title: "TradePulse", url: link })}
+        >
+          Share
+        </button>
+      </div>
+      <GradientPanel className="invite-card">
+        <div>
+          <span className="eyebrow">YOUR INVITE LINK</span>
+          <code>{link}</code>
+        </div>
+        <button
+          onClick={() => {
+            navigator.clipboard?.writeText(link);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1200);
+          }}
+        >
+          {copied ? "Copied" : "Copy link"}
+        </button>
+      </GradientPanel>
+      <div className="earn-grid">
+        <GradientPanel>
+          <span className="eyebrow">ACCRUED EARNINGS</span>
+          <strong className="big-number">
+            {money(data.referral.accrued_usd)}
+          </strong>
+          <small>Eligible referral earnings</small>
+        </GradientPanel>
+        <GradientPanel>
+          <span className="eyebrow">ACTIVE REFERRALS</span>
+          <strong className="big-number">{data.referral.count}</strong>
+          <small>Direct invites</small>
+        </GradientPanel>
+      </div>
+      <GradientPanel className="levels-card">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">REFERRAL LEVELS</span>
+            <h2>Share the upside</h2>
+          </div>
+        </div>
+        {data.referral_rates.map((rate, index) => (
+          <div className="level-row" key={rate}>
+            <b>0{index + 1}</b>
+            <span>
+              {index === 0 ? "Direct referrals" : `Level ${index + 1}`}
+              <small>Eligible fee share</small>
+            </span>
+            <strong>{rate}%</strong>
+          </div>
+        ))}
+      </GradientPanel>
+      <GradientPanel className="tier-table">
+        <div className="table-row table-head">
+          <span>TIER</span>
+          <span>MONTHLY</span>
+          <span>FEE</span>
+        </div>
+        {data.tier_config.map((tier) => (
+          <div
+            className={`table-row ${tier.name === data.user.tier ? "current" : ""}`}
+            key={tier.name}
+          >
+            <b>{tier.name}</b>
+            <span>{money(tier.monthly)}</span>
+            <strong>{tier.rate}%</strong>
+          </div>
+        ))}
+      </GradientPanel>
+    </div>
+  );
+}
+
 function LiveAccountScreen({
   data,
   request,
@@ -6571,6 +6826,13 @@ function LiveTradePulse() {
             </div>
           )}
           {tab === "Desk" && (
+            <LiveDeskScreen
+              data={data}
+              request={request}
+              onNotice={setNotice}
+            />
+          )}
+          {false && tab === "Desk" && (
             <div className="desk-screen">
               <GradientPanel className="alert-card">
                 <span className="eyebrow">PRICE ALERT</span>
@@ -6624,7 +6886,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Desk" && (
+          {false && tab === "Desk" && (
             <div className="desk-screen">
               <GradientPanel className="alert-card">
                 <span className="eyebrow">PRICE ALERT</span>
@@ -6678,7 +6940,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Desk" && (
+          {false && tab === "Desk" && (
             <GradientPanel className="ledger-card">
               <span className="eyebrow">MY PRICE ALERTS</span>
               {data.alerts.length ? (
@@ -6703,7 +6965,7 @@ function LiveTradePulse() {
               )}
             </GradientPanel>
           )}
-          {tab === "Desk" && (
+          {false && tab === "Desk" && (
             <GradientPanel className="announcements">
               <span className="eyebrow">LIVE PRICES · INFORMATIONAL</span>
               <h2>Market pulse</h2>
@@ -6726,7 +6988,8 @@ function LiveTradePulse() {
               </p>
             </GradientPanel>
           )}
-          {tab === "Earn" && (
+          {tab === "Earn" && <LiveEarnScreen data={data} />}
+          {false && tab === "Earn" && (
             <div className="desk-screen">
               <GradientPanel className="balance-hero">
                 <span className="eyebrow">REFERRAL HQ</span>
@@ -6772,7 +7035,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
-          {tab === "Earn" && (
+          {false && tab === "Earn" && (
             <GradientPanel className="flow-card">
               <span className="eyebrow">FEE SIMULATOR</span>
               <h2>Illustrative HWM calculation</h2>
