@@ -4234,6 +4234,353 @@ function chartPath(points: Array<{ price: number }>) {
     .join(" ");
 }
 
+function LiveBotsScreen({
+  data,
+  request,
+  reload,
+  onNotice,
+}: {
+  data: LiveDashboard;
+  request: (path: string, options?: RequestInit) => Promise<any>;
+  reload: () => Promise<void>;
+  onNotice: (message: string) => void;
+}) {
+  const [view, setView] = useState<"fleet" | "create" | "detail">("fleet");
+  const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
+  const [amount, setAmount] = useState("20");
+  const [review, setReview] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selected =
+    data.bots.find((bot) => bot.id === selectedId) || data.bots[0];
+  const run = async (path: string, payload: object) => {
+    try {
+      const response = await request(path, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      onNotice(response.message || "Saved successfully.");
+      await reload();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Action failed.");
+    }
+  };
+  const productLabel =
+    product === "memecoin" ? "Memecoin" : "Synthetic Indices";
+  if (view === "create")
+    return (
+      <div className="bot-flow">
+        <button
+          className="back-action"
+          onClick={() => {
+            setReview(false);
+            setView("fleet");
+          }}
+        >
+          ← Fleet overview
+        </button>
+        <div className="flow-kicker">
+          <span className="eyebrow">NEW AUTOMATION</span>
+          <h2>Choose a product</h2>
+          <p>
+            Each account can operate one Memecoin bot and one Synthetic Indices
+            bot at the same time.
+          </p>
+        </div>
+        <div className="product-grid">
+          <BotProductCard
+            name="Memecoin"
+            description="Automated crypto strategy"
+            icon="M"
+            selected={product === "memecoin"}
+            onClick={() => setProduct("memecoin")}
+          />
+          <BotProductCard
+            name="Synthetic Indices"
+            description="Trade the shared synthetic engine"
+            icon="S"
+            selected={product === "synthetic"}
+            onClick={() => setProduct("synthetic")}
+          />
+        </div>
+        <div className="amount-input">
+          <span>$</span>
+          <input
+            value={amount}
+            onChange={(event) =>
+              setAmount(event.target.value.replace(/[^0-9.]/g, ""))
+            }
+            inputMode="decimal"
+            aria-label="Allocation amount"
+          />
+        </div>
+        <div className="available-line">
+          <span>AVAILABLE TO DEPLOY</span>
+          <strong>{money(data.wallet.available)}</strong>
+        </div>
+        <p className="minimum-hint">
+          Minimum allocation is $20.00. Your allocation cannot exceed your
+          available balance.
+        </p>
+        <button
+          className="primary-action"
+          disabled={
+            Number(amount) < 20 || Number(amount) > data.wallet.available
+          }
+          onClick={() => setReview(true)}
+        >
+          Review allocation <ChevronRight />
+        </button>
+        {review && (
+          <div className="modal-backdrop">
+            <GradientPanel className="confirm-modal">
+              <span className="eyebrow">FINAL REVIEW</span>
+              <h2>Confirm deployment</h2>
+              <div className="fact-block">
+                <span>
+                  PRODUCT <b>{productLabel}</b>
+                </span>
+                <span>
+                  ALLOCATION <b>{money(Number(amount))}</b>
+                </span>
+                <span>
+                  AVAILABLE AFTER{" "}
+                  <b>
+                    {money(Math.max(0, data.wallet.available - Number(amount)))}
+                  </b>
+                </span>
+                <span>
+                  COMPOUNDING <b>0%</b>
+                </span>
+              </div>
+              <button
+                className="primary-action"
+                onClick={async () => {
+                  await run("/v1/bots", { product, amount: Number(amount) });
+                  setReview(false);
+                  setView("fleet");
+                }}
+              >
+                Start trade <Zap />
+              </button>
+              <button className="ghost-action" onClick={() => setReview(false)}>
+                Go back
+              </button>
+            </GradientPanel>
+          </div>
+        )}
+      </div>
+    );
+  if (view === "detail" && selected) {
+    const paused = selected.state === "paused";
+    return (
+      <div className="bot-detail">
+        <button className="back-action" onClick={() => setView("fleet")}>
+          ← Fleet overview
+        </button>
+        <GradientPanel className="detail-hero">
+          <div className="detail-ring">
+            <BotRing
+              percent={paused ? 0 : 72}
+              state={paused ? "paused" : "running"}
+            />
+          </div>
+          <div>
+            <span className="eyebrow">{selected.name.toUpperCase()} BOT</span>
+            <h2>{selected.name}</h2>
+            <span className={`status-chip ${paused ? "paused" : "running"}`}>
+              <i />
+              {paused ? "paused" : "running"}
+            </span>
+          </div>
+        </GradientPanel>
+        <div className="detail-stats">
+          <GradientPanel>
+            <span>ALLOCATION</span>
+            <strong>{money(selected.capital_usd)}</strong>
+          </GradientPanel>
+          <GradientPanel>
+            <span>COMPOUNDING</span>
+            <strong>{selected.compound_percent}%</strong>
+          </GradientPanel>
+          <GradientPanel>
+            <span>HIGH-WATER MARK</span>
+            <strong>{money(data.wallet.hwm)}</strong>
+          </GradientPanel>
+        </div>
+        <GradientPanel className="compound-panel">
+          <span className="eyebrow">COMPOUNDING</span>
+          <div className="segment-control">
+            {[0, 50, 100].map((percent) => (
+              <button
+                className={
+                  selected.compound_percent === percent ? "active" : ""
+                }
+                key={percent}
+                onClick={() =>
+                  run(`/v1/bots/${selected.id}/actions`, {
+                    action: "compound",
+                    percent,
+                  })
+                }
+              >
+                {percent}%
+              </button>
+            ))}
+          </div>
+        </GradientPanel>
+        <div className="detail-actions">
+          <button
+            className="primary-action"
+            onClick={() =>
+              run(`/v1/bots/${selected.id}/actions`, { action: "toggle" })
+            }
+          >
+            {paused ? "Resume bot" : "Pause bot"} <Zap />
+          </button>
+          <button
+            className="danger-action"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Close ${selected.name}? Its current allocation will return to your available balance.`,
+                )
+              )
+                void run(`/v1/bots/${selected.id}/actions`, {
+                  action: "close",
+                });
+            }}
+          >
+            Close bot <X />
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="bots-screen">
+      <GradientPanel className="fleet-hero">
+        <div>
+          <span className="eyebrow">BOT FLEET</span>
+          <h2>Bot fleet</h2>
+          <p>
+            {data.bots.filter((bot) => bot.state === "running").length} running
+            strategy
+            {data.bots.filter((bot) => bot.state === "running").length === 1
+              ? ""
+              : "ies"}{" "}
+            / {money(data.bots.reduce((sum, bot) => sum + bot.capital_usd, 0))}{" "}
+            deployed
+          </p>
+        </div>
+        <strong>
+          {money(data.bots.reduce((sum, bot) => sum + bot.capital_usd, 0))}
+        </strong>
+      </GradientPanel>
+      <div className="fleet-heading">
+        <div>
+          <span className="eyebrow">YOUR STRATEGIES</span>
+          <h2>
+            My bots{" "}
+            <small>{String(data.bots.length).padStart(2, "0")} / 02</small>
+          </h2>
+        </div>
+        <button
+          className="primary-action"
+          onClick={() => setView("create")}
+          disabled={data.bots.length >= 2}
+        >
+          <Plus /> Start trade
+        </button>
+      </div>
+      {data.bots.length ? (
+        <div className="fleet-bot-grid">
+          {data.bots.map((bot) => (
+            <GradientPanel className="fleet-bot-card reveal-card" key={bot.id}>
+              <div className="fleet-bot-head">
+                <BotRing
+                  percent={bot.state === "running" ? 72 : 0}
+                  state={bot.state === "paused" ? "paused" : "running"}
+                />
+                <div>
+                  <div className="bot-title">
+                    <strong>{bot.name}</strong>
+                    <span className={`status-chip ${bot.state}`}>
+                      <i />
+                      {bot.state}
+                    </span>
+                  </div>
+                  <span className="eyebrow">ALLOCATION</span>
+                  <strong className="fleet-amount">
+                    {money(bot.capital_usd)}
+                  </strong>
+                </div>
+              </div>
+              <div className="fleet-metrics">
+                <div>
+                  <span>COMPOUND</span>
+                  <strong>{bot.compound_percent}%</strong>
+                </div>
+                <div>
+                  <span>STATUS</span>
+                  <strong className={bot.state === "running" ? "up" : "down"}>
+                    {bot.state}
+                  </strong>
+                </div>
+                <MiniSparkline negative={bot.state === "paused"} />
+              </div>
+              <div className="fleet-bot-actions">
+                <span className="compound-chip">
+                  COMPOUND {bot.compound_percent}%
+                </span>
+                <button
+                  className="small-action"
+                  onClick={() => {
+                    setSelectedId(bot.id);
+                    setView("detail");
+                  }}
+                >
+                  Open detail <ChevronRight />
+                </button>
+              </div>
+            </GradientPanel>
+          ))}
+        </div>
+      ) : (
+        <EmptyBots />
+      )}
+      {data.bots.some((bot) => bot.state === "paused") && (
+        <GradientPanel className="bot-card">
+          <img
+            src="/illustrations/engine-paused.png"
+            alt="Paused bot engine"
+            className="illustration-engine-paused"
+            decoding="async"
+          />
+          <div>
+            <span className="eyebrow">BOT PAUSED</span>
+            <h2>One or more bots are paused</h2>
+            <p>
+              Paused bots retain allocation and do not process new strategy runs
+              until resumed.
+            </p>
+          </div>
+        </GradientPanel>
+      )}
+      {data.demo && (
+        <button
+          className="demo-link"
+          onClick={() =>
+            onNotice("Your virtual demo is available from the dashboard.")
+          }
+        >
+          Explore the {money(data.demo.grant_usd || 50)} virtual demo{" "}
+          <ChevronRight />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function LiveWalletScreen({
   data,
   request,
@@ -5463,6 +5810,14 @@ function LiveTradePulse() {
             </GradientPanel>
           )}
           {tab === "Bots" && (
+            <LiveBotsScreen
+              data={data}
+              request={request}
+              reload={load}
+              onNotice={setNotice}
+            />
+          )}
+          {false && tab === "Bots" && (
             <div className="wallet-grid">
               <GradientPanel className="flow-card">
                 <span className="eyebrow">START TRADE</span>
