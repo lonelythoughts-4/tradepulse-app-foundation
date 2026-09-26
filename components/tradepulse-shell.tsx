@@ -4519,8 +4519,10 @@ function LiveAdminScreen({
       await request(path, { method: "POST", body: JSON.stringify(body) });
       onNotice(message);
       await reload();
+      return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Admin action failed.");
+      return false;
     }
   };
   return (
@@ -4858,7 +4860,9 @@ function LiveAdminScreen({
                 "/v1/admin/members",
                 { user_id: adminMember },
                 "Administrator access updated.",
-              ).then(() => setAdminMember(""))
+              ).then((saved) => {
+                if (saved) setAdminMember("");
+              })
             }
           >
             Add administrator <ShieldCheck />
