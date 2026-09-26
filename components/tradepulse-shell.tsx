@@ -365,11 +365,13 @@ function Header({
   profileName = "Jordan",
   environment = "LIVE",
   isAdmin = true,
+  pageTitle = "Dashboard",
 }: {
   setActive: (view: string) => void;
   profileName?: string;
   environment?: string;
   isAdmin?: boolean;
+  pageTitle?: string;
 }) {
   const initials =
     profileName
@@ -388,7 +390,7 @@ function Header({
       </div>
       <div className="page-heading">
         <span className="eyebrow">WORKSPACE / OVERVIEW</span>
-        <h1>Dashboard</h1>
+        <h1>{pageTitle}</h1>
       </div>
       <div className="welcome">
         <span className="eyebrow">SIGNED IN AS</span>
@@ -700,16 +702,26 @@ function PriceStrip({ quotes }: { quotes?: Record<string, number> }) {
   );
 }
 function Activity({ ledger }: { ledger?: VisualDeskModel["ledger"] }) {
-  const items = ledger?.length
-    ? ledger
-        .slice(0, 3)
-        .map((entry) => [
-          entry.kind.replace(/_/g, " "),
-          entry.asset,
-          `${entry.amount_usd >= 0 ? "+" : ""}${money(entry.amount_usd)}`,
-          "recent",
-          entry.status === "failed" ? "review" : "complete",
-        ])
+  const items = ledger
+    ? ledger.length
+      ? ledger
+          .slice(0, 3)
+          .map((entry) => [
+            entry.kind.replace(/_/g, " "),
+            entry.asset,
+            `${entry.amount_usd >= 0 ? "+" : ""}${money(entry.amount_usd)}`,
+            "recent",
+            entry.status === "failed" ? "review" : "complete",
+          ])
+      : [
+          [
+            "No activity yet",
+            "Verified account events will appear here.",
+            "$0.00",
+            "—",
+            "complete",
+          ],
+        ]
     : [
         ["Memecoin bot", "Equity rebalance", "+$84.20", "2m", "complete"],
         ["Synthetic bot", "Risk threshold reached", "-$42.80", "18m", "review"],
@@ -4649,6 +4661,7 @@ function LiveTradePulse() {
           profileName={profileName}
           environment={data.environment.toUpperCase()}
           isAdmin={data.user.is_admin}
+          pageTitle={chromeActive}
         />
         <div className="content-wrap">
           {notice && (
@@ -4886,7 +4899,7 @@ function LiveTradePulse() {
                 </div>
               </GradientPanel>
             )}
-          {tab === "Dashboard" && data.demo?.state === "issued" && (
+          {false && tab === "Dashboard" && data.demo?.state === "issued" && (
             <GradientPanel className="demo-banner">
               <img
                 src="/illustrations/demo-banner.png"
