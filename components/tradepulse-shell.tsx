@@ -153,6 +153,7 @@ const ease = [0.16, 1, 0.3, 1] as const;
 const navItems = [
   { label: "Dashboard", icon: "dashboard" },
   { label: "Bots", icon: "bots" },
+  { label: "Synthetic", icon: "desk" },
   { label: "Wallet", icon: "wallet" },
   { label: "Earn", icon: "earn" },
   { label: "Account", icon: "account" },
@@ -7133,10 +7134,11 @@ function LiveTradePulse() {
   const [recoveryAsset, setRecoveryAsset] = useState("USDT");
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
+  const [syntheticAmount, setSyntheticAmount] = useState("20");
   const [synthetic, setSynthetic] = useState<{
     market: string;
-    latest: { price?: number };
-    ticks: Array<{ price: number }>;
+    latest: { price?: number; reference?: number };
+    ticks: Array<{ price?: number; reference?: number }>;
     account?: {
       available_usd: number;
       locked_usd: number;
@@ -7148,8 +7150,24 @@ function LiveTradePulse() {
       direction: string;
       margin_usd: number;
       status: string;
+      entry_price?: number;
+      realized_pnl_usd?: number;
+      clearing_type?: string;
+      spread_charged_usd?: number;
+      tier_fee_usd?: number;
+      environment?: string;
     }>;
+    live_disclosure_accepted?: boolean;
+    execution_mode?: "MANUAL" | "AUTO";
+    settings?: Record<string, string>;
   } | null>(null);
+  const [syntheticSignals, setSyntheticSignals] = useState<Array<{
+    id: string;
+    market: string;
+    direction: string;
+    reference_price: number;
+    expires_at: number;
+  }>>([]);
   const [admin, setAdmin] = useState<LiveTradePulseAdmin | null>(null);
   const headers = (targetEnvironment = webEnvironment) => ({
     "Content-Type": "application/json",
@@ -7232,11 +7250,19 @@ function LiveTradePulse() {
     setNotice(`${next.title} — ${next.body}`);
   }, [data, notice]);
   useEffect(() => {
-    if (tab !== "Synthetic" || !data?.user.is_admin) return;
-    request(`/v1/synthetic/${syntheticMarket}`)
-      .then(setSynthetic)
+    if (tab !== "Synthetic" || !data) return;
+    const refreshSynthetic = () => Promise.all([
+      request(`/v1/synthetic/${syntheticMarket}`),
+      request(`/v1/synthetic/signals?market=${syntheticMarket}&limit=10`),
+    ]).then(([snapshot, signalData]) => {
+      setSynthetic(snapshot);
+      setSyntheticSignals(signalData.signals || []);
+    })
       .catch((error) => setNotice(error.message));
-  }, [tab, data?.user.is_admin, syntheticMarket]);
+    void refreshSynthetic();
+    const timer = window.setInterval(refreshSynthetic, 5000);
+    return () => window.clearInterval(timer);
+  }, [tab, data, syntheticMarket, webEnvironment]);
   useEffect(() => {
     if (tab !== "Admin" || !data?.user.is_admin) return;
     request("/v1/admin/overview")
@@ -7290,7 +7316,7 @@ function LiveTradePulse() {
       setNotice(response.message || "Saved successfully.");
       await load();
       if (tab === "Synthetic")
-        setSynthetic(await request("/v1/synthetic/SYN-25"));
+        setSynthetic(await request(`/v1/synthetic/${syntheticMarket}`));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Action failed.");
     }
@@ -7390,7 +7416,7 @@ function LiveTradePulse() {
       </div>
     );
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
-  const chart = synthetic?.ticks?.slice(-80).map((t) => t.price) || [];
+  const chart = synthetic?.ticks?.slice(-80).map((t) => Number(t.reference ?? t.price ?? 0)) || [];
   const min = Math.min(...chart, 0),
     max = Math.max(...chart, 1),
     path = chart
@@ -7435,6 +7461,7 @@ function LiveTradePulse() {
         "Earn",
         "Account",
         "Help",
+        "Synthetic",
         "Admin",
       ].includes(value)
     ) {
@@ -8713,156 +8740,52 @@ function LiveTradePulse() {
             </GradientPanel>
           )}
           {tab === "Synthetic" && (
-            <GradientPanel className="synthetic-pilot">
-              <span className="eyebrow">SYNTHETIC PILOT MARKET</span>
-              <div className="segment-control">
-                <button
-                  className={syntheticMarket === "SYN-25" ? "active" : ""}
-                  onClick={() => setSyntheticMarket("SYN-25")}
-                >
-                  SYN-25
-                </button>
-                <button
-                  className={syntheticMarket === "SYN-50" ? "active" : ""}
-                  onClick={() => setSyntheticMarket("SYN-50")}
-                >
-                  SYN-50
-                </button>
-              </div>
-              <p>
-                Both charts and pilot orders use the same persisted shared tick
-                engine; virtual pilot funds never mix with wallet balances.
-              </p>
-            </GradientPanel>
-          )}
-          {tab === "Synthetic" && (
-            <GradientPanel className="synthetic-pilot">
-              <span className="eyebrow">MANUAL PILOT ORDER</span>
-              <h2>{syntheticMarket} virtual order</h2>
-              <div className="button-row">
-                <button
-                  className="small-action"
-                  onClick={() =>
-                    act("/v1/synthetic/actions", {
-                      action: "open",
-                      market: syntheticMarket,
-                      direction: "long",
-                      amount: 20,
-                    })
-                  }
-                >
-                  Open $20 long
-                </button>
-                <button
-                  className="small-action"
-                  onClick={() =>
-                    act("/v1/synthetic/actions", {
-                      action: "open",
-                      market: syntheticMarket,
-                      direction: "short",
-                      amount: 20,
-                    })
-                  }
-                >
-                  Open $20 short
-                </button>
-              </div>
-            </GradientPanel>
-          )}
-          {tab === "Synthetic" && (
             <div className="desk-screen">
               <GradientPanel className="synthetic-pilot">
-                <span className="eyebrow">SYNTHETIC PILOT · ADMIN ONLY</span>
-                <h2>SYN-25 shared tick chart</h2>
+                <span className="eyebrow">SYNTHETIC INDICES</span>
+                <div className="segment-control">
+                  <button className={syntheticMarket === "SYN-25" ? "active" : ""} onClick={() => setSyntheticMarket("SYN-25")}>SYN-25</button>
+                  <button className={syntheticMarket === "SYN-50" ? "active" : ""} onClick={() => setSyntheticMarket("SYN-50")}>SYN-50</button>
+                </div>
+                <p>Shared prices for every user. Mainnet orders reserve wallet USD 1:1; testnet pilot funds never mix with wallet balances.</p>
                 {synthetic ? (
                   <>
-                    <svg
-                      className="hero-chart"
-                      viewBox="0 0 600 100"
-                      preserveAspectRatio="none"
-                    >
-                      <path
-                        d={path}
-                        fill="none"
-                        stroke="#34d399"
-                        strokeWidth="2"
-                      />
+                    <svg className="hero-chart" viewBox="0 0 600 100" preserveAspectRatio="none" aria-label={`${syntheticMarket} shared price chart`}>
+                      <path d={path} fill="none" stroke="#34d399" strokeWidth="2" />
                     </svg>
                     <div className="wallet-stat-grid">
-                      <div>
-                        <span className="eyebrow">LAST TICK</span>
-                        <strong>
-                          {Number(synthetic.latest?.price || 0).toFixed(5)}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="eyebrow">VIRTUAL AVAILABLE</span>
-                        <strong>
-                          {money(synthetic.account?.available_usd || 0)}
-                        </strong>
-                      </div>
+                      <div><span className="eyebrow">LAST TICK</span><strong>{Number(synthetic.latest?.reference || 0).toFixed(5)}</strong></div>
+                      <div><span className="eyebrow">AVAILABLE</span><strong>{money(synthetic.account?.available_usd || 0)}</strong></div>
+                      <div><span className="eyebrow">EXECUTION</span><strong>{synthetic.execution_mode || "MANUAL"}</strong></div>
                     </div>
-                    <div className="button-row">
-                      <button
-                        className="small-action"
-                        onClick={() =>
-                          act("/v1/synthetic/actions", {
-                            action: "open",
-                            market: "SYN-25",
-                            direction: "long",
-                            amount: 20,
-                          })
-                        }
-                      >
-                        Open $20 long
-                      </button>
-                      <button
-                        className="small-action"
-                        onClick={() =>
-                          act("/v1/synthetic/actions", {
-                            action: "open",
-                            market: "SYN-25",
-                            direction: "short",
-                            amount: 20,
-                          })
-                        }
-                      >
-                        Open $20 short
-                      </button>
-                      <button
-                        className="danger-action"
-                        onClick={() =>
-                          act("/v1/synthetic/actions", { action: "reset" })
-                        }
-                      >
-                        Reset virtual balance
-                      </button>
-                    </div>
-                    {synthetic.positions?.map((position) => (
-                      <div className="activity-row" key={position.id}>
-                        <div className="activity-info">
-                          <strong>
-                            {position.market} · {position.direction}
-                          </strong>
-                          <small>{money(position.margin_usd)} virtual</small>
+                    {webEnvironment === "mainnet" ? (
+                      <>
+                        {!synthetic.live_disclosure_accepted && (
+                          <div className="announcements">
+                            <span className="eyebrow">LIVE-RISK DISCLOSURE</span>
+                            <p>Prices are shared and execution uses a transparent spread plus your tier volume fee. Positions are 1:1 margin and can lose their reserved margin.</p>
+                            <button className="primary-action" onClick={() => act("/v1/synthetic/disclosure", {})}>Accept disclosure</button>
+                          </div>
+                        )}
+                        <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
+                        <div className="button-row">
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>Manual</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO" })}>Auto</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>Long</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>Short</button>
                         </div>
-                        <button
-                          className="small-action"
-                          onClick={() =>
-                            act(`/v1/synthetic/actions`, {
-                              action: "close",
-                              position_id: position.id,
-                            })
-                          }
-                        >
-                          Close
-                        </button>
-                      </div>
+                        {syntheticSignals.filter((signal) => signal.expires_at * 1000 > Date.now()).slice(0, 3).map((signal) => (
+                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act(`/v1/synthetic/signals/${signal.id}/approve`, { amount: Number(syntheticAmount), idempotency_key: `web:${signal.id}:${Date.now()}` })}>Approve</button></div>
+                        ))}
+                      </>
+                    ) : data.user.is_admin ? (
+                      <div className="button-row"><button className="small-action" onClick={() => act("/v1/synthetic/actions", { action: "open", market: syntheticMarket, direction: "long", amount: 20 })}>Open $20 long</button><button className="small-action" onClick={() => act("/v1/synthetic/actions", { action: "open", market: syntheticMarket, direction: "short", amount: 20 })}>Open $20 short</button><button className="danger-action" onClick={() => act("/v1/synthetic/actions", { action: "reset" })}>Reset virtual balance</button></div>
+                    ) : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
+                    {synthetic.positions?.filter((position) => position.status === "open").map((position) => (
+                      <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>Close</button></div>
                     ))}
                   </>
-                ) : (
-                  <p>Loading shared tick feed…</p>
-                )}
+                ) : <p>Loading shared tick feed…</p>}
               </GradientPanel>
             </div>
           )}
