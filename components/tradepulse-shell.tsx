@@ -4619,6 +4619,7 @@ function LiveAdminScreen({
   const [vaults, setVaults] = useState<
     Array<{ chain: string; asset: string; address: string }>
   >([]);
+  const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
   useEffect(() => {
     setVaultChain((current) =>
       admin.chains.some((chain) => chain.id === current)
@@ -4630,6 +4631,9 @@ function LiveAdminScreen({
         setVaults(Array.isArray(response.vaults) ? response.vaults : []),
       )
       .catch(() => setVaults([]));
+    request("/v1/admin/synthetic-config")
+      .then((response) => setSyntheticConfig(response.settings || {}))
+      .catch(() => setSyntheticConfig({}));
   }, [environment]);
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
@@ -4642,6 +4646,18 @@ function LiveAdminScreen({
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Admin action failed.");
       return false;
+    }
+  };
+  const saveSyntheticConfig = async (settings: Record<string, string>) => {
+    try {
+      const response = await request("/v1/admin/synthetic-config", {
+        method: "PUT",
+        body: JSON.stringify({ settings }),
+      });
+      setSyntheticConfig((current) => ({ ...current, ...(response.settings || settings) }));
+      onNotice("Synthetic configuration saved and audit logged.");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not save synthetic configuration.");
     }
   };
   return (
@@ -5063,6 +5079,36 @@ function LiveAdminScreen({
           ) : (
             <p>No approved routes in this workspace.</p>
           )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">SYNTHETIC CONTROLS</span>
+          <h2>Live settlement and exposure</h2>
+          <p>These controls apply to the shared engine. Mainnet and testnet balances remain isolated.</p>
+          <div className="admin-row">
+            <div><strong>Live settlement</strong><small className="mono">{syntheticConfig.synthetic_live_enabled === "true" ? "ENABLED" : "DISABLED"}</small></div>
+            <button className={syntheticConfig.synthetic_live_enabled === "true" ? "danger-action" : "small-action"} onClick={() => saveSyntheticConfig({ synthetic_live_enabled: syntheticConfig.synthetic_live_enabled === "true" ? "false" : "true" })}>{syntheticConfig.synthetic_live_enabled === "true" ? "Disable" : "Enable"}</button>
+          </div>
+          <div className="admin-row">
+            <div><strong>Global entry pause</strong><small className="mono">{syntheticConfig.global_trading_pause === "true" ? "PAUSED" : "OPEN"}</small></div>
+            <button className={syntheticConfig.global_trading_pause === "true" ? "small-action" : "danger-action"} onClick={() => saveSyntheticConfig({ global_trading_pause: syntheticConfig.global_trading_pause === "true" ? "false" : "true" })}>{syntheticConfig.global_trading_pause === "true" ? "Resume" : "Pause"}</button>
+          </div>
+          <select value={syntheticConfig.clearing_mode || "PRINCIPAL"} onChange={(event) => saveSyntheticConfig({ clearing_mode: event.target.value })}>
+            <option value="PRINCIPAL">Principal clearing</option>
+            <option value="MATCHED">Matched clearing</option>
+          </select>
+          {[
+            ["per_user_exposure_cap_usd", "Per-user cap"],
+            ["per_market_exposure_cap_usd", "Per-market cap"],
+            ["global_exposure_cap_usd", "Global cap"],
+            ["fee_bps_explorer", "Explorer fee bps"],
+            ["fee_bps_dedicated", "Dedicated fee bps"],
+            ["fee_bps_whale", "Whale fee bps"],
+          ].map(([key, label]) => (
+            <div className="admin-row" key={key}>
+              <strong>{label}</strong>
+              <input value={syntheticConfig[key] || ""} inputMode="decimal" onChange={(event) => setSyntheticConfig((current) => ({ ...current, [key]: event.target.value }))} onBlur={() => syntheticConfig[key] && saveSyntheticConfig({ [key]: syntheticConfig[key] })} aria-label={label} />
+            </div>
+          ))}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">ENGINE SETTLEMENTS</span>
@@ -8768,6 +8814,7 @@ function LiveTradePulse() {
                           </div>
                         )}
                         <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
+                        <p>Before approval: 1:1 margin {money(Number(syntheticAmount) || 0)} · spread {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.spread_bps || 4) / 10000)} · tier fee {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}.</p>
                         <div className="button-row">
                           <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>Manual</button>
                           <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>Auto</button>
