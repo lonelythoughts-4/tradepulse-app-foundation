@@ -886,7 +886,7 @@ function DemoBanner({
   onStart?: () => void;
 }) {
   const active = demo?.state === "active";
-  const grant = demo?.grant_usd ?? 50;
+  const grant = demo?.grant_usd ?? 2000;
   return (
     <GradientPanel className="demo-banner reveal-card">
       <div>
@@ -6138,7 +6138,7 @@ function LiveBotsScreen({
           className="demo-link"
           onClick={onOpenDemo}
         >
-          Explore the {money(data.demo.grant_usd || 50)} virtual demo{" "}
+          Explore the {money(data.demo.grant_usd || 2000)} virtual demo{" "}
           <ChevronRight />
         </button>
       )}
@@ -7498,7 +7498,7 @@ function LiveTradePulse() {
                     <span className="eyebrow">
                       MEMECOIN DEMO · VIRTUAL ONLY
                     </span>
-                    <h2>{money(data.demo.grant_usd || 50)} launch offer</h2>
+                    <h2>{money(data.demo.grant_usd || 2000)} launch offer</h2>
                     <p>
                       Starts once, lasts 14 days after activation, and is never
                       wallet money or withdrawable. A future qualifying verified
