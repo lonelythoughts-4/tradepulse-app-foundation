@@ -4548,7 +4548,9 @@ function LiveAdminScreen({
         : admin.chains[0]?.id || "",
     );
     request("/v1/admin/vaults")
-      .then((response) => setVaults(response.vaults || []))
+      .then((response) =>
+        setVaults(Array.isArray(response.vaults) ? response.vaults : []),
+      )
       .catch(() => setVaults([]));
   }, [environment]);
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
@@ -4813,6 +4815,8 @@ function LiveAdminScreen({
             <option value="deposit_min_usd">Deposit minimum</option>
             <option value="withdraw_min_usd">Withdrawal minimum</option>
             <option value="demo_active_days">Demo duration</option>
+            <option value="demo_conversion_percent">Demo gift rate</option>
+            <option value="community_url">Community link</option>
             <option value="popup_ttl_seconds">Popup cleanup seconds</option>
           </select>
           <input
@@ -4953,7 +4957,7 @@ function LiveAdminScreen({
                 });
                 setVaultAddress("");
                 const response = await request("/v1/admin/vaults");
-                setVaults(response.vaults || []);
+                setVaults(Array.isArray(response.vaults) ? response.vaults : []);
                 onNotice("Approved vault destination saved.");
               } catch (error) {
                 onNotice(
@@ -4980,6 +4984,27 @@ function LiveAdminScreen({
               ))
           ) : (
             <p>No approved routes in this workspace.</p>
+          )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">ENGINE SETTLEMENTS</span>
+          <h2>Environment-scoped results</h2>
+          <p>Completed bot results recorded for this workspace.</p>
+          {admin.engine.length ? (
+            admin.engine.map((row) => (
+              <div className="admin-row" key={row.event_key}>
+                <div>
+                  <strong>{row.bot_name || "Trading bot"}</strong>
+                  <small className="mono">{row.event_key.slice(0, 14)}</small>
+                </div>
+                <div className="admin-row-value">
+                  <strong>{money(row.net_realized)}</strong>
+                  <small className="mono">{row.status}</small>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p>No engine settlements in this workspace.</p>
           )}
         </GradientPanel>
       </div>
