@@ -4217,8 +4217,9 @@ async function waitForTelegramWebApp() {
   return undefined;
 }
 function BrowserBotHandoff() {
-  const [state, setState] = useState<"idle" | "waiting" | "error">("idle");
+  const [state, setState] = useState<"preparing" | "ready" | "waiting" | "error">("preparing");
   const [message, setMessage] = useState("");
+  const [token, setToken] = useState("");
   const [botUrl, setBotUrl] = useState("");
   const timer = useRef<number | null>(null);
   useEffect(
@@ -4227,92 +4228,99 @@ function BrowserBotHandoff() {
     },
     [],
   );
-  const connect = async () => {
-    // Opening a blank tab must happen during the click itself. Waiting for the
-    // network response first makes most browsers block the Telegram window.
-    // Keeping this page open is essential: it polls for the confirmed session.
-    const telegramWindow = window.open("", "_blank");
-    setState("waiting");
-    setMessage("Confirm this browser in Telegram, then return here…");
-    setBotUrl("");
-    try {
-      const start = await fetch("/api/v1/auth/handoff/start", {
-        method: "POST",
-      });
-      const handoff = await start.json();
-      if (!start.ok || !handoff.token || !handoff.bot_url)
-        throw new Error(
-          handoff.error || "Could not start a secure browser connection.",
-        );
-      if (telegramWindow) telegramWindow.location.replace(handoff.bot_url);
-      else {
+  useEffect(() => {
+    let cancelled = false;
+    const prepare = async () => {
+      try {
+        const response = await fetch("/api/v1/auth/handoff/start", {
+          method: "POST",
+        });
+        const handoff = await response.json();
+        if (!response.ok || !handoff.token || !handoff.bot_url) {
+          throw new Error(
+            handoff.error || "Could not prepare a secure Telegram connection.",
+          );
+        }
+        if (cancelled) return;
+        setToken(handoff.token);
         setBotUrl(handoff.bot_url);
+        setState("ready");
+        setMessage("Open Telegram, confirm this browser, then return here automatically.");
+      } catch (error) {
+        if (cancelled) return;
+        setState("error");
         setMessage(
-          "Your browser blocked the Telegram tab. Open Telegram with the secure link below, then return here…",
+          error instanceof Error
+            ? error.message
+            : "Could not prepare a secure Telegram connection.",
         );
       }
-      const deadline = Date.now() + Number(handoff.expires_in || 300) * 1000;
-      timer.current = window.setInterval(async () => {
-        if (Date.now() >= deadline) {
-          if (timer.current) window.clearInterval(timer.current);
-          timer.current = null;
+    };
+    void prepare();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (state !== "waiting" || !token) return;
+    const deadline = Date.now() + 300_000;
+    timer.current = window.setInterval(async () => {
+      if (Date.now() >= deadline) {
+        if (timer.current) window.clearInterval(timer.current);
+        timer.current = null;
+        setState("error");
+        setMessage("That connection expired. Refresh this page to create a new secure link.");
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/api/v1/auth/handoff/complete?token=${encodeURIComponent(token)}`,
+          { credentials: "same-origin" },
+        );
+        if (response.status === 202) return;
+        const result = await response.json();
+        if (!response.ok || !result.ready) {
+          throw new Error(result.error || "Could not finish browser connection.");
+        }
+        if (timer.current) window.clearInterval(timer.current);
+        timer.current = null;
+        window.location.replace("/");
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("finish")) {
           setState("error");
-          setMessage("That connection expired. Start again from this browser.");
-          return;
+          setMessage(error.message);
         }
-        try {
-          const response = await fetch(
-            `/api/v1/auth/handoff/complete?token=${encodeURIComponent(handoff.token)}`,
-            { credentials: "same-origin" },
-          );
-          if (response.status === 202) return;
-          const result = await response.json();
-          if (!response.ok || !result.ready)
-            throw new Error(
-              result.error || "Could not finish browser connection.",
-            );
-          if (timer.current) window.clearInterval(timer.current);
-          timer.current = null;
-          window.location.replace("/");
-        } catch (error) {
-          if (error instanceof Error && error.message.includes("finish")) {
-            setState("error");
-            setMessage(error.message);
-          }
-        }
-      }, 1500);
-    } catch (error) {
-      telegramWindow?.close();
-      setState("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not start a secure browser connection.",
-      );
-    }
-  };
+      }
+    }, 1500);
+    return () => {
+      if (timer.current) window.clearInterval(timer.current);
+      timer.current = null;
+    };
+  }, [state, token]);
   return (
     <div className="browser-handoff">
-      <button
+      <a
         className="primary-action"
-        onClick={connect}
-        disabled={state === "waiting"}
+        href={botUrl || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-disabled={state !== "ready"}
+        onClick={(event) => {
+          if (state !== "ready" || !botUrl) {
+            event.preventDefault();
+            return;
+          }
+          setState("waiting");
+          setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
+        }}
       >
-        {state === "waiting"
+        {state === "preparing"
+          ? "Preparing secure link…"
+          : state === "waiting"
           ? "Confirming in Telegram…"
           : "Continue with Telegram"}{" "}
         <ChevronRight />
-      </button>
-      {botUrl && (
-        <a
-          className="ghost-action"
-          href={botUrl}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open Telegram
-        </a>
-      )}
+      </a>
       {message && <small role="status">{message}</small>}
     </div>
   );
