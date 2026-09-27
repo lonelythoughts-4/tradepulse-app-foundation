@@ -77,6 +77,63 @@ const ShieldCheck = (props: FunctionalIconProps) => (
 const X = (props: FunctionalIconProps) => (
   <FunctionalIcon name="x" {...props} />
 );
+type PublicIconName =
+  | "alert-triangle"
+  | "arrow-left"
+  | "arrow-up-right"
+  | "bell"
+  | "bell-off"
+  | "check"
+  | "chevron-right"
+  | "copy"
+  | "eye"
+  | "eye-off"
+  | "lock"
+  | "minus"
+  | "pause"
+  | "play"
+  | "plus"
+  | "refresh";
+function StateIcon({
+  name,
+  size = 18,
+  className = "",
+}: FunctionalIconProps & { name: PublicIconName }) {
+  return (
+    <img
+      src={`/icons/${name}.svg`}
+      width={size}
+      height={size}
+      className={`state-icon ${className}`}
+      alt=""
+      aria-hidden="true"
+    />
+  );
+}
+function StateSwapIcon({
+  name,
+  swapKey = name,
+  size = 18,
+  className = "",
+}: FunctionalIconProps & { name: PublicIconName; swapKey?: string }) {
+  return (
+    <span className={`state-icon-swap ${className}`} aria-hidden="true">
+      <AnimatePresence initial={false} mode="wait">
+        <motion.img
+          key={swapKey}
+          src={`/icons/${name}.svg`}
+          width={size}
+          height={size}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          alt=""
+        />
+      </AnimatePresence>
+    </span>
+  );
+}
 const Settings = (props: FunctionalIconProps) => (
   <NavIcon name="account" {...props} />
 );
@@ -272,7 +329,11 @@ function Sidebar({
         aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"}
         onClick={() => setCollapsed((value) => !value)}
       >
-        {collapsed ? "›" : "‹"}
+        <StateSwapIcon
+          name="chevron-right"
+          swapKey={collapsed ? "sidebar-expand" : "sidebar-collapse"}
+          className={collapsed ? "" : "state-icon-rotated"}
+        />
       </button>
       <div className="brand">
         <PulseMark />
@@ -359,7 +420,10 @@ function BottomNav({
         aria-label={compact ? "Expand navigation" : "Minimize navigation"}
         onClick={() => setCompact((value) => !value)}
       >
-        {compact ? "＋" : "−"}
+        <StateSwapIcon
+          name={compact ? "plus" : "minus"}
+          swapKey={compact ? "nav-expand" : "nav-collapse"}
+        />
       </button>
       {mobileNavItems
         .filter((item) => item.label !== "Admin" || isAdmin)
@@ -1001,7 +1065,7 @@ function DepositFlow({ onBack }: { onBack: () => void }) {
   return (
     <div className="wallet-flow">
       <button className="back-action" onClick={onBack}>
-        ← Wallet overview
+        <StateIcon name="arrow-left" /> Wallet overview
       </button>
       <StepRail current={step} />
       <GradientPanel className="flow-card">
@@ -1234,7 +1298,7 @@ function WithdrawFlowLegacy({ onBack }: { onBack: () => void }) {
   return (
     <div className="wallet-flow">
       <button className="back-action" onClick={onBack}>
-        ← Wallet overview
+        <StateIcon name="arrow-left" /> Wallet overview
       </button>
       <StepRail current={2} />
       <GradientPanel className="flow-card">
@@ -1462,7 +1526,7 @@ function WithdrawFlow({
   return (
     <div className="wallet-flow">
       <button className="back-action" onClick={onBack}>
-        ← Wallet overview
+        <StateIcon name="arrow-left" /> Wallet overview
       </button>
       <StepRail current={2} />
       <GradientPanel className="flow-card">
@@ -1775,7 +1839,7 @@ function WalletScreen({
       className="back-action wallet-back"
       onClick={() => setView("Wallet")}
     >
-      ← Wallet overview
+      <StateIcon name="arrow-left" /> Wallet overview
     </button>
   );
   return view === "Wallet" ? (
@@ -1937,7 +2001,7 @@ function BotCreate({ setView }: { setView: (view: BotView) => void }) {
   return (
     <div className="bot-flow">
       <button className="back-action" onClick={() => setProduct("")}>
-        ← Choose another product
+        <StateIcon name="arrow-left" /> Choose another product
       </button>
       <div className="flow-kicker">
         <span className="eyebrow">{product.toUpperCase()} · ALLOCATION</span>
@@ -2042,7 +2106,7 @@ function BotDetail({
   return (
     <div className="bot-detail">
       <button className="back-action" onClick={() => setView("fleet")}>
-        ← Fleet overview
+        <StateIcon name="arrow-left" /> Fleet overview
       </button>
       <GradientPanel className="detail-hero">
         <div className="detail-ring">
@@ -2378,7 +2442,7 @@ function EarnScreen() {
     return (
       <>
         <button className="back-action" onClick={() => setTier(false)}>
-          ← Referral overview
+          <StateIcon name="arrow-left" /> Referral overview
         </button>
         <TierScreen />
       </>
@@ -4375,7 +4439,7 @@ function LiveHelpScreen({
             window.open(data.community_url, "_blank", "noopener,noreferrer")
           }
         >
-          Community
+          Community <StateIcon name="arrow-up-right" />
         </button>
       </div>
       <GradientPanel className="levels-card">
@@ -5034,16 +5098,25 @@ function LiveDeskScreen({
   const [asset, setAsset] = useState("BTC");
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
+  const [alertError, setAlertError] = useState("");
   const createAlert = async () => {
+    if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
+      setAlertError("Enter a positive price threshold before creating an alert.");
+      return;
+    }
     try {
       await request("/v1/alerts", {
         method: "POST",
         body: JSON.stringify({ asset, operator, threshold: Number(threshold) }),
       });
       setThreshold("");
+      setAlertError("");
       await reload();
       onNotice("Price alert created.");
     } catch (error) {
+      setAlertError(
+        error instanceof Error ? error.message : "Could not create the alert.",
+      );
       onNotice(
         error instanceof Error ? error.message : "Could not create the alert.",
       );
@@ -5060,6 +5133,14 @@ function LiveDeskScreen({
           <i />
           {data.quote_fresh ? "LIVE" : "CACHED"}
         </span>
+        {!data.quote_fresh && (
+          <button
+            className="small-action desk-retry"
+            onClick={() => void reload()}
+          >
+            <StateIcon name="refresh" /> Retry feed
+          </button>
+        )}
       </div>
       <GradientPanel className="price-board">
         {Object.entries(data.quotes).map(([name, price]) => (
@@ -5118,11 +5199,20 @@ function LiveDeskScreen({
             </select>
             <input
               value={threshold}
-              onChange={(event) => setThreshold(event.target.value)}
+              onChange={(event) => {
+                setThreshold(event.target.value);
+                if (alertError) setAlertError("");
+              }}
               inputMode="decimal"
               placeholder="Price"
             />
           </div>
+          {alertError && (
+            <p className="alert-input-error" role="alert">
+              <StateIcon name="alert-triangle" />
+              {alertError}
+            </p>
+          )}
           <div className="parsed-preview">
             <span>PARSED PREVIEW</span>
             <code>
@@ -5131,7 +5221,7 @@ function LiveDeskScreen({
           </div>
           <button
             className="primary-action"
-            disabled={!Number(threshold)}
+            disabled={!Number(threshold) || Number(threshold) <= 0}
             onClick={createAlert}
           >
             Create alert <Bell />
@@ -5237,6 +5327,10 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
             window.setTimeout(() => setCopied(false), 1200);
           }}
         >
+          <StateSwapIcon
+            name={copied ? "check" : "copy"}
+            swapKey={copied ? "referral-copied" : "referral-copy"}
+          />
           {copied ? "Copied" : "Copy link"}
         </button>
       </GradientPanel>
@@ -5308,6 +5402,7 @@ function LiveAccountScreen({
     "" | "code" | "notifications" | "whitelist" | "reset" | "support"
   >("");
   const [code, setCode] = useState("");
+  const [showCode, setShowCode] = useState(false);
   const [chain, setChain] = useState("ERC20");
   const [nickname, setNickname] = useState("");
   const [address, setAddress] = useState("");
@@ -5315,12 +5410,17 @@ function LiveAccountScreen({
   const initials = (data.user.first_name || data.user.username || "U")
     .slice(0, 1)
     .toUpperCase();
-  const post = async (path: string, body: object, message: string) => {
+  const post = async (
+    path: string,
+    body: object,
+    message: string,
+    closeModal = true,
+  ) => {
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
       onNotice(message);
       await reload();
-      setModal("");
+      if (closeModal) setModal("");
     } catch (error) {
       onNotice(
         error instanceof Error
@@ -5336,7 +5436,9 @@ function LiveAccountScreen({
           <span className="eyebrow">ACCOUNT / SECURITY</span>
           <h2>Desk controls</h2>
         </div>
-        <div className="security-chip">SECURE</div>
+        <div className="security-chip">
+          <StateIcon name="lock" /> PROTECTED
+        </div>
       </div>
       <GradientPanel className="profile-card">
         <div className="top-avatar">{initials}</div>
@@ -5368,7 +5470,18 @@ function LiveAccountScreen({
           onClick={() => setModal("notifications")}
         >
           <span>
-            <Bell />
+            <StateSwapIcon
+              name={
+                Object.values(data.notifications).some(Boolean)
+                  ? "bell"
+                  : "bell-off"
+              }
+              swapKey={
+                Object.values(data.notifications).some(Boolean)
+                  ? "notifications-on"
+                  : "notifications-off"
+              }
+            />
           </span>
           <div>
             <strong>Notifications</strong>
@@ -5450,15 +5563,28 @@ function LiveAccountScreen({
                 </p>
                 <label className="amount-field">
                   <span>SIX-DIGIT CODE</span>
-                  <input
-                    type="password"
-                    value={code}
-                    onChange={(event) =>
-                      setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                    }
-                    inputMode="numeric"
-                    placeholder="••••••"
-                  />
+                  <div className="secure-code-field">
+                    <input
+                      type={showCode ? "text" : "password"}
+                      value={code}
+                      onChange={(event) =>
+                        setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      inputMode="numeric"
+                      placeholder="••••••"
+                    />
+                    <button
+                      type="button"
+                      className="code-visibility"
+                      aria-label={showCode ? "Hide security code" : "Show security code"}
+                      onClick={() => setShowCode((value) => !value)}
+                    >
+                      <StateSwapIcon
+                        name={showCode ? "eye-off" : "eye"}
+                        swapKey={showCode ? "code-visible" : "code-hidden"}
+                      />
+                    </button>
+                  </div>
                 </label>
                 <button
                   className="primary-action"
@@ -5479,13 +5605,15 @@ function LiveAccountScreen({
               <>
                 <span className="eyebrow">ACCOUNT / NOTIFICATIONS</span>
                 <h2>Keep me informed</h2>
-                {[
+                  {[
                   ["fills", "Trade fills"],
                   ["fees", "Fees charged"],
                   ["deposits", "Deposits"],
                   ["tank_low", "Tank low"],
                   ["hwm_breaks", "High-water mark"],
-                ].map(([key, label]) => (
+                ].map(([key, label]) => {
+                  const enabled = Boolean(data.notifications[key]);
+                  return (
                   <label className="toggle-row" key={key}>
                     <span>
                       {label}
@@ -5493,18 +5621,24 @@ function LiveAccountScreen({
                     </span>
                     <input
                       type="checkbox"
-                      checked={Boolean(data.notifications[key])}
+                      checked={enabled}
                       onChange={() =>
                         post(
                           "/v1/account/notifications",
                           { name: key },
                           `${label} notification updated.`,
+                          false,
                         )
                       }
                     />
-                    <i />
+                    <StateSwapIcon
+                      name={enabled ? "bell" : "bell-off"}
+                      swapKey={`${key}-${enabled ? "on" : "off"}`}
+                      className="notification-toggle-icon"
+                    />
                   </label>
-                ))}
+                  );
+                })}
               </>
             )}
             {modal === "whitelist" && (
@@ -5701,7 +5835,7 @@ function LiveBotsScreen({
             setView("fleet");
           }}
         >
-          ← Fleet overview
+          <StateIcon name="arrow-left" /> Fleet overview
         </button>
         <div className="flow-kicker">
           <span className="eyebrow">NEW AUTOMATION</span>
@@ -5800,7 +5934,7 @@ function LiveBotsScreen({
     return (
       <div className="bot-detail">
         <button className="back-action" onClick={() => setView("fleet")}>
-          ← Fleet overview
+          <StateIcon name="arrow-left" /> Fleet overview
         </button>
         <GradientPanel className="detail-hero">
           <div className="detail-ring">
@@ -5860,7 +5994,11 @@ function LiveBotsScreen({
               run(`/v1/bots/${selected.id}/actions`, { action: "toggle" })
             }
           >
-            {paused ? "Resume bot" : "Pause bot"} <Zap />
+            {paused ? "Resume bot" : "Pause bot"}{" "}
+            <StateSwapIcon
+              name={paused ? "play" : "pause"}
+              swapKey={paused ? "bot-resume" : "bot-pause"}
+            />
           </button>
           <button
             className="danger-action"
@@ -6027,6 +6165,7 @@ function LiveWalletScreen({
   const [asset, setAsset] = useState("USDT");
   const [chain, setChain] = useState("ERC20");
   const [expectedAmount, setExpectedAmount] = useState("");
+  const [copiedAddress, setCopiedAddress] = useState(false);
   const [intent, setIntent] = useState<
     LiveDashboard["deposits"][number] | null
   >(null);
@@ -6118,7 +6257,7 @@ function LiveWalletScreen({
     return (
       <div className="wallet-flow">
         <button className="back-action" onClick={showOverview}>
-          ← Wallet overview
+          <StateIcon name="arrow-left" /> Wallet overview
         </button>
         <StepRail current={step} />
         <GradientPanel className="flow-card">
@@ -6134,7 +6273,7 @@ function LiveWalletScreen({
               </h2>
             </div>
             <span className="secure-chip">
-              <ShieldCheck /> SECURE
+              <StateIcon name="lock" /> PROTECTED
             </span>
           </div>
           {step === 0 && (
@@ -6198,9 +6337,16 @@ function LiveWalletScreen({
                 <code>{intent.address}</code>
                 <button
                   aria-label="Copy deposit address"
-                  onClick={() => navigator.clipboard?.writeText(intent.address)}
+                  onClick={async () => {
+                    await navigator.clipboard?.writeText(intent.address);
+                    setCopiedAddress(true);
+                    window.setTimeout(() => setCopiedAddress(false), 1200);
+                  }}
                 >
-                  <Copy />
+                  <StateSwapIcon
+                    name={copiedAddress ? "check" : "copy"}
+                    swapKey={copiedAddress ? "address-copied" : "address-copy"}
+                  />
                 </button>
               </div>
               <div className="warning-block">
@@ -6314,7 +6460,7 @@ function LiveWalletScreen({
     return (
       <div className="wallet-flow">
         <button className="back-action" onClick={showOverview}>
-          ← Wallet overview
+          <StateIcon name="arrow-left" /> Wallet overview
         </button>
         <StepRail current={2} />
         <GradientPanel className="flow-card">
@@ -6599,7 +6745,7 @@ function LiveWalletScreen({
     return (
       <div className="wallet-flow">
         <button className="back-action" onClick={showOverview}>
-          ← Wallet overview
+          <StateIcon name="arrow-left" /> Wallet overview
         </button>
         <GradientPanel className="gas-card">
           <div className="section-heading">
