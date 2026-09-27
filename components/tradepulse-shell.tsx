@@ -180,17 +180,26 @@ function GradientPanel({
   className = "",
   onPointerDown,
   onClick,
+  onKeyDown,
+  role,
+  tabIndex,
 }: {
   children: React.ReactNode;
   className?: string;
   onPointerDown?: React.PointerEventHandler<HTMLDivElement>;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  role?: React.AriaRole;
+  tabIndex?: number;
 }) {
   return (
     <div
       className={`gradient-panel ${className}`}
       onPointerDown={onPointerDown}
       onClick={onClick}
+      onKeyDown={onKeyDown}
+      role={role}
+      tabIndex={tabIndex}
     >
       {children}
     </div>
@@ -559,6 +568,7 @@ function BalanceHero({ wallet }: { wallet?: VisualDeskModel["wallet"] }) {
 
 type BotState = "running" | "paused";
 type Bot = {
+  id?: number;
   name: string;
   allocation: string;
   equity: string;
@@ -633,6 +643,14 @@ function BotCard({
     <GradientPanel
       className={`bot-card reveal-card ${onOpen ? "bot-card-openable" : ""}`}
       onClick={onOpen}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (onOpen && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
       {bot.state === "paused" && (
         <img
@@ -2272,6 +2290,7 @@ function Dashboard({
   onTopUp,
   onStartDemo,
   onViewActivity,
+  onOpenBot,
 }: {
   bots: Bot[];
   model?: VisualDeskModel;
@@ -2279,6 +2298,7 @@ function Dashboard({
   onTopUp?: () => void;
   onStartDemo?: () => void;
   onViewActivity?: () => void;
+  onOpenBot?: (bot: Bot) => void;
 }) {
   const gasLow = model && model.wallet.tank < model.wallet.tank_capacity * 0.25;
   return (
@@ -2299,7 +2319,14 @@ function Dashboard({
         </div>
         <div className="bot-grid">
           {bots.map((bot) => (
-            <BotCard key={bot.name} bot={bot} onOpen={onManage} />
+            <BotCard
+              key={bot.name}
+              bot={bot}
+              onOpen={() => {
+                if (onOpenBot) onOpenBot(bot);
+                else onManage?.();
+              }}
+            />
           ))}
         </div>
       </section>
@@ -5138,6 +5165,19 @@ function LiveDeskScreen({
 function LiveEarnScreen({ data }: { data: LiveDashboard }) {
   const [copied, setCopied] = useState(false);
   const link = `https://t.me/${data.referral.bot_username}?start=ref_${data.user.id}`;
+  const share = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "TradePulse", url: link });
+        return;
+      }
+      await navigator.clipboard?.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // Closing a native share sheet is not an application error.
+    }
+  };
   return (
     <div className="account-screen">
       <div className="screen-title">
@@ -5147,9 +5187,9 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
         </div>
         <button
           className="share-action"
-          onClick={() => navigator.share?.({ title: "TradePulse", url: link })}
+          onClick={() => void share()}
         >
-          Share
+          {copied ? "Copied" : "Share"}
         </button>
       </div>
       <GradientPanel className="invite-card">
@@ -5582,18 +5622,26 @@ function LiveBotsScreen({
   reload,
   onNotice,
   onOpenDemo,
+  initialBotId = null,
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
   onOpenDemo: () => void;
+  initialBotId?: number | null;
 }) {
-  const [view, setView] = useState<"fleet" | "create" | "detail">("fleet");
+  const [view, setView] = useState<"fleet" | "create" | "detail">(
+    initialBotId ? "detail" : "fleet",
+  );
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
   const [amount, setAmount] = useState("20");
   const [review, setReview] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(initialBotId);
+  useEffect(() => {
+    setSelectedId(initialBotId);
+    setView(initialBotId ? "detail" : "fleet");
+  }, [initialBotId]);
   const selected =
     data.bots.find((bot) => bot.id === selectedId) || data.bots[0];
   const run = async (path: string, payload: object) => {
@@ -6785,6 +6833,7 @@ function LiveTradePulse() {
   const [walletEntry, setWalletEntry] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
+  const [botEntryId, setBotEntryId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("20");
@@ -7116,6 +7165,7 @@ function LiveTradePulse() {
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
   const visualBots: Bot[] = data.bots.map((bot) => ({
+    id: bot.id,
     name: bot.product === "memecoin" ? "Memecoin" : "Synthetic Indices",
     allocation: money(bot.capital_usd),
     equity: money(bot.capital_usd),
@@ -7151,6 +7201,7 @@ function LiveTradePulse() {
         "Admin",
       ].includes(value)
     ) {
+      if (value === "Bots") setBotEntryId(null);
       setTab(value as typeof tab);
     }
   };
@@ -7324,7 +7375,10 @@ function LiveTradePulse() {
             <Dashboard
               bots={visualBots}
               model={visualModel}
-              onManage={() => setTab("Bots")}
+              onManage={() => {
+                setBotEntryId(null);
+                setTab("Bots");
+              }}
               onTopUp={() => {
                 setWalletEntry("gas");
                 setTab("Wallet");
@@ -7333,6 +7387,10 @@ function LiveTradePulse() {
               onViewActivity={() => {
                 setWalletEntry("activity");
                 setTab("Wallet");
+              }}
+              onOpenBot={(bot) => {
+                setBotEntryId(bot.id || null);
+                setTab("Bots");
               }}
             />
           )}
@@ -7466,6 +7524,7 @@ function LiveTradePulse() {
               reload={load}
               onNotice={setNotice}
               onOpenDemo={() => setTab("Dashboard")}
+              initialBotId={botEntryId}
             />
           )}
           {false && tab === "Bots" && (
