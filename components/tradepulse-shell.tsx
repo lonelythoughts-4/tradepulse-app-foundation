@@ -8769,8 +8769,8 @@ function LiveTradePulse() {
                         )}
                         <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
                         <div className="button-row">
-                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>Manual</button>
-                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO" })}>Auto</button>
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>Manual</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>Auto</button>
                           <button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>Long</button>
                           <button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>Short</button>
                         </div>
