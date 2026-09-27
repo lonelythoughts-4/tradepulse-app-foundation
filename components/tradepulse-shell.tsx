@@ -100,12 +100,14 @@ function StateIcon({
   className = "",
 }: FunctionalIconProps & { name: PublicIconName }) {
   return (
-    <img
-      src={`/icons/${name}.svg`}
-      width={size}
-      height={size}
+    <span
+      style={{
+        width: size,
+        height: size,
+        WebkitMaskImage: `url(/icons/${name}.svg)`,
+        maskImage: `url(/icons/${name}.svg)`,
+      }}
       className={`state-icon ${className}`}
-      alt=""
       aria-hidden="true"
     />
   );
@@ -119,16 +121,18 @@ function StateSwapIcon({
   return (
     <span className={`state-icon-swap ${className}`} aria-hidden="true">
       <AnimatePresence initial={false} mode="wait">
-        <motion.img
+        <motion.span
           key={swapKey}
-          src={`/icons/${name}.svg`}
-          width={size}
-          height={size}
+          style={{
+            width: size,
+            height: size,
+            WebkitMaskImage: `url(/icons/${name}.svg)`,
+            maskImage: `url(/icons/${name}.svg)`,
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          alt=""
         />
       </AnimatePresence>
     </span>
