@@ -305,14 +305,19 @@ function Sidebar({
           <NavIcon name="help" />
           <span>Help center</span>
         </button>
-        <div className="profile">
+        <button
+          type="button"
+          className="profile profile-button"
+          onClick={() => setActive("Account")}
+          aria-label="Open account controls"
+        >
           <div className="avatar">{initials}</div>
           <div>
             <strong>{profileName}</strong>
             <small>{profileTier}</small>
           </div>
           <NavIcon name="more" size={22} />
-        </div>
+        </button>
       </div>
     </aside>
   );
@@ -322,7 +327,6 @@ const mobileNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Live Desk", icon: "desk" },
   { label: "Community", icon: "community" },
   { label: "Help", icon: "help" },
-  { label: "More", icon: "more" },
   { label: "Admin", icon: "admin" },
 ];
 function BottomNav({
@@ -373,12 +377,14 @@ function Header({
   environment = "LIVE",
   isAdmin = true,
   pageTitle = "Dashboard",
+  notificationCount = 0,
 }: {
   setActive: (view: string) => void;
   profileName?: string;
   environment?: string;
   isAdmin?: boolean;
   pageTitle?: string;
+  notificationCount?: number;
 }) {
   const initials =
     profileName
@@ -419,14 +425,20 @@ function Header({
         )}
         <button
           className="icon-button notification"
-          aria-label="3 notifications"
+          aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
+          onClick={() => setActive("Account")}
         >
           <Bell size={18} />
-          <b>3</b>
+          {notificationCount > 0 && <b>{notificationCount > 99 ? "99+" : notificationCount}</b>}
         </button>
-        <div className="top-avatar" aria-label={`${profileName} avatar`}>
+        <button
+          type="button"
+          className="top-avatar top-avatar-button"
+          aria-label={`Open ${profileName} account controls`}
+          onClick={() => setActive("Account")}
+        >
           {initials}
-        </div>
+        </button>
       </div>
     </header>
   );
@@ -7127,10 +7139,6 @@ function LiveTradePulse() {
       window.open(data.community_url, "_blank", "noopener,noreferrer");
       return;
     }
-    if (value === "More") {
-      setNotice("Profile controls are available in Account.");
-      return setTab("Account");
-    }
     if (value === "Admin" && !data.user.is_admin) return;
     if (
       [
@@ -7188,6 +7196,7 @@ function LiveTradePulse() {
           environment={data.environment.toUpperCase()}
           isAdmin={data.user.is_admin}
           pageTitle={chromeActive}
+          notificationCount={data.notices.length}
         />
         <div className="content-wrap">
           {notice && (
