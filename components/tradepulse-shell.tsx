@@ -5094,7 +5094,7 @@ function LiveAdminScreen({
           </div>
           <select value={syntheticConfig.clearing_mode || "PRINCIPAL"} onChange={(event) => saveSyntheticConfig({ clearing_mode: event.target.value })}>
             <option value="PRINCIPAL">Principal clearing</option>
-            <option value="MATCHED" disabled>Matched clearing (order-book rollout)</option>
+            <option value="MATCHED">Matched clearing</option>
           </select>
           {[
             ["per_user_exposure_cap_usd", "Per-user cap"],
