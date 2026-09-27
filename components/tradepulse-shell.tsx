@@ -4174,6 +4174,7 @@ type LiveDashboard = {
     chain: string;
     address: string;
     status: string;
+    watch_enabled?: boolean;
     expected_amount?: string;
   }>;
   withdrawals: Array<{
@@ -6188,6 +6189,7 @@ function LiveWalletScreen({
   const [chain, setChain] = useState("ERC20");
   const [expectedAmount, setExpectedAmount] = useState("");
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
   const [intent, setIntent] = useState<
     LiveDashboard["deposits"][number] | null
   >(null);
@@ -6205,6 +6207,23 @@ function LiveWalletScreen({
   useEffect(() => {
     setTankAutofill(data.wallet.tank_autofill);
   }, [data.wallet.tank_autofill]);
+  useEffect(() => {
+    if (!intent) {
+      setQrDataUrl("");
+      return;
+    }
+    let cancelled = false;
+    void request(`/v1/deposits/${intent.id}/qr`)
+      .then((result) => {
+        if (!cancelled) setQrDataUrl(String(result.data_url || ""));
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [intent?.id]);
   const networks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -6371,7 +6390,16 @@ function LiveWalletScreen({
           {step === 2 && intent && (
             <>
               <div className="qr-placeholder">
-                <div className="qr-grid" />
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={`Scan ${intent.asset} deposit address`}
+                    width={128}
+                    height={128}
+                  />
+                ) : (
+                  <div className="qr-grid" />
+                )}
                 <small>
                   SCAN TO DEPOSIT {intent.asset} ON {intent.chain}
                 </small>
@@ -6409,8 +6437,19 @@ function LiveWalletScreen({
                       `/v1/deposits/${intent.id}/watch`,
                       { method: "POST", body: "{}" },
                     );
+                    setIntent((current) =>
+                      current
+                        ? {
+                            ...current,
+                            status: String(result.status || current.status),
+                            watch_enabled: true,
+                          }
+                        : current,
+                    );
                     onNotice(
-                      `Deposit monitoring started / ${result.status}. Credit happens after confirmation.`,
+                      result.detected
+                        ? `Transfer detected. Status: ${result.status}. Credit happens after confirmation.`
+                        : `Monitoring started. No transfer detected yet; nothing was credited.`,
                     );
                     await reload();
                   } catch (error) {
