@@ -5411,6 +5411,10 @@ function LiveAccountScreen({
   const [nickname, setNickname] = useState("");
   const [address, setAddress] = useState("");
   const [support, setSupport] = useState("");
+  const [notificationState, setNotificationState] = useState(data.notifications);
+  useEffect(() => {
+    setNotificationState(data.notifications);
+  }, [data.notifications]);
   const initials = (data.user.first_name || data.user.username || "U")
     .slice(0, 1)
     .toUpperCase();
@@ -5419,18 +5423,20 @@ function LiveAccountScreen({
     body: object,
     message: string,
     closeModal = true,
-  ) => {
+  ): Promise<boolean> => {
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
       onNotice(message);
       await reload();
       if (closeModal) setModal("");
+      return true;
     } catch (error) {
       onNotice(
         error instanceof Error
           ? error.message
           : "Action could not be completed.",
       );
+      return false;
     }
   };
   return (
@@ -5476,12 +5482,12 @@ function LiveAccountScreen({
           <span>
             <StateSwapIcon
               name={
-                Object.values(data.notifications).some(Boolean)
+                Object.values(notificationState).some(Boolean)
                   ? "bell"
                   : "bell-off"
               }
               swapKey={
-                Object.values(data.notifications).some(Boolean)
+                Object.values(notificationState).some(Boolean)
                   ? "notifications-on"
                   : "notifications-off"
               }
@@ -5490,7 +5496,7 @@ function LiveAccountScreen({
           <div>
             <strong>Notifications</strong>
             <small>
-              {Object.values(data.notifications).filter(Boolean).length} alerts
+              {Object.values(notificationState).filter(Boolean).length} alerts
               enabled
             </small>
           </div>
@@ -5616,7 +5622,7 @@ function LiveAccountScreen({
                   ["tank_low", "Tank low"],
                   ["hwm_breaks", "High-water mark"],
                 ].map(([key, label]) => {
-                  const enabled = Boolean(data.notifications[key]);
+                  const enabled = Boolean(notificationState[key]);
                   return (
                   <label className="toggle-row" key={key}>
                     <span>
@@ -5626,14 +5632,26 @@ function LiveAccountScreen({
                     <input
                       type="checkbox"
                       checked={enabled}
-                      onChange={() =>
-                        post(
+                      onChange={() => {
+                        const next = !enabled;
+                        setNotificationState((current) => ({
+                          ...current,
+                          [key]: next,
+                        }));
+                        void post(
                           "/v1/account/notifications",
                           { name: key },
                           `${label} notification updated.`,
                           false,
-                        )
-                      }
+                        ).then((saved) => {
+                          if (!saved) {
+                            setNotificationState((current) => ({
+                              ...current,
+                              [key]: enabled,
+                            }));
+                          }
+                        });
+                      }}
                     />
                     <StateSwapIcon
                       name={enabled ? "bell" : "bell-off"}
@@ -6180,9 +6198,13 @@ function LiveWalletScreen({
   const [withdrawCode, setWithdrawCode] = useState("");
   const [reviewWithdrawal, setReviewWithdrawal] = useState(false);
   const [tankAmount, setTankAmount] = useState("20");
+  const [tankAutofill, setTankAutofill] = useState(data.wallet.tank_autofill);
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
+  useEffect(() => {
+    setTankAutofill(data.wallet.tank_autofill);
+  }, [data.wallet.tank_autofill]);
   const networks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -6194,6 +6216,23 @@ function LiveWalletScreen({
     setView("overview");
     setStep(0);
     setReviewWithdrawal(false);
+  };
+  const toggleTankAutofill = async () => {
+    const previous = tankAutofill;
+    setTankAutofill(!previous);
+    try {
+      await request("/v1/tank/actions", {
+        method: "POST",
+        body: JSON.stringify({ action: "autofill" }),
+      });
+      await reload();
+      onNotice(`Auto-fill ${previous ? "disabled" : "enabled"}.`);
+    } catch (error) {
+      setTankAutofill(previous);
+      onNotice(
+        error instanceof Error ? error.message : "Could not update auto-fill.",
+      );
+    }
   };
   const isEvmAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value);
   const filteredLedger = data.ledger.filter((entry) => {
@@ -6786,22 +6825,8 @@ function LiveWalletScreen({
             </span>
             <input
               type="checkbox"
-              checked={data.wallet.tank_autofill}
-              onChange={async () => {
-                try {
-                  await request("/v1/tank/actions", {
-                    method: "POST",
-                    body: JSON.stringify({ action: "autofill" }),
-                  });
-                  await reload();
-                } catch (error) {
-                  onNotice(
-                    error instanceof Error
-                      ? error.message
-                      : "Could not update auto-fill.",
-                  );
-                }
-              }}
+              checked={tankAutofill}
+              onChange={toggleTankAutofill}
             />
             <i />
           </label>
@@ -6897,22 +6922,8 @@ function LiveWalletScreen({
           </span>
           <input
             type="checkbox"
-            checked={data.wallet.tank_autofill}
-            onChange={async () => {
-              try {
-                await request("/v1/tank/actions", {
-                  method: "POST",
-                  body: JSON.stringify({ action: "autofill" }),
-                });
-                await reload();
-              } catch (error) {
-                onNotice(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not update auto-fill.",
-                );
-              }
-            }}
+            checked={tankAutofill}
+            onChange={toggleTankAutofill}
           />
           <i />
         </label>
@@ -7127,7 +7138,11 @@ function LiveTradePulse() {
     }
   };
   const load = async (targetEnvironment = webEnvironment) => {
-    setLoading(true);
+    // Keep the current desk mounted during background refreshes. This lets
+    // optimistic toggles and button feedback render immediately instead of
+    // replacing the whole surface with the boot screen after every action.
+    const showBootScreen = !data;
+    if (showBootScreen) setLoading(true);
     try {
       const webApp = await waitForTelegramWebApp();
       webApp?.ready?.();
@@ -7144,7 +7159,7 @@ function LiveTradePulse() {
             : "Unable to load your desk.",
       );
     } finally {
-      setLoading(false);
+      if (showBootScreen) setLoading(false);
     }
   };
   useEffect(() => {
