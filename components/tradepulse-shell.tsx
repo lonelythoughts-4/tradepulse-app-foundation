@@ -7109,7 +7109,7 @@ function LiveTradePulse() {
     return (
       <div className="onboarding-screen">
         <img
-          src="/illustrations/session-door.png"
+          src="/illustrations/session-door-clean.png"
           alt="Secure Telegram session required"
           className="onboarding-hero"
         />
