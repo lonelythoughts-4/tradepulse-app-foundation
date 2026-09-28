@@ -5100,6 +5100,7 @@ function LiveAdminScreen({
             ["per_user_exposure_cap_usd", "Per-user cap"],
             ["per_market_exposure_cap_usd", "Per-market cap"],
             ["global_exposure_cap_usd", "Global cap"],
+            ["principal_liquidity_usd", "Principal liquidity"],
             ["fee_bps_explorer", "Explorer fee bps"],
             ["fee_bps_dedicated", "Dedicated fee bps"],
             ["fee_bps_whale", "Whale fee bps"],
