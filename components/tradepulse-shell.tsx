@@ -7174,7 +7174,7 @@ function LiveTradePulse() {
   const [broadcastText, setBroadcastText] = useState("");
   const [broadcastConfirm, setBroadcastConfirm] = useState("");
   const [securityCode, setSecurityCode] = useState("");
-  const [syntheticMarket, setSyntheticMarket] = useState<"SYN-25" | "SYN-50">(
+  const [syntheticMarket, setSyntheticMarket] = useState<"SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100">(
     "SYN-25",
   );
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
@@ -8814,10 +8814,11 @@ function LiveTradePulse() {
               <GradientPanel className="synthetic-pilot">
                 <span className="eyebrow">SYNTHETIC INDICES</span>
                 <div className="segment-control">
-                  <button className={syntheticMarket === "SYN-25" ? "active" : ""} onClick={() => setSyntheticMarket("SYN-25")}>SYN-25</button>
-                  <button className={syntheticMarket === "SYN-50" ? "active" : ""} onClick={() => setSyntheticMarket("SYN-50")}>SYN-50</button>
+                  {(["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"] as const).map((market) => (
+                    <button key={market} className={syntheticMarket === market ? "active" : ""} onClick={() => setSyntheticMarket(market)}>{market}</button>
+                  ))}
                 </div>
-                <p>Shared prices for every user. Mainnet orders reserve wallet USD 1:1; testnet pilot funds never mix with wallet balances.</p>
+                <p>Shared prices for every user. Volatility tiers describe movement intensity, not expected profit. Mainnet orders reserve wallet USD 1:1; testnet pilot funds never mix with wallet balances.</p>
                 {synthetic ? (
                   <>
                     <svg className="hero-chart" viewBox="0 0 600 100" preserveAspectRatio="none" aria-label={`${syntheticMarket} shared price chart`}>
