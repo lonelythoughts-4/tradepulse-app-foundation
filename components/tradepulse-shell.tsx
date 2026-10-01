@@ -6059,17 +6059,26 @@ function LiveBotsScreen({
           </div>
         </GradientPanel>
         <div className="detail-actions">
+          <div className="amount-input">
+            <span>$</span>
+            <input
+              value={amount}
+              onChange={(event) =>
+                setAmount(event.target.value.replace(/[^0-9.]/g, ""))
+              }
+              inputMode="decimal"
+              aria-label="Product top-up amount"
+            />
+          </div>
           <button
             className="small-action"
-            onClick={async () => {
-              const raw = window.prompt(`Top up ${selected.name} (minimum $20)`);
-              const value = raw ? Number(raw) : 0;
-              if (!value) return;
-              await run(`/v1/bots/${selected.id}/actions`, {
+            disabled={Number(amount) < 20}
+            onClick={() =>
+              run(`/v1/bots/${selected.id}/actions`, {
                 action: "topup",
-                amount: value,
-              });
-            }}
+                amount: Number(amount),
+              })
+            }
           >
             Top up allocation <Plus />
           </button>
@@ -8830,11 +8839,9 @@ function LiveTradePulse() {
                           </div>
                         )}
                         <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
-                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" onClick={() => {
-                          const raw = window.prompt("Top up Synthetic allocation (minimum $20)");
-                          const value = raw ? Number(raw) : 0;
+                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20} onClick={() => {
                           const bot = data.bots.find((item) => item.product === "synthetic");
-                          if (value && bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: value });
+                          if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
                         }}>Top up Synthetic</button>}
                         <p>Before approval: 1:1 margin {money(Number(syntheticAmount) || 0)} · spread {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.spread_bps || 4) / 10000)} · tier fee {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}.</p>
                         <div className="button-row">
