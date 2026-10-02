@@ -621,7 +621,15 @@ type VisualDeskModel = {
     status: string;
     created_at: number;
   }>;
-  demo: { state?: string; grant_usd?: number } | null;
+  demo: {
+    state?: string;
+    grant_usd?: number;
+    expires_at?: number;
+    redemption_ends_at?: number;
+    profit_snapshot_usd?: number;
+    gift_credit_usd?: number;
+    converted_at?: number;
+  } | null;
 };
 
 function BalanceHero({ wallet }: { wallet?: VisualDeskModel["wallet"] }) {
@@ -875,13 +883,16 @@ function Activity({
     ? ledger.length
       ? ledger
           .slice(0, 3)
-          .map((entry) => [
-            entry.kind.replace(/_/g, " "),
-            entry.asset,
-            `${entry.amount_usd >= 0 ? "+" : ""}${money(entry.amount_usd)}`,
-            "recent",
-            entry.status === "failed" ? "review" : "complete",
-          ])
+          .map((entry) => {
+            const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+            return [
+              entry.kind.replace(/_/g, " "),
+              entry.asset,
+              `${amount >= 0 ? "+" : ""}${money(amount)}`,
+              "recent",
+              activityTone(entry.kind, entry.status),
+            ];
+          })
       : [
           [
             "No activity yet",
@@ -930,40 +941,57 @@ function Activity({
 function DemoBanner({
   demo,
   onStart,
+  hasFundedDesk = false,
 }: {
   demo?: VisualDeskModel["demo"];
   onStart?: () => void;
+  hasFundedDesk?: boolean;
 }) {
   const active = demo?.state === "active";
   const grant = demo?.grant_usd ?? 2000;
+  const feeCredit = Number(demo?.gift_credit_usd || 0);
+  // An unstarted virtual offer should never obscure a funded desk. Once it is
+  // active, show its actual status instead of repeating the launch invitation.
+  if (!demo || (!active && demo.state !== "issued" && feeCredit <= 0)) return null;
+  if (demo.state === "issued" && hasFundedDesk) return null;
   return (
     <GradientPanel className="demo-banner reveal-card">
       <div>
         <span className="eyebrow">
-          {active ? "PRACTICE MODE ACTIVE" : "PRACTICE MODE"}
+          {feeCredit > 0
+            ? "DEMO FEE CREDIT"
+            : active
+              ? "PRACTICE MODE ACTIVE"
+              : "PRACTICE MODE"}
         </span>
         <h2>
-          {active
-            ? "Your virtual demo is active"
-            : `Try a ${money(grant)} virtual memecoin demo`}
+          {feeCredit > 0
+            ? `${money(feeCredit)} fee credit locked`
+            : active
+              ? "Your virtual demo is active"
+              : `Try a ${money(grant)} virtual memecoin demo`}
         </h2>
         <p>
-          {active
-            ? "Virtual funds are isolated and can never be withdrawn."
-            : "Explore the desk with zero risk. Your balance stays untouched."}
+          {feeCredit > 0
+            ? "This non-withdrawable credit is already applied against an eligible future mainnet performance fee; it is not cash or wallet balance."
+            : active
+              ? "Virtual funds are isolated and can never be withdrawn. A fee credit is calculated only after a qualifying verified mainnet deposit and eligible realised demo profit."
+              : "Explore the desk with zero risk. Your balance stays untouched."}
         </p>
       </div>
       <img
-        src="/illustrations/demo-banner.png"
-        alt="Paper money plane flying toward a virtual demo"
+        src={active || feeCredit > 0 ? "/illustrations/demo-hourglass.png" : "/illustrations/demo-banner.png"}
+        alt={active || feeCredit > 0 ? "Virtual demo status" : "Paper money plane flying toward a virtual demo"}
         className="illustration-demo-banner pointer-events-none select-none"
         draggable={false}
         decoding="async"
         loading="eager"
       />
-      <button aria-label="Try demo" onClick={onStart}>
-        <ChevronRight size={17} />
-      </button>
+      {!active && feeCredit <= 0 && (
+        <button aria-label="Try demo" onClick={onStart}>
+          <ChevronRight size={17} />
+        </button>
+      )}
     </GradientPanel>
   );
 }
@@ -2469,7 +2497,11 @@ function Dashboard({
         </div>
       )}
       <Activity ledger={model?.ledger} onViewAll={onViewActivity} />
-      {model?.demo && <DemoBanner demo={model.demo} onStart={onStartDemo} />}
+      <DemoBanner
+        demo={model?.demo}
+        onStart={onStartDemo}
+        hasFundedDesk={Boolean(bots.length || (model?.wallet.equity || 0) > 0)}
+      />
       <div className="sync-time">
         ACCOUNT SNAPSHOT · LIVE DATA
       </div>
@@ -4257,7 +4289,15 @@ type LiveDashboard = {
     nickname: string;
     cooling_until: number;
   }>;
-  demo: { state?: string; grant_usd?: number } | null;
+  demo: {
+    state?: string;
+    grant_usd?: number;
+    expires_at?: number;
+    redemption_ends_at?: number;
+    profit_snapshot_usd?: number;
+    gift_credit_usd?: number;
+    converted_at?: number;
+  } | null;
   popup_ttl_seconds: number;
   notices: Array<{ id: string; kind: string; title: string; body: string }>;
   referral: { count: number; accrued_usd: number; bot_username: string };
@@ -4456,18 +4496,36 @@ function money(value: number) {
     currency: "USD",
   }).format(Number(value || 0));
 }
+
+function signedActivityAmount(kind: string, status: string, amount: number) {
+  const description = `${kind} ${status}`.toLowerCase();
+  // Engine rows are occasionally stored as an absolute realised amount. The
+  // event label remains authoritative for the direction shown to the user.
+  return /\bloss\b/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
+}
+
+function activityTone(kind: string, status: string) {
+  const description = `${kind} ${status}`.toLowerCase();
+  if (/\bloss\b|failed|rejected/.test(description)) return "loss";
+  if (/pending|review|queued/.test(description)) return "review";
+  return "complete";
+}
+
 function chartPath(points: Array<{ price: number }>) {
   const values = points
     .map((point) => Number(point.price))
     .filter(Number.isFinite);
-  if (!values.length) return "";
+  if (values.length < 2) return "";
   const low = Math.min(...values),
     high = Math.max(...values),
     range = Math.max(high - low, 0.000001);
   return values
     .map(
-      (value, index) =>
-        `${index ? "L" : "M"} ${(index / Math.max(values.length - 1, 1)) * 600} ${92 - ((value - low) / range) * 84}`,
+      (value, index) => {
+        const x = 12 + (index / (values.length - 1)) * 576;
+        const y = 88 - Math.min(1, Math.max(0, (value - low) / range)) * 76;
+        return `${index ? "L" : "M"} ${x} ${y}`;
+      },
     )
     .join(" ");
 }
@@ -5516,9 +5574,33 @@ function LiveAccountScreen({
   const [address, setAddress] = useState("");
   const [support, setSupport] = useState("");
   const [notificationState, setNotificationState] = useState(data.notifications);
+  const [notificationPending, setNotificationPending] = useState<string | null>(null);
   useEffect(() => {
     setNotificationState(data.notifications);
   }, [data.notifications]);
+  const updateNotification = async (key: string, label: string, enabled: boolean) => {
+    if (notificationPending) return;
+    const next = !enabled;
+    setNotificationState((current) => ({ ...current, [key]: next }));
+    setNotificationPending(key);
+    try {
+      const result = await request("/v1/account/notifications", {
+        method: "POST",
+        body: JSON.stringify({ name: key }),
+      });
+      if (result.notifications && typeof result.notifications === "object") {
+        setNotificationState(result.notifications as Record<string, boolean>);
+      }
+      onNotice(`${label} notification ${next ? "enabled" : "disabled"}.`);
+    } catch (error) {
+      setNotificationState((current) => ({ ...current, [key]: enabled }));
+      onNotice(
+        error instanceof Error ? error.message : "Notification setting could not be updated.",
+      );
+    } finally {
+      setNotificationPending(null);
+    }
+  };
   const initials = (data.user.first_name || data.user.username || "U")
     .slice(0, 1)
     .toUpperCase();
@@ -5736,26 +5818,8 @@ function LiveAccountScreen({
                     <input
                       type="checkbox"
                       checked={enabled}
-                      onChange={() => {
-                        const next = !enabled;
-                        setNotificationState((current) => ({
-                          ...current,
-                          [key]: next,
-                        }));
-                        void post(
-                          "/v1/account/notifications",
-                          { name: key },
-                          `${label} notification updated.`,
-                          false,
-                        ).then((saved) => {
-                          if (!saved) {
-                            setNotificationState((current) => ({
-                              ...current,
-                              [key]: enabled,
-                            }));
-                          }
-                        });
-                      }}
+                      disabled={notificationPending === key}
+                      onChange={() => void updateNotification(key, label, enabled)}
                     />
                     <StateSwapIcon
                       name={enabled ? "bell" : "bell-off"}
@@ -6992,14 +7056,14 @@ function LiveWalletScreen({
   if (view === "history")
     return (
       <div className="ledger-screen">
+        <button className="back-action" onClick={showOverview}>
+          <StateIcon name="arrow-left" /> Wallet overview
+        </button>
         <div className="ledger-header">
           <div>
             <span className="eyebrow">WALLET / HISTORY</span>
             <h2>Ledger history</h2>
           </div>
-          <button className="view-all" onClick={showOverview}>
-            Overview <ChevronRight />
-          </button>
         </div>
         <div className="filter-chips">
           {(["all", "deposit", "withdraw", "bot"] as const).map((filter) => (
@@ -7020,7 +7084,9 @@ function LiveWalletScreen({
         </div>
         <GradientPanel className="ledger-card">
           {filteredLedger.length ? (
-            filteredLedger.map((entry, index) => (
+            filteredLedger.map((entry, index) => {
+              const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+              return (
               <div className="ledger-row" key={`${entry.created_at}-${index}`}>
                 <div>
                   <strong>{entry.kind.replace(/_/g, " ")}</strong>
@@ -7029,16 +7095,17 @@ function LiveWalletScreen({
                   </small>
                 </div>
                 <span
-                  className={`activity-status ${entry.status === "failed" ? "review" : "complete"}`}
+                  className={`activity-status ${activityTone(entry.kind, entry.status)}`}
                 >
                   {entry.status}
                 </span>
-                <code className={entry.amount_usd >= 0 ? "mint" : ""}>
-                  {entry.amount_usd >= 0 ? "+" : ""}
-                  {money(entry.amount_usd)}
+                <code className={amount >= 0 ? "mint" : "down"}>
+                  {amount >= 0 ? "+" : ""}
+                  {money(amount)}
                 </code>
               </div>
-            ))
+              );
+            })
           ) : (
             <div className="empty-wallet-state">
               <img src="/illustrations/empty-wallet.png" alt="Empty wallet" />
@@ -7055,14 +7122,14 @@ function LiveWalletScreen({
   if (view === "activity")
     return (
       <div className="ledger-screen">
+        <button className="back-action" onClick={showOverview}>
+          <StateIcon name="arrow-left" /> Wallet overview
+        </button>
         <div className="ledger-header">
           <div>
             <span className="eyebrow">WALLET / ACTIVITY</span>
             <h2>Activity</h2>
           </div>
-          <button className="view-all" onClick={showOverview}>
-            Overview <ChevronRight />
-          </button>
         </div>
         <GradientPanel className="ledger-card">
           {[...data.engine, ...data.ledger].length ? (
@@ -7077,7 +7144,9 @@ function LiveWalletScreen({
               ...data.ledger,
             ]
               .sort((a, b) => b.created_at - a.created_at)
-              .map((entry, index) => (
+              .map((entry, index) => {
+                const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                return (
                 <div
                   className="ledger-row"
                   key={`${entry.created_at}-${index}`}
@@ -7089,16 +7158,17 @@ function LiveWalletScreen({
                     </small>
                   </div>
                   <span
-                    className={`activity-status ${entry.status === "failed" ? "review" : "complete"}`}
+                    className={`activity-status ${activityTone(entry.kind, entry.status)}`}
                   >
                     {entry.status}
                   </span>
-                  <code className={entry.amount_usd >= 0 ? "mint" : ""}>
-                    {entry.amount_usd >= 0 ? "+" : ""}
-                    {money(entry.amount_usd)}
+                  <code className={amount >= 0 ? "mint" : "down"}>
+                    {amount >= 0 ? "+" : ""}
+                    {money(amount)}
                   </code>
                 </div>
-              ))
+                );
+              })
           ) : (
             <div className="empty-wallet-state">
               <img
@@ -7531,22 +7601,38 @@ function LiveTradePulse() {
         data.bots
           .filter(
             (bot) =>
-              ["memecoin", "synthetic"].includes(bot.product) &&
+              bot.product === "memecoin" &&
               ["running", "paused"].includes(bot.state),
           )
           .map((bot) => bot.product),
       ),
     ];
-    if (!active.length) return;
     let cancelled = false;
-    const refresh = () =>
-      Promise.all(
-        active.map((product) =>
+    const refresh = () => {
+      const chartRequests: Array<Promise<{ product: string; value: any } | null>> = [
+        ...active.map((product) =>
           request(`/v1/charts/${product}`)
             .then((value) => ({ product, value }))
             .catch(() => null),
         ),
-      ).then((results) => {
+        // Synthetic prices are shared market data, so the live graph must not
+        // depend on a user already having an open synthetic allocation.
+        request("/v1/synthetic/SYN-25")
+          .then((snapshot) => ({
+            product: "synthetic",
+            value: {
+              market: snapshot.market || "SYN-25",
+              points: (snapshot.ticks || []).map((tick: { price?: number; reference?: number }) => ({
+                price: Number(tick.reference ?? tick.price),
+              })),
+              positions: snapshot.positions || [],
+              activity: [],
+              updated_at: Date.now(),
+            },
+          }))
+          .catch(() => null),
+      ];
+      return Promise.all(chartRequests).then((results) => {
         if (cancelled) return;
         setCharts((current) => ({
           ...current,
@@ -7555,6 +7641,7 @@ function LiveTradePulse() {
           ),
         }));
       });
+    };
     void refresh();
     const timer = window.setInterval(refresh, 30000);
     return () => {
@@ -7617,6 +7704,11 @@ function LiveTradePulse() {
         current
           ? { ...current, execution_mode: response.execution_mode as "MANUAL" | "AUTO" }
           : current,
+      );
+    }
+    if (path === "/v1/demo/start" && response.trial && typeof response.trial === "object") {
+      setData((current) =>
+        current ? { ...current, demo: response.trial as LiveDashboard["demo"] } : current,
       );
     }
   };
@@ -7738,25 +7830,12 @@ function LiveTradePulse() {
       </div>
     );
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
-  const chart = (synthetic?.ticks || [])
+  const chartPoints = (synthetic?.ticks || [])
     .slice(-80)
     .map((tick) => Number(tick.reference ?? tick.price))
-    .filter((price) => Number.isFinite(price) && price > 0);
-  // Synthetic indices trade around a non-zero reference price. Including zero
-  // in the domain compresses normal movement into a visually flat line.
-  const rawMin = chart.length ? Math.min(...chart) : 0;
-  const rawMax = chart.length ? Math.max(...chart) : 1;
-  const observedRange = rawMax - rawMin;
-  const minimumRange = Math.max(Math.abs(chart.at(-1) || 1) * 0.0025, 0.01);
-  const padding = Math.max(observedRange, minimumRange) * 0.12;
-  const min = rawMin - padding,
-    max = rawMax + padding,
-    path = chart
-      .map(
-        (value, index) =>
-          `${index ? "L" : "M"} ${(index / Math.max(chart.length - 1, 1)) * 600} ${90 - ((value - min) / Math.max(max - min, 0.000001)) * 80}`,
-      )
-      .join(" ");
+    .filter((price) => Number.isFinite(price) && price > 0)
+    .map((price) => ({ price }));
+  const path = chartPath(chartPoints);
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
   const visualBots: Bot[] = data.bots.map((bot) => ({
@@ -7798,6 +7877,7 @@ function LiveTradePulse() {
       ].includes(value)
     ) {
       if (value === "Bots") setBotEntryId(null);
+      if (value === "Wallet") setWalletEntry("overview");
       setTab(value as typeof tab);
     }
   };
@@ -8013,12 +8093,24 @@ function LiveTradePulse() {
                   preserveAspectRatio="none"
                   aria-label={`${chart.market} price chart`}
                 >
+                  <defs>
+                    <clipPath id={`chart-clip-${product}`}>
+                      <rect x="12" y="12" width="576" height="76" />
+                    </clipPath>
+                  </defs>
+                  <path d="M12 30H588M12 50H588M12 70H588" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeDasharray="3 5" />
                   <path
                     d={chartPath(chart.points)}
                     fill="none"
                     stroke={product === "memecoin" ? "#60a5fa" : "#34d399"}
                     strokeWidth="2"
+                    clipPath={`url(#chart-clip-${product})`}
                   />
+                  {!chartPath(chart.points) && (
+                    <text x="300" y="54" textAnchor="middle" fill="currentColor" opacity="0.62" fontSize="10">
+                      Waiting for live ticks
+                    </text>
+                  )}
                 </svg>
                 <div className="activity-row">
                   <div className="activity-info">
@@ -9098,7 +9190,10 @@ function LiveTradePulse() {
                 {synthetic ? (
                   <>
                     <svg className="hero-chart" viewBox="0 0 600 100" preserveAspectRatio="none" aria-label={`${syntheticMarket} shared price chart`}>
-                      <path d={path} fill="none" stroke="#34d399" strokeWidth="2" />
+                      <defs><clipPath id="synthetic-chart-clip"><rect x="12" y="12" width="576" height="76" /></clipPath></defs>
+                      <path d="M12 30H588M12 50H588M12 70H588" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeDasharray="3 5" />
+                      <path d={path} fill="none" stroke="#34d399" strokeWidth="2" clipPath="url(#synthetic-chart-clip)" />
+                      {!path && <text x="300" y="54" textAnchor="middle" fill="currentColor" opacity="0.62" fontSize="10">Waiting for shared market ticks</text>}
                     </svg>
                     <div className="wallet-stat-grid">
                       <div><span className="eyebrow">LAST TICK</span><strong>{Number(synthetic.latest?.reference || 0).toFixed(5)}</strong></div>
