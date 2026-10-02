@@ -4305,7 +4305,10 @@ function BrowserBotHandoff() {
         const response = await fetch("/api/v1/auth/handoff/start", {
           method: "POST",
         });
-        const handoff = await response.json();
+        const contentType = response.headers.get("content-type") || "";
+        const handoff = contentType.includes("application/json")
+          ? await response.json()
+          : { error: (await response.text()).slice(0, 240) };
         if (!response.ok || !handoff.token || !handoff.bot_url) {
           throw new Error(
             handoff.error || "Could not prepare a secure Telegram connection.",
@@ -4348,7 +4351,10 @@ function BrowserBotHandoff() {
           { credentials: "same-origin" },
         );
         if (response.status === 202) return;
-        const result = await response.json();
+        const contentType = response.headers.get("content-type") || "";
+        const result = contentType.includes("application/json")
+          ? await response.json()
+          : { error: (await response.text()).slice(0, 240) };
         if (!response.ok || !result.ready) {
           throw new Error(result.error || "Could not finish browser connection.");
         }
