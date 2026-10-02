@@ -3008,6 +3008,7 @@ function AccountSection({
                     </div>
                     <button
                       className="ghost-action"
+                      disabled={actionPending}
                       onClick={() => {
                         setSavedWallets((wallets) =>
                           wallets.filter(
@@ -5884,22 +5885,46 @@ function LiveBotsScreen({
   const [amount, setAmount] = useState("20");
   const [review, setReview] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(initialBotId);
+  const [pendingAction, setPendingAction] = useState(false);
+  const [compoundOverrides, setCompoundOverrides] = useState<Record<number, number>>({});
+  const [allocationDeltas, setAllocationDeltas] = useState<Record<number, number>>({});
   useEffect(() => {
     setSelectedId(initialBotId);
     setView(initialBotId ? "detail" : "fleet");
   }, [initialBotId]);
+  const displayBots = data.bots.map((bot) => ({
+    ...bot,
+    compound_percent: compoundOverrides[bot.id] ?? bot.compound_percent,
+    capital_usd: bot.capital_usd + (allocationDeltas[bot.id] || 0),
+  }));
   const selected =
-    data.bots.find((bot) => bot.id === selectedId) || data.bots[0];
-  const run = async (path: string, payload: object) => {
+    displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
+  const run = async (path: string, payload: Record<string, unknown>) => {
+    if (pendingAction) return;
+    setPendingAction(true);
     try {
       const response = await request(path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      const botMatch = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
+      if (botMatch && payload.action === "compound") {
+        const percent = Number(payload.percent);
+        if (Number.isFinite(percent))
+          setCompoundOverrides((current) => ({ ...current, [Number(botMatch[1])]: percent }));
+      }
+      if (botMatch && payload.action === "topup") {
+        const topUp = Number(payload.amount);
+        if (Number.isFinite(topUp))
+          setAllocationDeltas((current) => ({ ...current, [Number(botMatch[1])]: (current[Number(botMatch[1])] || 0) + topUp }));
+      }
       onNotice(response.message || "Saved successfully.");
-      await reload();
+      // Keep controls responsive; reconciliation happens without holding the UI.
+      void reload();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Action failed.");
+    } finally {
+      setPendingAction(false);
     }
   };
   const productLabel =
@@ -6054,6 +6079,7 @@ function LiveBotsScreen({
                   selected.compound_percent === percent ? "active" : ""
                 }
                 key={percent}
+                disabled={pendingAction}
                 onClick={() =>
                   run(`/v1/bots/${selected.id}/actions`, {
                     action: "compound",
@@ -6080,7 +6106,7 @@ function LiveBotsScreen({
           </div>
           <button
             className="small-action"
-            disabled={Number(amount) < 20}
+            disabled={Number(amount) < 20 || pendingAction}
             onClick={() =>
               run(`/v1/bots/${selected.id}/actions`, {
                 action: "topup",
@@ -6088,7 +6114,7 @@ function LiveBotsScreen({
               })
             }
           >
-            Top up allocation <Plus />
+            {pendingAction ? "Updating…" : "Top up allocation"} <Plus />
           </button>
           <button
             className="primary-action"
@@ -6128,17 +6154,17 @@ function LiveBotsScreen({
           <span className="eyebrow">BOT FLEET</span>
           <h2>Bot fleet</h2>
           <p>
-            {data.bots.filter((bot) => bot.state === "running").length} running
+            {displayBots.filter((bot) => bot.state === "running").length} running
             strategy
-            {data.bots.filter((bot) => bot.state === "running").length === 1
+            {displayBots.filter((bot) => bot.state === "running").length === 1
               ? ""
               : "ies"}{" "}
-            / {money(data.bots.reduce((sum, bot) => sum + bot.capital_usd, 0))}{" "}
+            / {money(displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0))}{" "}
             deployed
           </p>
         </div>
         <strong>
-          {money(data.bots.reduce((sum, bot) => sum + bot.capital_usd, 0))}
+          {money(displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0))}
         </strong>
       </GradientPanel>
       <div className="fleet-heading">
@@ -6146,20 +6172,20 @@ function LiveBotsScreen({
           <span className="eyebrow">YOUR STRATEGIES</span>
           <h2>
             My bots{" "}
-            <small>{String(data.bots.length).padStart(2, "0")} / 02</small>
+            <small>{String(displayBots.length).padStart(2, "0")} / 02</small>
           </h2>
         </div>
         <button
           className="primary-action"
           onClick={() => setView("create")}
-          disabled={data.bots.length >= 2}
+          disabled={displayBots.length >= 2 || pendingAction}
         >
           <Plus /> Start trade
         </button>
       </div>
-      {data.bots.length ? (
+      {displayBots.length ? (
         <div className="fleet-bot-grid">
-          {data.bots.map((bot) => (
+          {displayBots.map((bot) => (
             <GradientPanel className="fleet-bot-card reveal-card" key={bot.id}>
               <div className="fleet-bot-head">
                 <BotRing
@@ -6213,7 +6239,7 @@ function LiveBotsScreen({
       ) : (
         <EmptyBots onLaunch={() => setView("create")} />
       )}
-      {data.bots.some((bot) => bot.state === "paused") && (
+      {displayBots.some((bot) => bot.state === "paused") && (
         <GradientPanel className="bot-card">
           <img
             src="/illustrations/engine-paused.png"
@@ -7249,6 +7275,7 @@ function LiveTradePulse() {
     expires_at: number;
   }>>([]);
   const [admin, setAdmin] = useState<LiveTradePulseAdmin | null>(null);
+  const [actionPending, setActionPending] = useState(false);
   const headers = (targetEnvironment = webEnvironment) => ({
     "Content-Type": "application/json",
     "X-Telegram-Init-Data": telegramInitData(),
@@ -7387,18 +7414,87 @@ function LiveTradePulse() {
       window.clearInterval(timer);
     };
   }, [tab, data?.bots]);
-  const act = async (path: string, payload: object) => {
+  const applyActionResult = (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => {
+    const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
+    if (botAction) {
+      const botId = Number(botAction[1]);
+      const action = String(payload.action || "");
+      const amount = Number(payload.amount || 0);
+      const percent = Number(payload.percent || 0);
+      setData((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          wallet:
+            action === "topup" && Number.isFinite(amount)
+              ? {
+                  ...current.wallet,
+                  available: Math.max(0, current.wallet.available - amount),
+                  locked: current.wallet.locked + amount,
+                }
+              : current.wallet,
+          bots: current.bots.map((bot) =>
+            bot.id !== botId
+              ? bot
+              : action === "compound" && Number.isFinite(percent)
+                ? { ...bot, compound_percent: percent }
+                : action === "topup" && Number.isFinite(amount)
+                  ? { ...bot, capital_usd: bot.capital_usd + amount }
+                  : bot,
+          ),
+        };
+      });
+    }
+    if (response.position && typeof response.position === "object") {
+      const position = response.position as { id?: string };
+      setSynthetic((current) =>
+        current
+          ? {
+              ...current,
+              positions: [
+                position as (typeof current.positions)[number],
+                ...current.positions.filter((item) => item.id !== position.id),
+              ],
+            }
+          : current,
+      );
+    }
+    if (path === "/v1/synthetic/disclosure" && response.accepted) {
+      setSynthetic((current) =>
+        current ? { ...current, live_disclosure_accepted: true } : current,
+      );
+    }
+    if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) {
+      setSynthetic((current) =>
+        current
+          ? { ...current, execution_mode: response.execution_mode as "MANUAL" | "AUTO" }
+          : current,
+      );
+    }
+  };
+  const act = async (path: string, payload: Record<string, unknown>) => {
+    if (actionPending) return;
+    setActionPending(true);
     try {
       const response = await request(path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
-      await load();
-      if (tab === "Synthetic")
-        setSynthetic(await request(`/v1/synthetic/${syntheticMarket}`));
+      // Do not hold the desk UI behind a full dashboard refresh. The immediate
+      // update above keeps controls responsive; the authoritative refresh runs
+      // in the background and reconciles any server-side detail.
+      void load();
+      if (tab === "Synthetic") {
+        void request(`/v1/synthetic/${syntheticMarket}`)
+          .then(setSynthetic)
+          .catch(() => undefined);
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Action failed.");
+    } finally {
+      setActionPending(false);
     }
   };
   if (loading)
@@ -7951,6 +8047,7 @@ function LiveTradePulse() {
                   <div className="button-row">
                     <button
                       className="ghost-action"
+                      disabled={actionPending}
                       onClick={() =>
                         act(`/v1/bots/${bot.id}/actions`, {
                           action: "compound",
@@ -7962,6 +8059,7 @@ function LiveTradePulse() {
                     </button>
                     <button
                       className="ghost-action"
+                      disabled={actionPending}
                       onClick={() =>
                         act(`/v1/bots/${bot.id}/actions`, {
                           action: "compound",
@@ -8860,19 +8958,19 @@ function LiveTradePulse() {
                           </div>
                         )}
                         <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
-                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20} onClick={() => {
+                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || actionPending} onClick={() => {
                           const bot = data.bots.find((item) => item.product === "synthetic");
                           if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
-                        }}>Top up Synthetic</button>}
+                        }}>{actionPending ? "Updating…" : "Top up Synthetic"}</button>}
                         <p>Before approval: 1:1 margin {money(Number(syntheticAmount) || 0)} · spread {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.spread_bps || 4) / 10000)} · tier fee {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}.</p>
                         <div className="button-row">
-                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>Manual</button>
-                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>Auto</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>Long</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>Short</button>
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} disabled={actionPending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>Manual</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} disabled={actionPending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>Auto</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>{actionPending ? "Submitting…" : "Long"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>Short</button>
                         </div>
                         {syntheticSignals.filter((signal) => signal.expires_at * 1000 > Date.now()).slice(0, 3).map((signal) => (
-                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted} onClick={() => act(`/v1/synthetic/signals/${signal.id}/approve`, { amount: Number(syntheticAmount), idempotency_key: `web:${signal.id}:${Date.now()}` })}>Approve</button></div>
+                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => act(`/v1/synthetic/signals/${signal.id}/approve`, { amount: Number(syntheticAmount), idempotency_key: `web:${signal.id}:${Date.now()}` })}>{actionPending ? "Approving…" : "Approve"}</button></div>
                         ))}
                       </>
                     ) : data.user.is_admin ? (
