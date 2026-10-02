@@ -1097,7 +1097,9 @@ function DepositFlow({ onBack }: { onBack: () => void }) {
                 key={asset}
                 onClick={() => setStep(1)}
               >
-                <span className="coin-mark">{asset[0]}</span>
+                <span className="coin-mark" aria-label={`${asset} logo`}>
+                  {asset === "USDT" ? "₮" : "$"}
+                </span>
                 <strong>{asset}</strong>
                 <small>{i === 1 ? "USD Coin" : "Tether USD"}</small>
                 <ChevronRight />
@@ -6426,7 +6428,9 @@ function LiveWalletScreen({
                     setStep(1);
                   }}
                 >
-                  <span className="coin-mark">{item[0]}</span>
+                  <span className="coin-mark" aria-label={`${item} logo`}>
+                    {item === "USDT" ? "₮" : "$"}
+                  </span>
                   <strong>{item}</strong>
                   <small>{item === "USDT" ? "Tether USD" : "USD Coin"}</small>
                   <ChevronRight />
@@ -7492,9 +7496,19 @@ function LiveTradePulse() {
       </div>
     );
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
-  const chart = synthetic?.ticks?.slice(-80).map((t) => Number(t.reference ?? t.price ?? 0)) || [];
-  const min = Math.min(...chart, 0),
-    max = Math.max(...chart, 1),
+  const chart = (synthetic?.ticks || [])
+    .slice(-80)
+    .map((tick) => Number(tick.reference ?? tick.price))
+    .filter((price) => Number.isFinite(price) && price > 0);
+  // Synthetic indices trade around a non-zero reference price. Including zero
+  // in the domain compresses normal movement into a visually flat line.
+  const rawMin = chart.length ? Math.min(...chart) : 0;
+  const rawMax = chart.length ? Math.max(...chart) : 1;
+  const observedRange = rawMax - rawMin;
+  const minimumRange = Math.max(Math.abs(chart.at(-1) || 1) * 0.0025, 0.01);
+  const padding = Math.max(observedRange, minimumRange) * 0.12;
+  const min = rawMin - padding,
+    max = rawMax + padding,
     path = chart
       .map(
         (value, index) =>
