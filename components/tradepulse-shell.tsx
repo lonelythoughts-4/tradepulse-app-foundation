@@ -94,6 +94,50 @@ type PublicIconName =
   | "play"
   | "plus"
   | "refresh";
+type PaymentMarkName =
+  | "usdt"
+  | "usdc"
+  | "ethereum"
+  | "bnb"
+  | "base"
+  | "arbitrum"
+  | "polygon"
+  | "solana";
+const paymentMarkNames: Record<string, PaymentMarkName> = {
+  USDT: "usdt",
+  USDC: "usdc",
+  Ethereum: "ethereum",
+  ERC20: "ethereum",
+  "BNB Chain": "bnb",
+  BEP20: "bnb",
+  Base: "base",
+  BASE: "base",
+  Arbitrum: "arbitrum",
+  ARBITRUM: "arbitrum",
+  Polygon: "polygon",
+  POLYGON: "polygon",
+  Solana: "solana",
+  SPL: "solana",
+};
+function PaymentMark({ asset }: { asset: string }) {
+  const name = paymentMarkNames[asset] || "base";
+  const isAsset = asset === "USDT" || asset === "USDC";
+  return (
+    <span className={isAsset ? "coin-mark" : "network-mark"} aria-label={`${asset} logo`}>
+      <span
+        aria-hidden="true"
+        style={{
+          display: "block",
+          width: 18,
+          height: 18,
+          background: "currentColor",
+          WebkitMaskImage: `url(/icons/${name}.svg)`,
+          maskImage: `url(/icons/${name}.svg)`,
+        }}
+      />
+    </span>
+  );
+}
 function StateIcon({
   name,
   size = 18,
@@ -1097,9 +1141,7 @@ function DepositFlow({ onBack }: { onBack: () => void }) {
                 key={asset}
                 onClick={() => setStep(1)}
               >
-                <span className="coin-mark" aria-label={`${asset} logo`}>
-                  {asset === "USDT" ? "₮" : "$"}
-                </span>
+                <PaymentMark asset={asset} />
                 <strong>{asset}</strong>
                 <small>{i === 1 ? "USD Coin" : "Tether USD"}</small>
                 <ChevronRight />
@@ -1115,7 +1157,7 @@ function DepositFlow({ onBack }: { onBack: () => void }) {
               ["Solana", "Fast · ~1 min"],
             ].map(([network, note]) => (
               <button key={network} onClick={() => setStep(2)}>
-                <span className="network-mark" />
+                <PaymentMark asset={network} />
                 <strong>{network}</strong>
                 <small>{note}</small>
                 <ChevronRight />
@@ -2999,7 +3041,7 @@ function AccountSection({
                     className="whitelist-item"
                     key={`${wallet.chain}-${wallet.address}`}
                   >
-                    <span className="network-mark" />
+                    <PaymentMark asset={wallet.chain} />
                     <div>
                       <strong>
                         {wallet.nickname} · {wallet.chain}
@@ -3399,7 +3441,7 @@ function LegacyAccountScreen() {
           </div>
         )}
         <div className="address-row">
-          <span className="network-mark" />
+          <PaymentMark asset="BASE" />
           <div>
             <strong>Base · Treasury</strong>
             <code>0x71F4...9aC28D</code>
@@ -5888,15 +5930,20 @@ function LiveBotsScreen({
   const [pendingAction, setPendingAction] = useState(false);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<number, number>>({});
   const [allocationDeltas, setAllocationDeltas] = useState<Record<number, number>>({});
+  const [stateOverrides, setStateOverrides] = useState<Record<number, string>>({});
+  const [closedBotIds, setClosedBotIds] = useState<number[]>([]);
   useEffect(() => {
     setSelectedId(initialBotId);
     setView(initialBotId ? "detail" : "fleet");
   }, [initialBotId]);
-  const displayBots = data.bots.map((bot) => ({
-    ...bot,
-    compound_percent: compoundOverrides[bot.id] ?? bot.compound_percent,
-    capital_usd: bot.capital_usd + (allocationDeltas[bot.id] || 0),
-  }));
+  const displayBots = data.bots
+    .filter((bot) => !closedBotIds.includes(bot.id))
+    .map((bot) => ({
+      ...bot,
+      state: stateOverrides[bot.id] ?? bot.state,
+      compound_percent: compoundOverrides[bot.id] ?? bot.compound_percent,
+      capital_usd: bot.capital_usd + (allocationDeltas[bot.id] || 0),
+    }));
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const run = async (path: string, payload: Record<string, unknown>) => {
@@ -5918,9 +5965,18 @@ function LiveBotsScreen({
         if (Number.isFinite(topUp))
           setAllocationDeltas((current) => ({ ...current, [Number(botMatch[1])]: (current[Number(botMatch[1])] || 0) + topUp }));
       }
+      if (botMatch && payload.action === "toggle") {
+        const botId = Number(botMatch[1]);
+        const currentState = stateOverrides[botId] ?? data.bots.find((bot) => bot.id === botId)?.state;
+        setStateOverrides((current) => ({ ...current, [botId]: currentState === "running" ? "paused" : "running" }));
+      }
+      if (botMatch && payload.action === "close") {
+        setClosedBotIds((current) => [...current, Number(botMatch[1])]);
+      }
       onNotice(response.message || "Saved successfully.");
-      // Keep controls responsive; reconciliation happens without holding the UI.
-      void reload();
+      // Starting a new product is the only action that needs the new server
+      // record. Existing products update locally without refreshing the desk.
+      if (path === "/v1/bots") void reload();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Action failed.");
     } finally {
@@ -6454,9 +6510,7 @@ function LiveWalletScreen({
                     setStep(1);
                   }}
                 >
-                  <span className="coin-mark" aria-label={`${item} logo`}>
-                    {item === "USDT" ? "₮" : "$"}
-                  </span>
+                  <PaymentMark asset={item} />
                   <strong>{item}</strong>
                   <small>{item === "USDT" ? "Tether USD" : "USD Coin"}</small>
                   <ChevronRight />
@@ -6473,7 +6527,7 @@ function LiveWalletScreen({
                     className={chain === value ? "selected" : ""}
                     onClick={() => setChain(value)}
                   >
-                    <span className="network-mark" />
+                    <PaymentMark asset={value} />
                     <strong>{label}</strong>
                     <small>Use only this matching network</small>
                     <ChevronRight />
@@ -7482,10 +7536,8 @@ function LiveTradePulse() {
       });
       applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
-      // Do not hold the desk UI behind a full dashboard refresh. The immediate
-      // update above keeps controls responsive; the authoritative refresh runs
-      // in the background and reconciles any server-side detail.
-      void load();
+      // The visible product/position is updated locally. Avoid reloading the
+      // entire desk after a single click, which can interrupt unrelated work.
       if (tab === "Synthetic") {
         void request(`/v1/synthetic/${syntheticMarket}`)
           .then(setSynthetic)
