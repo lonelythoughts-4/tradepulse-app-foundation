@@ -12,7 +12,9 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
   const origin = process.env.TRADEPULSE_API_ORIGIN?.replace(/\/+$/, '')
   if (!origin) return NextResponse.json({ error: 'TradePulse service is not configured.' }, { status: 503 })
 
-  const url = new URL(upstreamPath, `${origin}/`)
+  const originUrl = new URL(`${origin}/`)
+  const basePath = originUrl.pathname.replace(/\/+$/, '')
+  const url = new URL(`${basePath}${upstreamPath.startsWith('/') ? upstreamPath : `/${upstreamPath}`}`, originUrl.origin)
   url.search = request.nextUrl.search
 
   const headers = new Headers()
