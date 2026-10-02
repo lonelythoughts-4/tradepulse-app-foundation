@@ -6367,6 +6367,11 @@ function LiveWalletScreen({
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawCode, setWithdrawCode] = useState("");
   const [reviewWithdrawal, setReviewWithdrawal] = useState(false);
+  const [submittedWithdrawal, setSubmittedWithdrawal] = useState<{
+    asset: string;
+    chain: string;
+    amount: number;
+  } | null>(null);
   const [tankAmount, setTankAmount] = useState("20");
   const [tankAutofill, setTankAutofill] = useState(data.wallet.tank_autofill);
   const [walletPending, setWalletPending] = useState(false);
@@ -6405,6 +6410,7 @@ function LiveWalletScreen({
     setView("overview");
     setStep(0);
     setReviewWithdrawal(false);
+    setSubmittedWithdrawal(null);
   };
   const toggleTankAutofill = async () => {
     if (walletPending) return;
@@ -6517,11 +6523,15 @@ function LiveWalletScreen({
       onNotice(
         `Withdrawal ${String(result.withdrawal_id || "request").slice(0, 8)} is queued for review.`,
       );
+      setSubmittedWithdrawal({
+        asset: withdrawAsset,
+        chain: withdrawChain,
+        amount: Number(withdrawAmount),
+      });
       setWithdrawAddress("");
       setWithdrawAmount("");
       setWithdrawCode("");
       setReviewWithdrawal(false);
-      showOverview();
     } catch (error) {
       onNotice(
         error instanceof Error
@@ -6606,6 +6616,32 @@ function LiveWalletScreen({
           )}
           {step === 2 && intent && (
             <>
+              {intent.status.toLowerCase() === "credited_and_closed" && (
+                <div className="success-state">
+                  <img
+                    src="/illustrations/deposit-credited.png"
+                    alt="Deposit credited into TradePulse"
+                    className="deposit-credited-art"
+                    decoding="async"
+                  />
+                  <strong>Deposit credited</strong>
+                  <small>Your verified transfer is now in your available wallet balance.</small>
+                </div>
+              )}
+              {intent.status.toLowerCase() === "pending_dust" && (
+                <div className="below-minimum-card">
+                  <img
+                    src="/illustrations/below-minimum.png"
+                    alt="Deposit below the required minimum"
+                    className="below-minimum-art"
+                    decoding="async"
+                  />
+                  <div>
+                    <strong>Deposit below minimum</strong>
+                    <small>Send the remaining amount to this same route to complete the credit.</small>
+                  </div>
+                </div>
+              )}
               <div className="qr-placeholder">
                 {qrDataUrl ? (
                   <img
@@ -6752,6 +6788,36 @@ function LiveWalletScreen({
             ))}
           </GradientPanel>
         )}
+      </div>
+    );
+  if (view === "withdraw" && submittedWithdrawal)
+    return (
+      <div className="wallet-flow">
+        <button className="back-action" onClick={showOverview}>
+          <StateIcon name="arrow-left" /> Wallet overview
+        </button>
+        <StepRail current={2} />
+        <GradientPanel className="flow-card">
+          <div className="success-state">
+            <img
+              src="/illustrations/withdrawal-sent.png"
+              alt="Withdrawal queued for secure review"
+              className="withdrawal-sent-art"
+              decoding="async"
+            />
+            <strong>Withdrawal queued</strong>
+            <small>
+              {money(submittedWithdrawal.amount)} {submittedWithdrawal.asset} on{" "}
+              {submittedWithdrawal.chain} is reserved for review.
+            </small>
+          </div>
+          <button className="primary-action" onClick={showOverview}>
+            Back to wallet <ChevronRight />
+          </button>
+          <button className="ghost-action" onClick={() => setView("history")}>
+            View withdrawal history
+          </button>
+        </GradientPanel>
       </div>
     );
   if (view === "withdraw")
@@ -8029,7 +8095,7 @@ function LiveTradePulse() {
                 </div>
               </GradientPanel>
             )}
-          {false && tab === "Dashboard" && data.demo?.state === "issued" && (
+          {tab === "Dashboard" && data.demo?.state === "issued" && (
             <GradientPanel className="demo-banner">
               <img
                 src="/illustrations/demo-banner.png"
