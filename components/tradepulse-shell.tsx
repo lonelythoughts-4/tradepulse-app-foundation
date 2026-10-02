@@ -119,17 +119,21 @@ const paymentMarkNames: Record<string, PaymentMarkName> = {
   Solana: "solana",
   SPL: "solana",
 };
-function PaymentMark({ asset }: { asset: string }) {
+function PaymentMark({ asset, compact = false }: { asset: string; compact?: boolean }) {
   const name = paymentMarkNames[asset] || "base";
   const isAsset = asset === "USDT" || asset === "USDC";
   return (
-    <span className={isAsset ? "coin-mark" : "network-mark"} aria-label={`${asset} logo`}>
+    <span
+      className={isAsset ? "coin-mark" : "network-mark"}
+      aria-label={`${asset} logo`}
+      style={compact ? { width: 16, height: 16, borderRadius: 0, background: "transparent" } : undefined}
+    >
       <span
         aria-hidden="true"
         style={{
           display: "block",
-          width: 18,
-          height: 18,
+          width: compact ? 16 : 18,
+          height: compact ? 16 : 18,
           background: "currentColor",
           WebkitMaskImage: `url(/icons/${name}.svg)`,
           maskImage: `url(/icons/${name}.svg)`,
@@ -6329,13 +6333,16 @@ function LiveBotsScreen({
 function LiveWalletScreen({
   data,
   request,
-  reload,
+  onWalletUpdate,
   onNotice,
   initialView = "overview",
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
-  reload: () => Promise<void>;
+  onWalletUpdate: (update: {
+    wallet?: Partial<LiveDashboard["wallet"]>;
+    withdrawal?: LiveDashboard["withdrawals"][number];
+  }) => void;
   onNotice: (message: string) => void;
   initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
 }) {
@@ -6362,6 +6369,7 @@ function LiveWalletScreen({
   const [reviewWithdrawal, setReviewWithdrawal] = useState(false);
   const [tankAmount, setTankAmount] = useState("20");
   const [tankAutofill, setTankAutofill] = useState(data.wallet.tank_autofill);
+  const [walletPending, setWalletPending] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
@@ -6391,6 +6399,7 @@ function LiveWalletScreen({
     ["BASE", "Base"],
     ["ARBITRUM", "Arbitrum"],
     ["POLYGON", "Polygon"],
+    ["SPL", "Solana"],
   ];
   const showOverview = () => {
     setView("overview");
@@ -6398,23 +6407,53 @@ function LiveWalletScreen({
     setReviewWithdrawal(false);
   };
   const toggleTankAutofill = async () => {
+    if (walletPending) return;
     const previous = tankAutofill;
     setTankAutofill(!previous);
+    setWalletPending(true);
     try {
-      await request("/v1/tank/actions", {
+      const result = await request("/v1/tank/actions", {
         method: "POST",
         body: JSON.stringify({ action: "autofill" }),
       });
-      await reload();
+      onWalletUpdate({ wallet: { tank_autofill: Boolean(result.enabled) } });
       onNotice(`Auto-fill ${previous ? "disabled" : "enabled"}.`);
     } catch (error) {
       setTankAutofill(previous);
       onNotice(
         error instanceof Error ? error.message : "Could not update auto-fill.",
       );
+    } finally {
+      setWalletPending(false);
+    }
+  };
+  const topUpTank = async () => {
+    if (walletPending) return;
+    setWalletPending(true);
+    try {
+      const result = await request("/v1/tank/actions", {
+        method: "POST",
+        body: JSON.stringify({ action: "topup", amount: Number(tankAmount) }),
+      });
+      onWalletUpdate({
+        wallet: result.wallet || {
+          available: Math.max(0, data.wallet.available - Number(tankAmount)),
+          tank: Number(result.tank_usd ?? data.wallet.tank),
+        },
+      });
+      onNotice("Gas tank top-up applied.");
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : "Could not top up the gas tank.",
+      );
+    } finally {
+      setWalletPending(false);
     }
   };
   const isEvmAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value);
+  const isSolanaAddress = (value: string) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
+  const isWithdrawalAddress = (value: string) =>
+    withdrawChain === "SPL" ? isSolanaAddress(value) : isEvmAddress(value);
   const filteredLedger = data.ledger.filter((entry) => {
     if (historyFilter === "all") return true;
     const kind = entry.kind.toLowerCase();
@@ -6448,6 +6487,8 @@ function LiveWalletScreen({
     }
   };
   const submitWithdrawal = async () => {
+    if (walletPending) return;
+    setWalletPending(true);
     try {
       const result = await request("/v1/withdrawals", {
         method: "POST",
@@ -6459,6 +6500,20 @@ function LiveWalletScreen({
           security_code: withdrawCode,
         }),
       });
+      onWalletUpdate({
+        wallet: result.wallet || {
+          available: Math.max(0, data.wallet.available - Number(withdrawAmount)),
+          locked: data.wallet.locked + Number(withdrawAmount),
+        },
+        withdrawal: result.withdrawal || {
+          id: String(result.withdrawal_id || `pending-${Date.now()}`),
+          asset: withdrawAsset,
+          chain: withdrawChain,
+          address: withdrawAddress,
+          amount_usd: Number(withdrawAmount),
+          status: "pending_admin_release",
+        },
+      });
       onNotice(
         `Withdrawal ${String(result.withdrawal_id || "request").slice(0, 8)} is queued for review.`,
       );
@@ -6466,7 +6521,6 @@ function LiveWalletScreen({
       setWithdrawAmount("");
       setWithdrawCode("");
       setReviewWithdrawal(false);
-      await reload();
       showOverview();
     } catch (error) {
       onNotice(
@@ -6474,6 +6528,8 @@ function LiveWalletScreen({
           ? error.message
           : "Could not create the withdrawal request.",
       );
+    } finally {
+      setWalletPending(false);
     }
   };
   if (view === "deposit")
@@ -6612,7 +6668,6 @@ function LiveWalletScreen({
                         ? `Transfer detected. Status: ${result.status}. Credit happens after confirmation.`
                         : `Monitoring started. No transfer detected yet; nothing was credited.`,
                     );
-                    await reload();
                   } catch (error) {
                     onNotice(
                       error instanceof Error
@@ -6731,7 +6786,9 @@ function LiveWalletScreen({
             </small>
           </div>
           <label className="amount-field">
-            <span>ASSET</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <PaymentMark asset={withdrawAsset} compact /> ASSET · {withdrawAsset}
+            </span>
             <select
               value={withdrawAsset}
               onChange={(event) => setWithdrawAsset(event.target.value)}
@@ -6741,7 +6798,9 @@ function LiveWalletScreen({
             </select>
           </label>
           <label className="amount-field">
-            <span>NETWORK</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <PaymentMark asset={withdrawChain} compact /> NETWORK · {networks.find(([value]) => value === withdrawChain)?.[1] || withdrawChain}
+            </span>
             <select
               value={withdrawChain}
               onChange={(event) => setWithdrawChain(event.target.value)}
@@ -6820,8 +6879,9 @@ function LiveWalletScreen({
           <button
             className="primary-action"
             disabled={
+              walletPending ||
               !withdrawAddress ||
-              !isEvmAddress(withdrawAddress) ||
+              !isWithdrawalAddress(withdrawAddress) ||
               Number(withdrawAmount) <= 0 ||
               Number(withdrawAmount) > data.wallet.available ||
               withdrawCode.length !== 6
@@ -6837,7 +6897,9 @@ function LiveWalletScreen({
               <span className="eyebrow">FINAL CROSS-CHECK</span>
               <h2>Verify before sending</h2>
               <div className="mono-review">
-                <span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <PaymentMark asset={withdrawAsset} compact />
+                  <PaymentMark asset={withdrawChain} compact />
                   {withdrawAsset} / {withdrawChain}
                 </span>
                 <code>{withdrawAddress}</code>
@@ -6847,8 +6909,8 @@ function LiveWalletScreen({
                 Withdrawal requests are reviewed before release. Confirm only
                 when the address and network are correct.
               </p>
-              <button className="primary-action" onClick={submitWithdrawal}>
-                Confirm withdrawal <Send />
+              <button className="primary-action" disabled={walletPending} onClick={submitWithdrawal}>
+                {walletPending ? "Submitting…" : "Confirm withdrawal"} <Send />
               </button>
               <button
                 className="ghost-action"
@@ -7041,30 +7103,13 @@ function LiveWalletScreen({
           <button
             className="primary-action"
             disabled={
+              walletPending ||
               Number(tankAmount) <= 0 ||
               Number(tankAmount) > data.wallet.available
             }
-            onClick={async () => {
-              try {
-                await request("/v1/tank/actions", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    action: "topup",
-                    amount: Number(tankAmount),
-                  }),
-                });
-                await reload();
-                onNotice("Gas tank top-up applied.");
-              } catch (error) {
-                onNotice(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not top up gas tank.",
-                );
-              }
-            }}
+            onClick={() => void topUpTank()}
           >
-            Top up gas tank <Fuel />
+            {walletPending ? "Updating…" : "Top up gas tank"} <Fuel />
           </button>
         </GradientPanel>
       </div>
@@ -7137,27 +7182,10 @@ function LiveWalletScreen({
         </label>
         <button
           className="small-action"
-          onClick={async () => {
-            try {
-              await request("/v1/tank/actions", {
-                method: "POST",
-                body: JSON.stringify({
-                  action: "topup",
-                  amount: Number(tankAmount),
-                }),
-              });
-              await reload();
-              onNotice("Gas tank top-up applied.");
-            } catch (error) {
-              onNotice(
-                error instanceof Error
-                  ? error.message
-                  : "Could not top up the gas tank.",
-              );
-            }
-          }}
+          disabled={walletPending || Number(tankAmount) <= 0 || Number(tankAmount) > data.wallet.available}
+          onClick={() => void topUpTank()}
         >
-          Top up gas tank <Fuel />
+          {walletPending ? "Updating…" : "Top up gas tank"} <Fuel />
         </button>
       </GradientPanel>
       <div className="wallet-actions">
@@ -8141,7 +8169,19 @@ function LiveTradePulse() {
             <LiveWalletScreen
               data={data}
               request={request}
-              reload={load}
+              onWalletUpdate={({ wallet, withdrawal }) =>
+                setData((current) =>
+                  current
+                    ? {
+                        ...current,
+                        wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
+                        withdrawals: withdrawal
+                          ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
+                          : current.withdrawals,
+                      }
+                    : current,
+                )
+              }
               onNotice={setNotice}
               initialView={walletEntry}
             />
