@@ -4511,23 +4511,125 @@ function activityTone(kind: string, status: string) {
   return "complete";
 }
 
-function chartPath(points: Array<{ price: number }>) {
-  const values = points
-    .map((point) => Number(point.price))
-    .filter(Number.isFinite);
-  if (values.length < 2) return "";
-  const low = Math.min(...values),
-    high = Math.max(...values),
-    range = Math.max(high - low, 0.000001);
-  return values
-    .map(
-      (value, index) => {
-        const x = 12 + (index / (values.length - 1)) * 576;
-        const y = 88 - Math.min(1, Math.max(0, (value - low) / range)) * 76;
-        return `${index ? "L" : "M"} ${x} ${y}`;
-      },
-    )
+type MarketPoint = { price: number; timestamp?: number };
+type MarketCandle = {
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  timestamp?: number;
+};
+
+function makeCandles(points: MarketPoint[]): MarketCandle[] {
+  const valid = points.filter((point) => Number.isFinite(Number(point.price)) && Number(point.price) > 0);
+  if (valid.length < 2) return [];
+  const size = Math.max(1, Math.ceil(valid.length / Math.min(42, Math.max(12, Math.ceil(valid.length / 2)))));
+  const candles: MarketCandle[] = [];
+  for (let index = 0; index < valid.length; index += size) {
+    const bucket = valid.slice(index, index + size);
+    const prices = bucket.map((point) => Number(point.price));
+    candles.push({
+      open: prices[0],
+      close: prices.at(-1) || prices[0],
+      high: Math.max(...prices),
+      low: Math.min(...prices),
+      timestamp: bucket.at(-1)?.timestamp,
+    });
+  }
+  return candles;
+}
+
+function rsiValues(closes: number[], period = 14) {
+  if (closes.length < 2) return [] as number[];
+  const values: number[] = [];
+  for (let index = 0; index < closes.length; index += 1) {
+    const start = Math.max(1, index - period + 1);
+    const changes = closes.slice(start - 1, index + 1).map((value, changeIndex, series) =>
+      changeIndex ? value - series[changeIndex - 1] : 0,
+    ).slice(1);
+    const gains = changes.reduce((sum, change) => sum + Math.max(change, 0), 0) / Math.max(changes.length, 1);
+    const losses = changes.reduce((sum, change) => sum + Math.max(-change, 0), 0) / Math.max(changes.length, 1);
+    values.push(losses === 0 ? 100 : 100 - 100 / (1 + gains / losses));
+  }
+  return values;
+}
+
+function formatMarketPrice(value: number) {
+  if (Math.abs(value) >= 1000) return value.toFixed(2);
+  if (Math.abs(value) >= 1) return value.toFixed(4);
+  return value.toFixed(6);
+}
+
+function formatChartTime(timestamp: number | undefined, index: number, total: number) {
+  if (!timestamp) return index === total - 1 ? "NOW" : `T-${total - index - 1}`;
+  const millis = timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
+  return new Date(millis).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function MarketChart({
+  points,
+  market,
+  accent = "#34d399",
+}: {
+  points: MarketPoint[];
+  market: string;
+  accent?: string;
+}) {
+  const candles = makeCandles(points);
+  if (!candles.length) {
+    return <div className="market-chart market-chart-empty">Waiting for live market ticks</div>;
+  }
+  const low = Math.min(...candles.map((candle) => candle.low));
+  const high = Math.max(...candles.map((candle) => candle.high));
+  const range = Math.max(high - low, Math.abs(high || 1) * 0.0025, 0.000001);
+  const paddedLow = low - range * 0.08;
+  const paddedHigh = high + range * 0.08;
+  const domain = paddedHigh - paddedLow;
+  const chartWidth = 560;
+  const chartHeight = 204;
+  const xStep = chartWidth / candles.length;
+  const bodyWidth = Math.max(2, Math.min(10, xStep * 0.62));
+  const y = (value: number) => 10 + ((paddedHigh - value) / domain) * (chartHeight - 20);
+  const priceLabels = Array.from({ length: 5 }, (_, index) => paddedHigh - (domain * index) / 4);
+  const rsi = rsiValues(candles.map((candle) => candle.close));
+  const rsiPath = rsi
+    .map((value, index) => `${index ? "L" : "M"} ${(index / Math.max(rsi.length - 1, 1)) * chartWidth} ${42 - (value / 100) * 34}`)
     .join(" ");
+  const visibleTimes = [0, Math.floor((candles.length - 1) / 2), candles.length - 1];
+  return (
+    <div className="market-chart" aria-label={`${market} candlestick chart with RSI`}>
+      <div className="market-chart-main">
+        <svg viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles`}>
+          {priceLabels.map((label, index) => {
+            const lineY = 10 + ((chartHeight - 20) * index) / 4;
+            return <g key={label}><path d={`M0 ${lineY}H560`} className="market-grid-line" /><text x="570" y={lineY + 3} className="market-axis-label">{formatMarketPrice(label)}</text></g>;
+          })}
+          {Array.from({ length: 7 }, (_, index) => <path key={index} d={`M${(chartWidth * index) / 6} 0V204`} className="market-grid-line market-grid-vertical" />)}
+          {candles.map((candle, index) => {
+            const center = index * xStep + xStep / 2;
+            const rising = candle.close >= candle.open;
+            const color = rising ? accent : "#f87171";
+            const top = Math.min(y(candle.open), y(candle.close));
+            const height = Math.max(1.5, Math.abs(y(candle.open) - y(candle.close)));
+            return <g key={`${candle.timestamp || index}-${candle.close}`}>
+              <path d={`M${center} ${y(candle.high)}V${y(candle.low)}`} stroke={color} strokeWidth="1.15" />
+              <rect x={center - bodyWidth / 2} y={top} width={bodyWidth} height={height} fill={rising ? `${color}B3` : color} stroke={color} strokeWidth="0.8" />
+            </g>;
+          })}
+        </svg>
+      </div>
+      <div className="market-rsi">
+        <span>RSI (14)</span>
+        <svg viewBox="0 0 560 48" preserveAspectRatio="none" role="img" aria-label={`${market} RSI indicator`}>
+          <path d="M0 8H560M0 25H560M0 42H560" className="market-grid-line" />
+          <path d={rsiPath} fill="none" stroke="#aeb7ff" strokeWidth="1.5" />
+        </svg>
+      </div>
+      <div className="market-time-axis">
+        {visibleTimes.map((index) => <span key={index}>{formatChartTime(candles[index]?.timestamp, index, candles.length)}</span>)}
+      </div>
+    </div>
+  );
 }
 
 function LiveHelpScreen({
@@ -7462,7 +7564,7 @@ function LiveTradePulse() {
   const [synthetic, setSynthetic] = useState<{
     market: string;
     latest: { price?: number; reference?: number };
-    ticks: Array<{ price?: number; reference?: number }>;
+    ticks: Array<{ price?: number; reference?: number; timestamp?: number; created_at?: number }>;
     account?: {
       available_usd: number;
       locked_usd: number;
@@ -7622,8 +7724,9 @@ function LiveTradePulse() {
             product: "synthetic",
             value: {
               market: snapshot.market || "SYN-25",
-              points: (snapshot.ticks || []).map((tick: { price?: number; reference?: number }) => ({
+              points: (snapshot.ticks || []).map((tick: { price?: number; reference?: number; timestamp?: number; created_at?: number }) => ({
                 price: Number(tick.reference ?? tick.price),
+                timestamp: tick.timestamp ?? tick.created_at,
               })),
               positions: snapshot.positions || [],
               activity: [],
@@ -7832,10 +7935,11 @@ function LiveTradePulse() {
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
   const chartPoints = (synthetic?.ticks || [])
     .slice(-80)
-    .map((tick) => Number(tick.reference ?? tick.price))
-    .filter((price) => Number.isFinite(price) && price > 0)
-    .map((price) => ({ price }));
-  const path = chartPath(chartPoints);
+    .map((tick) => ({
+      price: Number(tick.reference ?? tick.price),
+      timestamp: tick.timestamp ?? tick.created_at,
+    }))
+    .filter((tick) => Number.isFinite(tick.price) && tick.price > 0);
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
   const visualBots: Bot[] = data.bots.map((bot) => ({
@@ -8087,31 +8191,11 @@ function LiveTradePulse() {
                     updates every 30s
                   </span>
                 </div>
-                <svg
-                  className="hero-chart"
-                  viewBox="0 0 600 100"
-                  preserveAspectRatio="none"
-                  aria-label={`${chart.market} price chart`}
-                >
-                  <defs>
-                    <clipPath id={`chart-clip-${product}`}>
-                      <rect x="12" y="12" width="576" height="76" />
-                    </clipPath>
-                  </defs>
-                  <path d="M12 30H588M12 50H588M12 70H588" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeDasharray="3 5" />
-                  <path
-                    d={chartPath(chart.points)}
-                    fill="none"
-                    stroke={product === "memecoin" ? "#60a5fa" : "#34d399"}
-                    strokeWidth="2"
-                    clipPath={`url(#chart-clip-${product})`}
-                  />
-                  {!chartPath(chart.points) && (
-                    <text x="300" y="54" textAnchor="middle" fill="currentColor" opacity="0.62" fontSize="10">
-                      Waiting for live ticks
-                    </text>
-                  )}
-                </svg>
+                <MarketChart
+                  points={chart.points}
+                  market={chart.market}
+                  accent={product === "memecoin" ? "#60a5fa" : "#34d399"}
+                />
                 <div className="activity-row">
                   <div className="activity-info">
                     <strong>
@@ -9189,12 +9273,7 @@ function LiveTradePulse() {
                 <p>Shared prices for every user. Volatility tiers describe movement intensity, not expected profit. Mainnet orders reserve wallet USD 1:1; testnet pilot funds never mix with wallet balances.</p>
                 {synthetic ? (
                   <>
-                    <svg className="hero-chart" viewBox="0 0 600 100" preserveAspectRatio="none" aria-label={`${syntheticMarket} shared price chart`}>
-                      <defs><clipPath id="synthetic-chart-clip"><rect x="12" y="12" width="576" height="76" /></clipPath></defs>
-                      <path d="M12 30H588M12 50H588M12 70H588" fill="none" stroke="currentColor" strokeOpacity="0.14" strokeDasharray="3 5" />
-                      <path d={path} fill="none" stroke="#34d399" strokeWidth="2" clipPath="url(#synthetic-chart-clip)" />
-                      {!path && <text x="300" y="54" textAnchor="middle" fill="currentColor" opacity="0.62" fontSize="10">Waiting for shared market ticks</text>}
-                    </svg>
+                    <MarketChart points={chartPoints} market={syntheticMarket} />
                     <div className="wallet-stat-grid">
                       <div><span className="eyebrow">LAST TICK</span><strong>{Number(synthetic.latest?.reference || 0).toFixed(5)}</strong></div>
                       <div><span className="eyebrow">UNASSIGNED</span><strong>{money(data.wallet.available || 0)}</strong></div>
