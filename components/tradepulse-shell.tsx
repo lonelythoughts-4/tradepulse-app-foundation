@@ -7600,8 +7600,9 @@ function LiveTradePulse() {
   const [admin, setAdmin] = useState<LiveTradePulseAdmin | null>(null);
   // Keep the pending action identity so a top-up, order, approval, or close
   // cannot make an unrelated control render the wrong loading label.
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const actionPending = pendingAction !== null;
+  const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
+  const actionPending = Object.values(pendingActions).some(Boolean);
+  const isActionPending = (key: string) => Boolean(pendingActions[key]);
   const headers = (targetEnvironment = webEnvironment) => ({
     "Content-Type": "application/json",
     "X-Telegram-Init-Data": telegramInitData(),
@@ -7822,7 +7823,6 @@ function LiveTradePulse() {
     }
   };
   const act = async (path: string, payload: Record<string, unknown>) => {
-    if (actionPending) return;
     const actionKey = path.includes("/synthetic/orders")
       ? String(payload.direction || "order")
       : path.includes("/synthetic/signals/")
@@ -7836,7 +7836,8 @@ function LiveTradePulse() {
               : path.includes("disclosure")
                 ? "disclosure"
                 : "action";
-    setPendingAction(actionKey);
+    if (isActionPending(actionKey)) return;
+    setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(path, {
         method: "POST",
@@ -7854,7 +7855,11 @@ function LiveTradePulse() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Action failed.");
     } finally {
-      setPendingAction(null);
+      setPendingActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
   };
   if (loading)
@@ -9309,26 +9314,26 @@ function LiveTradePulse() {
                           </div>
                         )}
                         <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
-                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || actionPending} onClick={() => {
+                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || isActionPending("topup")} onClick={() => {
                           const bot = data.bots.find((item) => item.product === "synthetic");
                           if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
-                        }}>{pendingAction === "topup" ? "Updating…" : "Top up Synthetic"}</button>}
+                        }}>{isActionPending("topup") ? "Updating…" : "Top up Synthetic"}</button>}
                         <p>Before approval: 1:1 margin {money(Number(syntheticAmount) || 0)} · spread {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.spread_bps || 4) / 10000)} · tier fee {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}.</p>
                         <div className="button-row">
-                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} disabled={actionPending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>Manual</button>
-                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} disabled={actionPending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>Auto</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>{pendingAction === "long" ? "Submitting…" : "Long"}</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>{pendingAction === "short" ? "Submitting…" : "Short"}</button>
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} disabled={isActionPending("manual")} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>{isActionPending("manual") ? "Saving…" : "Manual"}</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} disabled={isActionPending("auto")} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>{isActionPending("auto") ? "Saving…" : "Auto"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || isActionPending("long")} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>{isActionPending("long") ? "Submitting…" : "Long"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || isActionPending("short")} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>{isActionPending("short") ? "Submitting…" : "Short"}</button>
                         </div>
                         {syntheticSignals.filter((signal) => signal.expires_at * 1000 > Date.now()).slice(0, 3).map((signal) => (
-                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => act(`/v1/synthetic/signals/${signal.id}/approve`, { amount: Number(syntheticAmount), idempotency_key: `web:${signal.id}:${Date.now()}` })}>{pendingAction === "approve" ? "Approving…" : "Approve"}</button></div>
+                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted || isActionPending("approve")} onClick={() => act(`/v1/synthetic/signals/${signal.id}/approve`, { amount: Number(syntheticAmount), idempotency_key: `web:${signal.id}:${Date.now()}` })}>{isActionPending("approve") ? "Approving…" : "Approve"}</button></div>
                         ))}
                       </>
                     ) : data.user.is_admin ? (
                       <div className="button-row"><button className="small-action" onClick={() => act("/v1/synthetic/actions", { action: "open", market: syntheticMarket, direction: "long", amount: 20 })}>Open $20 long</button><button className="small-action" onClick={() => act("/v1/synthetic/actions", { action: "open", market: syntheticMarket, direction: "short", amount: 20 })}>Open $20 short</button><button className="danger-action" onClick={() => act("/v1/synthetic/actions", { action: "reset" })}>Reset virtual balance</button></div>
                     ) : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
                     {synthetic.positions?.filter((position) => position.status === "open").map((position) => (
-                      <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>Close</button></div>
+                      <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" disabled={isActionPending("close")} onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>{isActionPending("close") ? "Closing…" : "Close"}</button></div>
                     ))}
                   </>
                 ) : <p>Loading shared tick feed…</p>}
