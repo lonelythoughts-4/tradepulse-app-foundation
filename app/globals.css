@@ -43,3 +43,6 @@
 .state-icon-rotated{transform:rotate(180deg)}
 .notification-toggle-icon{color:#aeb7ff}
 .code-visibility{display:grid;place-items:center;color:#aeb7ff}
+.synthetic-pilot{padding:18px 16px;overflow:hidden}
+.main-content>.synthetic-pilot{margin-top:16px}
+.main-content>.synthetic-pilot+.synthetic-pilot{margin-top:26px}

@@ -499,6 +499,7 @@ function BottomNav({
 
 function Header({
   setActive,
+  onNotifications,
   profileName = "Jordan",
   environment = "LIVE",
   isAdmin = true,
@@ -506,6 +507,7 @@ function Header({
   notificationCount = 0,
 }: {
   setActive: (view: string) => void;
+  onNotifications?: () => void;
   profileName?: string;
   environment?: string;
   isAdmin?: boolean;
@@ -552,7 +554,7 @@ function Header({
         <button
           className="icon-button notification"
           aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
-          onClick={() => setActive("Account")}
+          onClick={() => (onNotifications ? onNotifications() : setActive("Account"))}
         >
           <Bell size={18} />
           {notificationCount > 0 && <b>{notificationCount > 99 ? "99+" : notificationCount}</b>}
@@ -5677,11 +5679,13 @@ function LiveAccountScreen({
   request,
   reload,
   onNotice,
+  openNotificationsRequest = 0,
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
+  openNotificationsRequest?: number;
 }) {
   const [modal, setModal] = useState<
     "" | "code" | "notifications" | "whitelist" | "reset" | "support"
@@ -5697,6 +5701,9 @@ function LiveAccountScreen({
   useEffect(() => {
     setNotificationState(data.notifications);
   }, [data.notifications]);
+  useEffect(() => {
+    if (openNotificationsRequest > 0) setModal("notifications");
+  }, [openNotificationsRequest]);
   const updateNotification = async (key: string, label: string, enabled: boolean) => {
     if (notificationPending) return;
     const next = !enabled;
@@ -7521,6 +7528,8 @@ function LiveTradePulse() {
   >("overview");
   const [botEntryId, setBotEntryId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
+  const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
+  const [seenNoticeIds, setSeenNoticeIds] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("20");
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
@@ -7699,6 +7708,7 @@ function LiveTradePulse() {
     );
     if (!next) return;
     seen[next.id] = now + Math.max(30, data.popup_ttl_seconds || 600) * 1000;
+    setSeenNoticeIds(seen);
     try {
       window.localStorage.setItem(key, JSON.stringify(seen));
     } catch {
@@ -7706,6 +7716,13 @@ function LiveTradePulse() {
     }
     setNotice(`${next.title} — ${next.body}`);
   }, [data, notice]);
+  useEffect(() => {
+    try {
+      setSeenNoticeIds(JSON.parse(window.localStorage.getItem("tradepulse.web-notices") || "{}"));
+    } catch {
+      /* storage is optional */
+    }
+  }, []);
   useEffect(() => {
     if (tab !== "Synthetic" || !data) return;
     const refreshSynthetic = () => Promise.all([
@@ -7989,6 +8006,9 @@ function LiveTradePulse() {
     .filter((tick) => Number.isFinite(tick.price) && tick.price > 0);
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
+  const unreadNoticeCount = data.notices.filter(
+    (item) => !seenNoticeIds[item.id] || seenNoticeIds[item.id] < Date.now(),
+  ).length;
   const visualBots: Bot[] = data.bots.map((bot) => ({
     id: bot.id,
     name: bot.product === "memecoin" ? "Memecoin" : "Synthetic Indices",
@@ -8070,11 +8090,15 @@ function LiveTradePulse() {
       <main className="main-content">
         <Header
           setActive={selectChromeTab}
+          onNotifications={() => {
+            setTab("Account");
+            setOpenNotificationsRequest((request) => request + 1);
+          }}
           profileName={profileName}
           environment={data.environment.toUpperCase()}
           isAdmin={data.user.is_admin}
           pageTitle={chromeActive}
-          notificationCount={data.notices.length}
+          notificationCount={unreadNoticeCount}
         />
         <div className="content-wrap">
           {notice && (
@@ -9128,6 +9152,7 @@ function LiveTradePulse() {
               request={request}
               reload={load}
               onNotice={setNotice}
+              openNotificationsRequest={openNotificationsRequest}
             />
           )}
           {false && tab === "Account" && (
