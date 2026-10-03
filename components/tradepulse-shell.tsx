@@ -126,23 +126,23 @@ function PaymentMark({ asset, compact = false }: { asset: string; compact?: bool
     <span
       className={isAsset ? "coin-mark" : "network-mark"}
       aria-label={`${asset} logo`}
-      style={compact ? { width: 16, height: 16, borderRadius: 0, background: "transparent" } : undefined}
+      role="img"
+      style={{
+        width: compact ? 16 : 32,
+        height: compact ? 16 : 32,
+        borderRadius: 0,
+        background: "transparent",
+      }}
     >
-      <span
+      <img
         aria-hidden="true"
+        alt=""
+        src={`/icons/${name}.svg`}
         style={{
           display: "block",
           width: compact ? 16 : 18,
           height: compact ? 16 : 18,
-          background: "currentColor",
-          WebkitMaskImage: `url(/icons/${name}.svg)`,
-          WebkitMaskPosition: "center",
-          WebkitMaskRepeat: "no-repeat",
-          WebkitMaskSize: "contain",
-          maskImage: `url(/icons/${name}.svg)`,
-          maskPosition: "center",
-          maskRepeat: "no-repeat",
-          maskSize: "contain",
+          objectFit: "contain",
         }}
       />
     </span>
