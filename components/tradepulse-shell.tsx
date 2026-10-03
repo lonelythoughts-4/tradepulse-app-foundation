@@ -4605,9 +4605,11 @@ function MarketChart({
   accent?: string;
 }) {
   const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState(0);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStartDistance = useRef(0);
   const pinchStartZoom = useRef(1);
+  const dragStart = useRef<{ x: number; offset: number } | null>(null);
   const clampZoom = (value: number) => Math.max(1, Math.min(8, value));
   const onWheel = (event: any) => {
     event.preventDefault();
@@ -4615,7 +4617,10 @@ function MarketChart({
   };
   const onPointerDown = (event: any) => {
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (pointers.current.size === 2) {
+    if (pointers.current.size === 1) {
+      dragStart.current = { x: event.clientX, offset };
+    } else if (pointers.current.size === 2) {
+      dragStart.current = null;
       const [first, second] = Array.from(pointers.current.values());
       pinchStartDistance.current = Math.hypot(first.x - second.x, first.y - second.y);
       pinchStartZoom.current = zoom;
@@ -4624,6 +4629,12 @@ function MarketChart({
   const onPointerMove = (event: any) => {
     if (!pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size === 1 && dragStart.current) {
+      const maxOffset = Math.max(0, points.length - Math.max(18, Math.round(points.length / zoom)));
+      const travelledPoints = Math.round(((dragStart.current.x - event.clientX) / 560) * Math.max(18, Math.round(points.length / zoom)));
+      setOffset(Math.max(0, Math.min(maxOffset, dragStart.current.offset + travelledPoints)));
+      return;
+    }
     if (pointers.current.size !== 2 || !pinchStartDistance.current) return;
     const [first, second] = Array.from(pointers.current.values());
     const distance = Math.hypot(first.x - second.x, first.y - second.y);
@@ -4631,10 +4642,15 @@ function MarketChart({
   };
   const onPointerUp = (event: any) => {
     pointers.current.delete(event.pointerId);
-    if (pointers.current.size < 2) pinchStartDistance.current = 0;
+    if (pointers.current.size < 2) {
+      pinchStartDistance.current = 0;
+      dragStart.current = null;
+    }
   };
   const visibleCount = Math.max(18, Math.round(points.length / zoom));
-  const candles = makeCandles(points.slice(-visibleCount));
+  const maxOffset = Math.max(0, points.length - visibleCount);
+  const cropEnd = points.length - Math.min(offset, maxOffset);
+  const candles = makeCandles(points.slice(Math.max(0, cropEnd - visibleCount), cropEnd));
   if (!candles.length) {
     return <div className="market-chart market-chart-empty">Waiting for live market ticks</div>;
   }
@@ -4658,7 +4674,7 @@ function MarketChart({
   return (
     <div
       className="market-chart"
-      aria-label={`${market} candlestick chart with RSI; use mouse wheel or pinch to zoom`}
+      aria-label={`${market} candlestick chart with RSI; use mouse wheel or pinch to zoom, then drag to review earlier prices`}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
