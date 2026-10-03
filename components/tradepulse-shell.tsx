@@ -4604,7 +4604,37 @@ function MarketChart({
   market: string;
   accent?: string;
 }) {
-  const candles = makeCandles(points);
+  const [zoom, setZoom] = useState(1);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStartDistance = useRef(0);
+  const pinchStartZoom = useRef(1);
+  const clampZoom = (value: number) => Math.max(1, Math.min(8, value));
+  const onWheel = (event: any) => {
+    event.preventDefault();
+    setZoom((current) => clampZoom(current * (event.deltaY < 0 ? 1.18 : 0.85)));
+  };
+  const onPointerDown = (event: any) => {
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size === 2) {
+      const [first, second] = Array.from(pointers.current.values());
+      pinchStartDistance.current = Math.hypot(first.x - second.x, first.y - second.y);
+      pinchStartZoom.current = zoom;
+    }
+  };
+  const onPointerMove = (event: any) => {
+    if (!pointers.current.has(event.pointerId)) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.current.size !== 2 || !pinchStartDistance.current) return;
+    const [first, second] = Array.from(pointers.current.values());
+    const distance = Math.hypot(first.x - second.x, first.y - second.y);
+    setZoom(clampZoom(pinchStartZoom.current * (distance / pinchStartDistance.current)));
+  };
+  const onPointerUp = (event: any) => {
+    pointers.current.delete(event.pointerId);
+    if (pointers.current.size < 2) pinchStartDistance.current = 0;
+  };
+  const visibleCount = Math.max(18, Math.round(points.length / zoom));
+  const candles = makeCandles(points.slice(-visibleCount));
   if (!candles.length) {
     return <div className="market-chart market-chart-empty">Waiting for live market ticks</div>;
   }
@@ -4626,7 +4656,16 @@ function MarketChart({
     .join(" ");
   const visibleTimes = [0, Math.floor((candles.length - 1) / 2), candles.length - 1];
   return (
-    <div className="market-chart" aria-label={`${market} candlestick chart with RSI`}>
+    <div
+      className="market-chart"
+      aria-label={`${market} candlestick chart with RSI; use mouse wheel or pinch to zoom`}
+      onWheel={onWheel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      style={{ touchAction: "none" }}
+    >
       <div className="market-chart-main">
         <svg viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles`}>
           {priceLabels.map((label, index) => {
@@ -7926,7 +7965,9 @@ function LiveTradePulse() {
       });
     };
     void refresh();
-    const timer = window.setInterval(refresh, 30000);
+    // Refresh the read-only market history frequently enough that the chart
+    // does not appear frozen; execution still uses the authoritative engine.
+    const timer = window.setInterval(refresh, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -7992,27 +8033,31 @@ function LiveTradePulse() {
       const action = String(payload.action || "");
       const amount = Number(payload.amount || 0);
       const percent = Number(payload.percent || 0);
+      const returnedBot = response.bot && typeof response.bot === "object"
+        ? response.bot as Partial<LiveDashboard["bots"][number]>
+        : null;
+      const returnedWallet = response.wallet && typeof response.wallet === "object"
+        ? response.wallet as Partial<LiveDashboard["wallet"]>
+        : null;
       setData((current) => {
         if (!current) return current;
+        const nextBots = returnedBot
+          ? current.bots.map((bot) => bot.id === botId ? { ...bot, ...returnedBot } : bot)
+          : action === "close"
+            ? current.bots.filter((bot) => bot.id !== botId)
+            : current.bots.map((bot) =>
+                bot.id !== botId
+                  ? bot
+                  : action === "compound" && Number.isFinite(percent)
+                    ? { ...bot, compound_percent: percent }
+                    : action === "topup" && Number.isFinite(amount)
+                      ? { ...bot, capital_usd: bot.capital_usd + amount }
+                      : bot,
+              );
         return {
           ...current,
-          wallet:
-            action === "topup" && Number.isFinite(amount)
-              ? {
-                  ...current.wallet,
-                  available: Math.max(0, current.wallet.available - amount),
-                  locked: current.wallet.locked + amount,
-                }
-              : current.wallet,
-          bots: current.bots.map((bot) =>
-            bot.id !== botId
-              ? bot
-              : action === "compound" && Number.isFinite(percent)
-                ? { ...bot, compound_percent: percent }
-                : action === "topup" && Number.isFinite(amount)
-                  ? { ...bot, capital_usd: bot.capital_usd + amount }
-                  : bot,
-          ),
+          wallet: returnedWallet ? { ...current.wallet, ...returnedWallet } : current.wallet,
+          bots: nextBots,
         };
       });
     }
@@ -8445,7 +8490,7 @@ function LiveTradePulse() {
                   </div>
                   <span className="live-indicator">
                     <i />
-                    {product === "synthetic" ? "LIVE · 1s" : "updates every 30s"}
+                    {product === "synthetic" ? "LIVE · 1s" : "quotes · 10s"}
                   </span>
                 </div>
                 <MarketChart

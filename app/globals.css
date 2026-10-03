@@ -46,3 +46,4 @@
 .synthetic-pilot{padding:18px 16px;overflow:hidden}
 .main-content>.synthetic-pilot{margin-top:16px}
 .main-content>.synthetic-pilot+.synthetic-pilot{margin-top:26px}
+.synthetic-pilot+.synthetic-pilot{margin-top:26px}
