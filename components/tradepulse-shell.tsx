@@ -4353,6 +4353,16 @@ type LiveTradePulseAdmin = {
     network: string;
     user_id: number;
   }>;
+  tickets: Array<{
+    id: number;
+    user_id: number;
+    topic?: string;
+    body: string;
+    status: string;
+    username?: string;
+    first_name?: string;
+    updated_at?: number;
+  }>;
   sweep_queue: Array<{
     id: string;
     asset: string;
@@ -5068,6 +5078,58 @@ function LiveAdminScreen({
             ))
           ) : (
             <p>No recovery cases.</p>
+          )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">SUPPORT QUEUE</span>
+              <h2>Tracked user requests</h2>
+            </div>
+            <span className="mono">{admin.tickets.length} ROWS</span>
+          </div>
+          {admin.tickets.length ? (
+            admin.tickets.map((ticket) => (
+              <div className="admin-row" key={ticket.id}>
+                <div>
+                  <strong>TP-{ticket.id} / {ticket.topic || "General"}</strong>
+                  <small className="mono">
+                    USER {ticket.user_id} / {ticket.first_name || ticket.username || "Telegram user"} / {ticket.status}
+                  </small>
+                  <small>{ticket.body}</small>
+                </div>
+                {ticket.status === "open" && (
+                  <button
+                    className="small-action"
+                    onClick={() =>
+                      post(
+                        `/v1/admin/tickets/${ticket.id}`,
+                        { status: "in_progress" },
+                        `Ticket TP-${ticket.id} moved to in progress.`,
+                      )
+                    }
+                  >
+                    Take
+                  </button>
+                )}
+                {ticket.status !== "closed" && (
+                  <button
+                    className="small-action"
+                    onClick={() =>
+                      post(
+                        `/v1/admin/tickets/${ticket.id}`,
+                        { status: "closed" },
+                        `Ticket TP-${ticket.id} closed.`,
+                      )
+                    }
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
+            ))
+          ) : (
+            <p>No support tickets.</p>
           )}
         </GradientPanel>
         <GradientPanel className="admin-table">
