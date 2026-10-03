@@ -4676,6 +4676,12 @@ function LiveHelpScreen({
   const [address, setAddress] = useState("");
   const [details, setDetails] = useState("");
   const [supportMessage, setSupportMessage] = useState("");
+  const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string }>>([]);
+  useEffect(() => {
+    request("/v1/support/tickets")
+      .then((response) => setTickets(Array.isArray(response.tickets) ? response.tickets : []))
+      .catch(() => setTickets([]));
+  }, []);
   return (
     <div className="account-screen">
       <div className="screen-title">
@@ -4794,6 +4800,18 @@ function LiveHelpScreen({
         <p>
           Open a tracked request for account, bot, deposit, or withdrawal help.
         </p>
+        {tickets.length > 0 && (
+          <div className="support-ticket-list">
+            {tickets.slice(0, 5).map((ticket) => (
+              <div className="activity-row" key={ticket.id}>
+                <div className="activity-info">
+                  <strong>TP-{ticket.id} · {ticket.topic || "General"}</strong>
+                  <small>{ticket.status.replace("_", " ")} · {ticket.body}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <textarea
           value={supportMessage}
           onChange={(event) => setSupportMessage(event.target.value)}
@@ -4813,6 +4831,8 @@ function LiveHelpScreen({
                 }),
               });
               setSupportMessage("");
+              const latest = await request("/v1/support/tickets");
+              setTickets(Array.isArray(latest.tickets) ? latest.tickets : []);
               onNotice(`Support ticket #${result.ticket_id} opened.`);
             } catch (error) {
               onNotice(
