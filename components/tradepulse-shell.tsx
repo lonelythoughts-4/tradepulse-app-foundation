@@ -136,7 +136,13 @@ function PaymentMark({ asset, compact = false }: { asset: string; compact?: bool
           height: compact ? 16 : 18,
           background: "currentColor",
           WebkitMaskImage: `url(/icons/${name}.svg)`,
+          WebkitMaskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskSize: "contain",
           maskImage: `url(/icons/${name}.svg)`,
+          maskPosition: "center",
+          maskRepeat: "no-repeat",
+          maskSize: "contain",
         }}
       />
     </span>
