@@ -7738,6 +7738,57 @@ function LiveTradePulse() {
     return () => window.clearInterval(timer);
   }, [tab, data, syntheticMarket, webEnvironment]);
   useEffect(() => {
+    if (tab !== "Synthetic" || !data) return;
+    let cancelled = false;
+    let inFlight = false;
+    const refreshSyntheticTick = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const stream = await request(
+          `/v1/synthetic/stream?market=${syntheticMarket}`,
+          {},
+          webEnvironment,
+        );
+        if (cancelled || !stream?.latest) return;
+        const latest = stream.latest as {
+          reference?: number;
+          price?: number;
+          timestamp?: number;
+        };
+        const price = Number(latest.reference ?? latest.price);
+        if (!Number.isFinite(price) || price <= 0) return;
+        setSynthetic((current) => {
+          if (!current || current.market !== syntheticMarket) return current;
+          const last = current.ticks.at(-1);
+          if (
+            last &&
+            last.timestamp === latest.timestamp &&
+            Number(last.reference ?? last.price) === price
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            latest,
+            ticks: [...current.ticks, { ...latest, reference: price }].slice(-240),
+            positions: stream.positions || current.positions,
+          };
+        });
+      } catch {
+        // The snapshot poll remains the recovery path if a tick poll is missed.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refreshSyntheticTick();
+    const timer = window.setInterval(refreshSyntheticTick, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [tab, data, syntheticMarket, webEnvironment]);
+  useEffect(() => {
     if (tab !== "Admin" || !data?.user.is_admin) return;
     request("/v1/admin/overview")
       .then(setAdmin)
@@ -7799,6 +7850,59 @@ function LiveTradePulse() {
       window.clearInterval(timer);
     };
   }, [tab, data?.bots]);
+  useEffect(() => {
+    if (tab !== "Dashboard" || !data) return;
+    let cancelled = false;
+    let inFlight = false;
+    const refreshSyntheticTick = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const stream = await request(
+          "/v1/synthetic/stream?market=SYN-25",
+          {},
+          webEnvironment,
+        );
+        if (cancelled || !stream?.latest) return;
+        const latest = stream.latest as {
+          reference?: number;
+          price?: number;
+          timestamp?: number;
+        };
+        const price = Number(latest.reference ?? latest.price);
+        if (!Number.isFinite(price) || price <= 0) return;
+        const timestamp = latest.timestamp;
+        setCharts((current) => {
+          const existing = current.synthetic;
+          const last = existing?.points.at(-1);
+          if (last && last.timestamp === timestamp && last.price === price) {
+            return current;
+          }
+          const points = [...(existing?.points || []), { price, timestamp }].slice(-240);
+          return {
+            ...current,
+            synthetic: {
+              market: existing?.market || "SYN-25",
+              points,
+              positions: stream.positions || existing?.positions || [],
+              activity: existing?.activity || [],
+              updated_at: Date.now(),
+            },
+          };
+        });
+      } catch {
+        // The slower history refresh remains the recovery path if a tick poll is missed.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refreshSyntheticTick();
+    const timer = window.setInterval(refreshSyntheticTick, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [tab, data, webEnvironment]);
   const applyActionResult = (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => {
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (botAction) {
@@ -8259,7 +8363,7 @@ function LiveTradePulse() {
                   </div>
                   <span className="live-indicator">
                     <i />
-                    updates every 30s
+                    {product === "synthetic" ? "LIVE · 1s" : "updates every 30s"}
                   </span>
                 </div>
                 <MarketChart
@@ -9343,6 +9447,7 @@ function LiveTradePulse() {
                   ))}
                 </div>
                 <p>Shared prices for every user. Volatility tiers describe movement intensity, not expected profit. Mainnet orders reserve wallet USD 1:1; testnet pilot funds never mix with wallet balances.</p>
+                <span className="live-indicator"><i />LIVE · 1s</span>
                 {synthetic ? (
                   <>
                     <MarketChart points={chartPoints} market={syntheticMarket} />
