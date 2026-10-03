@@ -6697,6 +6697,7 @@ function LiveWalletScreen({
   const [intent, setIntent] = useState<
     LiveDashboard["deposits"][number] | null
   >(null);
+  const [depositPending, setDepositPending] = useState(false);
   const [withdrawAsset, setWithdrawAsset] = useState("USDT");
   const [withdrawChain, setWithdrawChain] = useState("ERC20");
   const [withdrawAddress, setWithdrawAddress] = useState("");
@@ -6746,6 +6747,8 @@ function LiveWalletScreen({
   const showOverview = () => {
     setView("overview");
     setStep(0);
+    setIntent(null);
+    setDepositPending(false);
     setReviewWithdrawal(false);
     setSubmittedWithdrawal(null);
   };
@@ -6807,6 +6810,8 @@ function LiveWalletScreen({
     );
   });
   const createRoute = async () => {
+    if (depositPending || !asset || !chain) return;
+    setDepositPending(true);
     try {
       const result = await request("/v1/deposits/routes", {
         method: "POST",
@@ -6827,6 +6832,8 @@ function LiveWalletScreen({
           ? error.message
           : "Could not create the deposit route.",
       );
+    } finally {
+      setDepositPending(false);
     }
   };
   const submitWithdrawal = async () => {
@@ -6906,6 +6913,7 @@ function LiveWalletScreen({
             <div className="choice-grid">
               {["USDT", "USDC"].map((item) => (
                 <button
+                  type="button"
                   key={item}
                   className={asset === item ? "selected" : ""}
                   onClick={() => {
@@ -6926,6 +6934,7 @@ function LiveWalletScreen({
               <div className="choice-grid">
                 {networks.map(([value, label]) => (
                   <button
+                    type="button"
                     key={value}
                     className={chain === value ? "selected" : ""}
                     onClick={() => setChain(value)}
@@ -6946,8 +6955,14 @@ function LiveWalletScreen({
                   placeholder="0.00"
                 />
               </label>
-              <button className="primary-action" onClick={createRoute}>
-                Create secure route <ChevronRight />
+              <button
+                type="button"
+                className="primary-action"
+                disabled={depositPending || !asset || !chain}
+                onClick={createRoute}
+              >
+                {depositPending ? "Preparing route…" : "Create secure route"}{" "}
+                {!depositPending && <ChevronRight />}
               </button>
             </>
           )}

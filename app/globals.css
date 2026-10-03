@@ -47,3 +47,8 @@
 .main-content>.synthetic-pilot{margin-top:16px}
 .main-content>.synthetic-pilot+.synthetic-pilot{margin-top:26px}
 .synthetic-pilot+.synthetic-pilot{margin-top:26px}
+.main-content>.synthetic-pilot{margin-top:28px!important}
+.main-content>.dashboard-grid+.synthetic-pilot{margin-top:28px!important}
+.synthetic-pilot+.synthetic-pilot{margin-top:28px!important}
+.flow-card{width:100%}
+.choice-grid{width:100%;grid-template-columns:minmax(0,1fr)}
