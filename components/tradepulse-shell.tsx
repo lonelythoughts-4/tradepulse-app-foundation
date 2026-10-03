@@ -1033,16 +1033,33 @@ function WalletCard({
   value,
   detail,
   accent = "",
+  masked = false,
+  onToggleVisibility,
 }: {
   label: string;
   value: string;
   detail?: string;
   accent?: string;
+  masked?: boolean;
+  onToggleVisibility?: () => void;
 }) {
   return (
     <GradientPanel className="wallet-stat">
-      <span className="eyebrow">{label}</span>
-      <strong className={accent}>{value}</strong>
+      <div className="panel-heading">
+        <span className="eyebrow">{label}</span>
+        {onToggleVisibility && (
+          <button
+            type="button"
+            className="visibility"
+            aria-label={masked ? "Show wallet balances" : "Hide wallet balances"}
+            aria-pressed={!masked}
+            onClick={onToggleVisibility}
+          >
+            <StateIcon name={masked ? "eye-off" : "eye"} size={17} />
+          </button>
+        )}
+      </div>
+      <strong className={accent}>{masked ? "••••••" : value}</strong>
       {detail && <small>{detail}</small>}
     </GradientPanel>
   );
@@ -6543,6 +6560,7 @@ function LiveWalletScreen({
   } | null>(null);
   const [tankAmount, setTankAmount] = useState("20");
   const [tankAutofill, setTankAutofill] = useState(data.wallet.tank_autofill);
+  const [balancesVisible, setBalancesVisible] = useState(true);
   const [walletPending, setWalletPending] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
@@ -7367,22 +7385,27 @@ function LiveWalletScreen({
           value={money(data.wallet.available)}
           detail="Ready to deploy or withdraw"
           accent="mint"
+          masked={!balancesVisible}
         />
         <WalletCard
           label="LOCKED"
           value={money(data.wallet.locked)}
           detail="Allocated to active bots"
+          masked={!balancesVisible}
         />
         <WalletCard
           label="TOTAL EQUITY"
           value={money(data.wallet.equity)}
           detail="Account value"
           accent="mint"
+          masked={!balancesVisible}
+          onToggleVisibility={() => setBalancesVisible((visible) => !visible)}
         />
         <WalletCard
           label="HIGH-WATER MARK"
           value={money(data.wallet.hwm)}
           detail="Performance fee reference"
+          masked={!balancesVisible}
         />
       </div>
       <GradientPanel className="gas-card">
