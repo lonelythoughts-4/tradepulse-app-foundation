@@ -50,5 +50,5 @@
 .main-content>.synthetic-pilot{margin-top:28px!important}
 .main-content>.dashboard-grid+.synthetic-pilot{margin-top:28px!important}
 .synthetic-pilot+.synthetic-pilot{margin-top:28px!important}
-.flow-card{width:100%}
+.flow-card{width:100%;max-width:860px}
 .choice-grid{width:100%;grid-template-columns:minmax(0,1fr)}
