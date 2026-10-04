@@ -6937,7 +6937,11 @@ function LiveWalletScreen({
                     type="button"
                     key={value}
                     className={chain === value ? "selected" : ""}
-                    onClick={() => setChain(value)}
+                    onClick={() => {
+                      setChain(value);
+                      setIntent(null);
+                      setStep(2);
+                    }}
                   >
                     <PaymentMark asset={value} />
                     <strong>{label}</strong>
@@ -6945,6 +6949,22 @@ function LiveWalletScreen({
                     <ChevronRight />
                   </button>
                 ))}
+              </div>
+            </>
+          )}
+          {step === 2 && !intent && (
+            <>
+              <div className="minimum-warning">
+                <span>✓</span>
+                <div>
+                  <strong>
+                    {asset} on {networks.find(([value]) => value === chain)?.[1] || chain}
+                  </strong>
+                  <p>Use this matching network for your one-time deposit route.</p>
+                  <button type="button" className="small-action" onClick={() => setStep(1)}>
+                    Change network
+                  </button>
+                </div>
               </div>
               <label className="amount-field">
                 <span>EXPECTED AMOUNT / OPTIONAL</span>
@@ -7726,6 +7746,7 @@ function LiveTradePulse() {
   const [syntheticMarket, setSyntheticMarket] = useState<"SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100">(
     "SYN-25",
   );
+  const syntheticMarketRef = useRef(syntheticMarket);
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
     "mainnet",
   );
@@ -7883,17 +7904,27 @@ function LiveTradePulse() {
   }, []);
   useEffect(() => {
     if (tab !== "Synthetic" || !data) return;
+    let cancelled = false;
+    // A market snapshot is atomic. Clear the previous market immediately so
+    // its chart, signals, price, and order controls cannot be shown under a
+    // newly selected market label.
+    setSynthetic(null);
+    setSyntheticSignals([]);
     const refreshSynthetic = () => Promise.all([
       request(`/v1/synthetic/${syntheticMarket}`),
       request(`/v1/synthetic/signals?market=${syntheticMarket}&limit=10`),
     ]).then(([snapshot, signalData]) => {
+      if (cancelled || snapshot.market !== syntheticMarket || snapshot.market !== syntheticMarketRef.current) return;
       setSynthetic(snapshot);
       setSyntheticSignals(signalData.signals || []);
     })
       .catch((error) => setNotice(error.message));
     void refreshSynthetic();
     const timer = window.setInterval(refreshSynthetic, 5000);
-    return () => window.clearInterval(timer);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [tab, data, syntheticMarket, webEnvironment]);
   useEffect(() => {
     if (tab !== "Synthetic" || !data) return;
@@ -8157,7 +8188,9 @@ function LiveTradePulse() {
       // entire desk after a single click, which can interrupt unrelated work.
       if (tab === "Synthetic") {
         void request(`/v1/synthetic/${syntheticMarket}`)
-          .then(setSynthetic)
+          .then((snapshot) => {
+            if (snapshot?.market === syntheticMarketRef.current) setSynthetic(snapshot);
+          })
           .catch(() => undefined);
       }
     } catch (error) {
@@ -9607,7 +9640,19 @@ function LiveTradePulse() {
                 <span className="eyebrow">SYNTHETIC INDICES</span>
                 <div className="segment-control">
                   {(["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"] as const).map((market) => (
-                    <button key={market} className={syntheticMarket === market ? "active" : ""} onClick={() => setSyntheticMarket(market)}>{market}</button>
+                    <button
+                      key={market}
+                      className={syntheticMarket === market ? "active" : ""}
+                      onClick={() => {
+                        if (market === syntheticMarket) return;
+                        setSynthetic(null);
+                        setSyntheticSignals([]);
+                        syntheticMarketRef.current = market;
+                        setSyntheticMarket(market);
+                      }}
+                    >
+                      {market}
+                    </button>
                   ))}
                 </div>
                 <p>Shared prices for every user. Volatility tiers describe movement intensity, not expected profit. Mainnet orders reserve wallet USD 1:1; testnet pilot funds never mix with wallet balances.</p>
