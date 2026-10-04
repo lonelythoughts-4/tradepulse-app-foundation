@@ -6678,6 +6678,7 @@ function LiveWalletScreen({
   onWalletUpdate: (update: {
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
+    deposits?: LiveDashboard["deposits"];
   }) => void;
   onNotice: (message: string) => void;
   initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
@@ -6716,6 +6717,12 @@ function LiveWalletScreen({
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
+  const requestRef = useRef(request);
+  const walletUpdateRef = useRef(onWalletUpdate);
+  useEffect(() => {
+    requestRef.current = request;
+    walletUpdateRef.current = onWalletUpdate;
+  }, [request, onWalletUpdate]);
   useEffect(() => {
     setTankAutofill(data.wallet.tank_autofill);
   }, [data.wallet.tank_autofill]);
@@ -6736,6 +6743,37 @@ function LiveWalletScreen({
       cancelled = true;
     };
   }, [intent?.id]);
+  useEffect(() => {
+    const trackedStatuses = new Set([
+      "watching",
+      "confirming",
+      "pending_dust",
+      "confirmed_pending_sweep",
+      "sweeping",
+      "sweep_confirming",
+    ]);
+    if (!intent?.watch_enabled || !trackedStatuses.has(intent.status.toLowerCase())) return;
+    let cancelled = false;
+    const refreshDepositStatus = () => {
+      void requestRef.current("/v1/dashboard")
+        .then((snapshot: LiveDashboard) => {
+          const updatedIntent = snapshot.deposits.find((row) => row.id === intent.id);
+          if (cancelled || !updatedIntent) return;
+          setIntent(updatedIntent);
+          walletUpdateRef.current({
+            wallet: snapshot.wallet,
+            deposits: snapshot.deposits,
+          });
+        })
+        .catch(() => undefined);
+    };
+    refreshDepositStatus();
+    const timer = window.setInterval(refreshDepositStatus, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [intent?.id, intent?.status, intent?.watch_enabled]);
   const networks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -8783,12 +8821,13 @@ function LiveTradePulse() {
             <LiveWalletScreen
               data={data}
               request={request}
-              onWalletUpdate={({ wallet, withdrawal }) =>
+              onWalletUpdate={({ wallet, withdrawal, deposits }) =>
                 setData((current) =>
                   current
                     ? {
                         ...current,
                         wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
+                        deposits: deposits || current.deposits,
                         withdrawals: withdrawal
                           ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
                           : current.withdrawals,
