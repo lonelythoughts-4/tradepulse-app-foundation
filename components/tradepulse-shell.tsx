@@ -5478,16 +5478,15 @@ function LiveAdminScreen({
           <h2>Live settlement and exposure</h2>
           <p>These controls apply to the shared engine. Mainnet and testnet balances remain isolated.</p>
           <div className="admin-row">
-            <div><strong>Live settlement</strong><small className="mono">{syntheticConfig.synthetic_live_enabled === "true" ? "ENABLED" : "DISABLED"}</small></div>
-            <button className={syntheticConfig.synthetic_live_enabled === "true" ? "danger-action" : "small-action"} onClick={() => saveSyntheticConfig({ synthetic_live_enabled: syntheticConfig.synthetic_live_enabled === "true" ? "false" : "true" })}>{syntheticConfig.synthetic_live_enabled === "true" ? "Disable" : "Enable"}</button>
+            <div><strong>Live settlement</strong><small className="mono">RESERVE REQUIRED</small></div>
+            <button className="small-action" disabled>Unavailable</button>
           </div>
           <div className="admin-row">
             <div><strong>Global entry pause</strong><small className="mono">{syntheticConfig.global_trading_pause === "true" ? "PAUSED" : "OPEN"}</small></div>
             <button className={syntheticConfig.global_trading_pause === "true" ? "small-action" : "danger-action"} onClick={() => saveSyntheticConfig({ global_trading_pause: syntheticConfig.global_trading_pause === "true" ? "false" : "true" })}>{syntheticConfig.global_trading_pause === "true" ? "Resume" : "Pause"}</button>
           </div>
-          <select value={syntheticConfig.clearing_mode || "PRINCIPAL"} onChange={(event) => saveSyntheticConfig({ clearing_mode: event.target.value })}>
+          <select value="PRINCIPAL" disabled>
             <option value="PRINCIPAL">Principal clearing</option>
-            <option value="MATCHED">Matched clearing</option>
           </select>
           {[
             ["per_user_exposure_cap_usd", "Per-user cap"],
