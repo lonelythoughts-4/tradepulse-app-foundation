@@ -8371,14 +8371,20 @@ function LiveTradePulse() {
                 : "Continue once in Telegram. When your identity is confirmed, this browser returns to your desk automatically.")}
           </p>
           {openedInsideTelegram() ? (
-            <a
-              className="primary-action"
-              href={TELEGRAM_BOT_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Return to TradePulse <ChevronRight />
-            </a>
+            <>
+              <a
+                className="primary-action"
+                href={TELEGRAM_BOT_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Return to TradePulse <ChevronRight />
+              </a>
+              {/* A signed Mini App session can occasionally be stale in an
+                  already-open Telegram webview.  Offer the same verified
+                  browser-to-bot handoff instead of leaving the user blocked. */}
+              <BrowserBotHandoff />
+            </>
           ) : (
             <BrowserBotHandoff />
           )}
