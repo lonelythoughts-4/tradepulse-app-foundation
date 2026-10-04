@@ -4332,6 +4332,11 @@ type LiveDashboard = {
   quotes: Record<string, number>;
   quote_age: number;
   quote_fresh: boolean;
+  memecoin?: {
+    authorization?: { accepted_at?: number; settings_json?: string } | null;
+    health?: { status?: string; assets?: number; latest_tick_at?: number | null };
+    metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
+  };
 };
 
 type LiveTradePulseAdmin = {
@@ -4945,6 +4950,8 @@ function LiveAdminScreen({
     Array<{ chain: string; asset: string; address: string }>
   >([]);
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
+  const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
+  const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
   useEffect(() => {
     setVaultChain((current) =>
       admin.chains.some((chain) => chain.id === current)
@@ -4959,6 +4966,15 @@ function LiveAdminScreen({
     request("/v1/admin/synthetic-config")
       .then((response) => setSyntheticConfig(response.settings || {}))
       .catch(() => setSyntheticConfig({}));
+    request("/v1/admin/memecoin-config")
+      .then((response) => {
+        setMemecoinConfig(response.settings || {});
+        setMemecoinMetrics(response.metrics || {});
+      })
+      .catch(() => {
+        setMemecoinConfig({});
+        setMemecoinMetrics({});
+      });
   }, [environment]);
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
@@ -5870,6 +5886,19 @@ function LiveAccountScreen({
       setNotificationPending(null);
     }
   };
+  const saveMemecoinConfig = async (settings: Record<string, string>) => {
+    try {
+      const response = await request("/v1/admin/memecoin-config", {
+        method: "PUT",
+        body: JSON.stringify({ settings, confirmed: true }),
+      });
+      setMemecoinConfig((current) => ({ ...current, ...(response.settings || settings) }));
+      setMemecoinMetrics(response.metrics || {});
+      onNotice("Memecoin Bot configuration saved and audit logged.");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not save Memecoin Bot configuration.");
+    }
+  };
   const initials = (data.user.first_name || data.user.username || "U")
     .slice(0, 1)
     .toUpperCase();
@@ -6270,6 +6299,12 @@ function LiveBotsScreen({
   const [allocationDeltas, setAllocationDeltas] = useState<Record<number, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<number, string>>({});
   const [closedBotIds, setClosedBotIds] = useState<number[]>([]);
+  const [memecoinMarket, setMemecoinMarket] = useState("DOGE");
+  const [memecoinAssets, setMemecoinAssets] = useState<string[]>(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
+  const [memecoinLeverage, setMemecoinLeverage] = useState(3);
+  const [memecoinCadence, setMemecoinCadence] = useState(300);
+  const [includeTrench, setIncludeTrench] = useState(false);
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
   useEffect(() => {
     setSelectedId(initialBotId);
     setView(initialBotId ? "detail" : "fleet");
@@ -6284,6 +6319,18 @@ function LiveBotsScreen({
     }));
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
+  useEffect(() => {
+    if (!selected || selected.product !== "memecoin") return;
+    let cancelled = false;
+    const refresh = () => {
+      void request(`/v1/memecoin/snapshot?bot_id=${selected.id}&symbol=${memecoinMarket}`)
+        .then((snapshot) => { if (!cancelled) setMemecoinSnapshot(snapshot || {}); })
+        .catch(() => { if (!cancelled) setMemecoinSnapshot({}); });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [selected?.id, selected?.product, memecoinMarket, request]);
   const run = async (path: string, payload: Record<string, unknown>) => {
     if (pendingAction) return;
     setPendingAction(true);
@@ -6293,29 +6340,10 @@ function LiveBotsScreen({
         method: "POST",
         body: JSON.stringify(payload),
       });
-      const botMatch = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
-      if (botMatch && payload.action === "compound") {
-        const percent = Number(payload.percent);
-        if (Number.isFinite(percent))
-          setCompoundOverrides((current) => ({ ...current, [Number(botMatch[1])]: percent }));
-      }
-      if (botMatch && payload.action === "topup") {
-        const topUp = Number(payload.amount);
-        if (Number.isFinite(topUp))
-          setAllocationDeltas((current) => ({ ...current, [Number(botMatch[1])]: (current[Number(botMatch[1])] || 0) + topUp }));
-      }
-      if (botMatch && payload.action === "toggle") {
-        const botId = Number(botMatch[1]);
-        const currentState = stateOverrides[botId] ?? data.bots.find((bot) => bot.id === botId)?.state;
-        setStateOverrides((current) => ({ ...current, [botId]: currentState === "running" ? "paused" : "running" }));
-      }
-      if (botMatch && payload.action === "close") {
-        setClosedBotIds((current) => [...current, Number(botMatch[1])]);
-      }
       onNotice(response.message || "Saved successfully.");
-      // Starting a new product is the only action that needs the new server
-      // record. Existing products update locally without refreshing the desk.
-      if (path === "/v1/bots") void reload();
+      // Server state is shared with Telegram. Always refresh it instead of
+      // showing an optimistic pause, close, top-up, or recompound result.
+      await reload();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Action failed.");
     } finally {
@@ -6410,7 +6438,9 @@ function LiveBotsScreen({
                 <span>
                   COMPOUNDING <b>0%</b>
                 </span>
+                {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
               </div>
+              {product === "memecoin" && <p>Live market data is used to internally settle results against this Memecoin allocation. No external exchange order is placed.</p>}
               <button
                 className="primary-action"
                 onClick={async () => {
@@ -6431,6 +6461,7 @@ function LiveBotsScreen({
     );
   if (view === "detail" && selected) {
     const paused = selected.state === "paused";
+    const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
     return (
       <div className="bot-detail">
         <button className="back-action" onClick={() => setView("fleet")}>
@@ -6439,16 +6470,16 @@ function LiveBotsScreen({
         <GradientPanel className="detail-hero">
           <div className="detail-ring">
             <BotRing
-              percent={paused ? 0 : 72}
-              state={paused ? "paused" : "running"}
+              percent={paused || awaitingAuthorization ? 0 : 72}
+              state={paused || awaitingAuthorization ? "paused" : "running"}
             />
           </div>
           <div>
             <span className="eyebrow">{selected.name.toUpperCase()} BOT</span>
             <h2>{selected.name}</h2>
-            <span className={`status-chip ${paused ? "paused" : "running"}`}>
+            <span className={`status-chip ${paused || awaitingAuthorization ? "paused" : "running"}`}>
               <i />
-              {paused ? "paused" : "running"}
+              {awaitingAuthorization ? "authorization required" : paused ? "paused" : "running"}
             </span>
           </div>
         </GradientPanel>
@@ -6466,6 +6497,33 @@ function LiveBotsScreen({
             <strong>{money(data.wallet.hwm)}</strong>
           </GradientPanel>
         </div>
+        {selected.product === "memecoin" && (
+          <GradientPanel className="compound-panel">
+            <span className="eyebrow">LIVE MEMECOIN MARKET</span>
+            <div className="segment-control">
+              {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
+                <button className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{symbol}</button>
+              ))}
+            </div>
+            <MarketChart points={memecoinSnapshot.points || []} market={`${memecoinMarket}/USDT`} />
+            {(memecoinSnapshot.positions || []).length > 0 && (
+              <div className="support-ticket-list">
+                {(memecoinSnapshot.positions || []).slice(0, 5).map((position) => (
+                  <div className="activity-row" key={position.id}>
+                    <div className="activity-info">
+                      <strong>{position.symbol} · {position.direction.toUpperCase()} · {position.status}</strong>
+                      <small>Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
+                    </div>
+                    {position.status === "open" && <button className="small-action" disabled={pendingAction} onClick={() => run(`/v1/memecoin/positions/${position.id}/close`, {})}>Close <X /></button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {(memecoinSnapshot.events || []).slice(-4).map((event) => (
+              <p key={event.id}><b>{event.kind.replaceAll("_", " ")}</b> · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>
+            ))}
+          </GradientPanel>
+        )}
         <GradientPanel className="compound-panel">
           <span className="eyebrow">COMPOUNDING</span>
           <div className="segment-control">
@@ -6488,6 +6546,36 @@ function LiveBotsScreen({
             ))}
           </div>
         </GradientPanel>
+        {awaitingAuthorization && (
+          <GradientPanel className="compound-panel">
+            <span className="eyebrow">FUNDED MEMECOIN BOT BETA</span>
+            <p>
+              Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results; no external exchange order is placed.
+            </p>
+            <span className="eyebrow">CURATED BASKET</span>
+            <div className="segment-control">
+              {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
+                <button key={symbol} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
+              ))}
+            </div>
+            <span className="eyebrow">LEVERAGE</span>
+            <div className="segment-control">
+              {[1, 3, 5, 10].map((value) => <button key={value} className={memecoinLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
+            </div>
+            <span className="eyebrow">DECISION CADENCE</span>
+            <div className="segment-control">
+              {[60, 300, 900].map((value) => <button key={value} className={memecoinCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
+            </div>
+            <button className={includeTrench ? "small-action active" : "small-action"} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode</button>
+            <button
+              className="primary-action"
+              disabled={pendingAction || memecoinAssets.length === 0}
+              onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", settings: { basket: "curated", assets: memecoinAssets, auto_enabled: true, include_trench: includeTrench, cadence_seconds: memecoinCadence, leverage: memecoinLeverage } })}
+            >
+              Authorize Memecoin Bot Beta <StateIcon name="check" />
+            </button>
+          </GradientPanel>
+        )}
         <div className="detail-actions">
           <div className="amount-input">
             <span>$</span>
@@ -6514,6 +6602,7 @@ function LiveBotsScreen({
           </button>
           <button
             className="primary-action"
+            disabled={awaitingAuthorization || pendingAction}
             onClick={() =>
               run(`/v1/bots/${selected.id}/actions`, { action: "toggle" })
             }
@@ -10084,7 +10173,7 @@ function LiveTradePulse() {
             <div className="admin-screen">
               {admin ? (
                 <>
-                  <GradientPanel className="admin-hero">
+      <GradientPanel className="admin-hero">
                     <div>
                       <span className="eyebrow">ADMIN CONTROL ROOM</span>
                       <h2>{admin.environment.toUpperCase()} operations</h2>
@@ -10101,8 +10190,28 @@ function LiveTradePulse() {
                     >
                       Toggle sweeps
                     </button>
-                  </GradientPanel>
-                  <div className="admin-grid">
+      </GradientPanel>
+      <GradientPanel className="admin-table">
+        <span className="eyebrow">FUNDED MEMECOIN BOT BETA</span>
+        <h2>Settlement capacity and controls</h2>
+        <p className="mono">
+          CAPACITY {money(Number(memecoinMetrics.capacity_usd || 0))} / RESERVED {money(Number(memecoinMetrics.reserved_capacity_usd || 0))} / REMAINING {money(Number(memecoinMetrics.remaining_capacity_usd || 0))}
+        </p>
+        <p className="mono">
+          USER P&amp;L {money(Number(memecoinMetrics.gross_user_pnl_usd || 0))} / FEES {money(Number(memecoinMetrics.fee_income_usd || 0))} / HOUSE {money(Number(memecoinMetrics.net_house_result_usd || 0))}
+        </p>
+        <div className="segment-control">
+          <button className={memecoinConfig.memecoin_beta_enabled === "true" ? "active" : ""} onClick={() => saveMemecoinConfig({ memecoin_beta_enabled: memecoinConfig.memecoin_beta_enabled === "true" ? "false" : "true" })}>{memecoinConfig.memecoin_beta_enabled === "true" ? "Beta enabled" : "Beta disabled"}</button>
+          <button className={memecoinConfig.memecoin_global_pause === "true" ? "active" : ""} onClick={() => saveMemecoinConfig({ memecoin_global_pause: memecoinConfig.memecoin_global_pause === "true" ? "false" : "true" })}>{memecoinConfig.memecoin_global_pause === "true" ? "Resume entries" : "Pause entries"}</button>
+          <button className={memecoinConfig.memecoin_close_only === "true" ? "active" : ""} onClick={() => saveMemecoinConfig({ memecoin_close_only: memecoinConfig.memecoin_close_only === "true" ? "false" : "true" })}>{memecoinConfig.memecoin_close_only === "true" ? "Exit close-only" : "Close-only"}</button>
+        </div>
+        <div className="amount-input">
+          <span>$</span>
+          <input value={memecoinConfig.memecoin_principal_capacity_usd || "1000000"} onChange={(event) => setMemecoinConfig((current) => ({ ...current, memecoin_principal_capacity_usd: event.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" aria-label="Memecoin settlement capacity" />
+        </div>
+        <button className="small-action" onClick={() => saveMemecoinConfig({ memecoin_principal_capacity_usd: memecoinConfig.memecoin_principal_capacity_usd || "1000000" })}>Save capacity</button>
+      </GradientPanel>
+      <div className="admin-grid">
                     <GradientPanel className="admin-table">
                       <span className="eyebrow">WITHDRAWAL APPROVALS</span>
                       <h2>Pending review</h2>
