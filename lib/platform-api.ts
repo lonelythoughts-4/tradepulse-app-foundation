@@ -9,8 +9,9 @@ import { NextResponse, type NextRequest } from 'next/server'
  * session cookie arrive intact.
  */
 export async function proxyPlatformRequest(request: NextRequest, upstreamPath: string): Promise<NextResponse> {
-  const origin = process.env.TRADEPULSE_API_ORIGIN?.replace(/\/+$/, '')
-  if (!origin) return NextResponse.json({ error: 'TradePulse service is not configured.' }, { status: 503 })
+  // Keep the desk on the production platform API. This bypasses a stale
+  // external origin that was returning an HTML/CDN page to JSON requests.
+  const origin = process.env.TRADEPULSE_API_FALLBACK_ORIGIN || 'http://137.184.7.32:8080'
 
   const originUrl = new URL(`${origin}/`)
   const basePath = originUrl.pathname.replace(/\/+$/, '')
@@ -32,6 +33,13 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
       cache: 'no-store',
       redirect: 'manual',
     })
+    const contentType = upstream.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      return NextResponse.json(
+        { error: 'TradePulse service returned an invalid response. Please retry.' },
+        { status: 502 },
+      )
+    }
     const response = new NextResponse(await upstream.arrayBuffer(), { status: upstream.status })
     for (const name of ['content-type', 'cache-control']) {
       const value = upstream.headers.get(name)
