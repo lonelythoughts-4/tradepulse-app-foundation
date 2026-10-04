@@ -6332,7 +6332,7 @@ function LiveBotsScreen({
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [selected?.id, selected?.product, memecoinMarket, request]);
   const run = async (path: string, payload: Record<string, unknown>) => {
-    if (pendingAction) return;
+    if (pendingAction) return false;
     setPendingAction(true);
     setPendingActionType(String(payload.action || "action"));
     try {
@@ -6344,8 +6344,10 @@ function LiveBotsScreen({
       // Server state is shared with Telegram. Always refresh it instead of
       // showing an optimistic pause, close, top-up, or recompound result.
       await reload();
+      return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Action failed.");
+      return false;
     } finally {
       setPendingAction(false);
       setPendingActionType(null);
@@ -6444,9 +6446,11 @@ function LiveBotsScreen({
               <button
                 className="primary-action"
                 onClick={async () => {
-                  await run("/v1/bots", { product, amount: Number(amount) });
-                  setReview(false);
-                  setView("fleet");
+                  const created = await run("/v1/bots", { product, amount: Number(amount) });
+                  if (created) {
+                    setReview(false);
+                    setView("fleet");
+                  }
                 }}
               >
                 Start trade <Zap />
@@ -6615,6 +6619,7 @@ function LiveBotsScreen({
           </button>
           <button
             className="danger-action"
+            disabled={pendingAction}
             onClick={() => {
               if (
                 window.confirm(
