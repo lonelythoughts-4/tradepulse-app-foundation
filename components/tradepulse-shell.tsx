@@ -4392,11 +4392,37 @@ type TelegramWebApp = {
   expand?: () => void;
 };
 function telegramWebApp() {
-  return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } })
-    .Telegram?.WebApp;
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram
+    ?.WebApp;
+}
+function telegramLaunchData() {
+  if (typeof window === "undefined") return "";
+  const sources = [window.location.search, window.location.hash.replace(/^#/, "")];
+  for (const source of sources) {
+    if (!source) continue;
+    const value = new URLSearchParams(source).get("tgWebAppData");
+    if (value) return value;
+  }
+  return "";
 }
 function telegramInitData() {
-  return telegramWebApp()?.initData || "";
+  const bridgeData = telegramWebApp()?.initData || "";
+  const launchData = telegramLaunchData();
+  if (bridgeData || launchData) {
+    const value = bridgeData || launchData;
+    try {
+      window.sessionStorage.setItem("tradepulse.telegram.initData", value);
+    } catch {
+      /* storage is optional */
+    }
+    return value;
+  }
+  try {
+    return window.sessionStorage.getItem("tradepulse.telegram.initData") || "";
+  } catch {
+    return "";
+  }
 }
 // Telegram can expose a WebApp object in an in-app browser without mounting a
 // signed Mini App. Only signed init data means the desk has a usable Telegram
@@ -4410,7 +4436,7 @@ async function waitForTelegramWebApp() {
   // dashboard request.
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const webApp = telegramWebApp();
-    if (webApp?.initData) return webApp;
+    if (webApp?.initData || telegramLaunchData()) return webApp;
     await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
   return undefined;
