@@ -457,8 +457,15 @@ function Sidebar({
     </aside>
   );
 }
-const mobileNavItems: { label: string; icon: NavIconName }[] = [
-  ...navItems,
+const mobilePrimaryNavItems: { label: string; icon: NavIconName }[] = [
+  { label: "Dashboard", icon: "dashboard" },
+  { label: "Bots", icon: "bots" },
+  { label: "Synthetic", icon: "desk" },
+  { label: "Wallet", icon: "wallet" },
+  { label: "Account", icon: "account" },
+];
+const mobileSecondaryNavItems: { label: string; icon: NavIconName }[] = [
+  { label: "Earn", icon: "earn" },
   { label: "Live Desk", icon: "desk" },
   { label: "Community", icon: "community" },
   { label: "Help", icon: "help" },
@@ -473,25 +480,17 @@ function BottomNav({
   setActive: (value: string) => void;
   isAdmin?: boolean;
 }) {
-  const [compact, setCompact] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const secondaryItems = mobileSecondaryNavItems.filter(
+    (item) => item.label !== "Admin" || isAdmin,
+  );
+  const secondaryActive = secondaryItems.some((item) => item.label === active);
   return (
     <nav
-      className={`bottom-nav ${compact ? "compact" : ""}`}
+      className="bottom-nav"
       aria-label="Primary navigation"
     >
-      <button
-        className="bottom-collapse"
-        type="button"
-        aria-label={compact ? "Expand navigation" : "Minimize navigation"}
-        onClick={() => setCompact((value) => !value)}
-      >
-        <StateSwapIcon
-          name={compact ? "plus" : "minus"}
-          swapKey={compact ? "nav-expand" : "nav-collapse"}
-        />
-      </button>
-      {mobileNavItems
-        .filter((item) => item.label !== "Admin" || isAdmin)
+      {mobilePrimaryNavItems
         .map(({ label, icon }) => (
         <button
           key={label}
@@ -507,6 +506,40 @@ function BottomNav({
           <span className="bottom-label">{label}</span>
         </button>
         ))}
+      <button
+        type="button"
+        className={`bottom-item bottom-more ${secondaryActive ? "active" : ""}`}
+        aria-current={secondaryActive ? "page" : undefined}
+        aria-expanded={moreOpen}
+        aria-controls="mobile-secondary-navigation"
+        onClick={() => setMoreOpen((value) => !value)}
+      >
+        <span className="bottom-icon">
+          {(secondaryActive || moreOpen) && <i />}
+          <NavIcon name="more" />
+        </span>
+        <span className="bottom-label">More</span>
+      </button>
+      {moreOpen && (
+        <div id="mobile-secondary-navigation" className="mobile-more-menu" role="menu">
+          {secondaryItems.map(({ label, icon }) => (
+            <button
+              key={label}
+              type="button"
+              role="menuitem"
+              className={active === label ? "active" : ""}
+              aria-current={active === label ? "page" : undefined}
+              onClick={() => {
+                setActive(label);
+                setMoreOpen(false);
+              }}
+            >
+              <NavIcon name={icon} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }
@@ -4500,20 +4533,27 @@ function BrowserBotHandoff() {
   useEffect(() => {
     if (state !== "waiting" || !token) return;
     const deadline = Date.now() + 300_000;
-    timer.current = window.setInterval(async () => {
+    let inFlight = false;
+    const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
       if (Date.now() >= deadline) {
-        if (timer.current) window.clearInterval(timer.current);
         timer.current = null;
         setState("error");
         setMessage("That connection expired. Refresh this page to create a new secure link.");
+        inFlight = false;
         return;
       }
       try {
         const response = await fetch(
           `/api/v1/auth/handoff/complete?token=${encodeURIComponent(token)}`,
-          { credentials: "same-origin" },
+          { credentials: "same-origin", cache: "no-store" },
         );
-        if (response.status === 202) return;
+        if (response.status === 202) {
+          inFlight = false;
+          timer.current = window.setTimeout(poll, 1000);
+          return;
+        }
         const contentType = response.headers.get("content-type") || "";
         const result = contentType.includes("application/json")
           ? await response.json()
@@ -4521,7 +4561,6 @@ function BrowserBotHandoff() {
         if (!response.ok || !result.ready) {
           throw new Error(result.error || "Could not finish browser connection.");
         }
-        if (timer.current) window.clearInterval(timer.current);
         timer.current = null;
         window.location.replace("/");
       } catch (error) {
@@ -4529,10 +4568,16 @@ function BrowserBotHandoff() {
           setState("error");
           setMessage(error.message);
         }
+      } finally {
+        inFlight = false;
+        if (timer.current === null && Date.now() < deadline) {
+          timer.current = window.setTimeout(poll, 1000);
+        }
       }
-    }, 1500);
+    };
+    void poll();
     return () => {
-      if (timer.current) window.clearInterval(timer.current);
+      if (timer.current) window.clearTimeout(timer.current);
       timer.current = null;
     };
   }, [state, token]);
@@ -7988,9 +8033,10 @@ function LiveTradePulse() {
     path: string,
     options: RequestInit = {},
     targetEnvironment = webEnvironment,
+    timeoutMs = 15_000,
   ) => {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(`/api${path}`, {
         ...options,
@@ -8011,10 +8057,10 @@ function LiveTradePulse() {
     const showBootScreen = !data;
     if (showBootScreen) setLoading(true);
     try {
-      const webApp = await waitForTelegramWebApp();
+      const webApp = openedInsideTelegram() ? await waitForTelegramWebApp() : undefined;
       webApp?.ready?.();
       webApp?.expand?.();
-      const next = await request("/v1/dashboard", {}, targetEnvironment);
+      const next = await request("/v1/dashboard", {}, targetEnvironment, 60_000);
       setData(next);
       setWebEnvironment(next.environment);
     } catch (error) {
