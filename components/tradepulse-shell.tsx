@@ -381,7 +381,7 @@ function Sidebar({
       .map((part) => part[0]?.toUpperCase())
       .join("") || "TP";
   return (
-    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`} aria-label="Workspace navigation">
       <button
         className="sidebar-collapse"
         type="button"
@@ -405,7 +405,9 @@ function Sidebar({
         {navItems.map(({ label, icon }) => (
           <button
             key={label}
+            type="button"
             className={`nav-item ${active === label ? "active" : ""}`}
+            aria-current={active === label ? "page" : undefined}
             onClick={() => setActive(label)}
           >
             <NavIcon name={icon} />
@@ -413,7 +415,9 @@ function Sidebar({
           </button>
         ))}
         <button
+          type="button"
           className={`nav-item ${active === "Live Desk" ? "active" : ""}`}
+          aria-current={active === "Live Desk" ? "page" : undefined}
           onClick={() => setActive("Live Desk")}
         >
           <NavIcon name="desk" />
@@ -421,7 +425,9 @@ function Sidebar({
         </button>
         {isAdmin && (
           <button
+            type="button"
             className={`nav-item ${active === "Admin" ? "active" : ""}`}
+            aria-current={active === "Admin" ? "page" : undefined}
             onClick={() => setActive("Admin")}
           >
             <NavIcon name="admin" />
@@ -430,7 +436,7 @@ function Sidebar({
         )}
       </nav>
       <div className="sidebar-bottom">
-        <button className="nav-item" onClick={() => setActive("Help")}>
+        <button type="button" className="nav-item" onClick={() => setActive("Help")}>
           <NavIcon name="help" />
           <span>Help center</span>
         </button>
@@ -489,7 +495,9 @@ function BottomNav({
         .map(({ label, icon }) => (
         <button
           key={label}
+          type="button"
           className={`bottom-item ${active === label ? "active" : ""}`}
+          aria-current={active === label ? "page" : undefined}
           onClick={() => setActive(label)}
         >
           <span className="bottom-icon">
