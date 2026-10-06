@@ -12,7 +12,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
   // Keep the production desk reachable even if the Vercel project loses its
   // environment variable during a redeploy.  The API still enforces Telegram
   // HMAC or the signed browser session on every protected request.
-  const origin = (process.env.TRADEPULSE_API_ORIGIN || 'http://137.184.7.32:8820').replace(/\/+$/, '')
+  const origin = (process.env.TRADEPULSE_API_ORIGIN || 'https://aids-work-jose-longitude.trycloudflare.com').replace(/\/+$/, '')
   if (!origin) return NextResponse.json({ error: 'TradePulse service is not configured.' }, { status: 503 })
 
   const originUrl = new URL(`${origin}/`)
