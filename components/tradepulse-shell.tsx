@@ -5290,6 +5290,31 @@ function LiveAdminScreen({
                       Reject
                     </button>
                   </>
+                ) : row.status === "verified" ? (
+                  <>
+                    <button
+                      className="small-action"
+                      disabled={pendingRecovery !== null}
+                      onClick={() => updateRecovery(row.id, "treasury_review", "Escalated for custody review after evidence verification.", "Recovery sent to Treasury Review.")}
+                    >
+                      Treasury review
+                    </button>
+                    <button
+                      className="small-action"
+                      disabled={pendingRecovery !== null}
+                      onClick={() => updateRecovery(row.id, "rejected", "Rejected after verification review.", "Recovery rejected.")}
+                    >
+                      Reject
+                    </button>
+                  </>
+                ) : row.status === "treasury_review" ? (
+                  <button
+                    className="small-action"
+                    disabled={pendingRecovery !== null}
+                    onClick={() => updateRecovery(row.id, "rejected", "Rejected during treasury review.", "Recovery rejected.")}
+                  >
+                    Reject
+                  </button>
                 ) : (
                   <span className="status-chip review">{row.status.replace("_", " ")}</span>
                 )}
