@@ -4333,6 +4333,13 @@ type LiveDashboard = {
     amount_usd: number;
     status: string;
   }>;
+  recovery_cases: Array<{
+    id: number;
+    network: string;
+    asset: string;
+    status: string;
+    updated_at: number;
+  }>;
   ledger: Array<{
     kind: string;
     asset: string;
@@ -4820,6 +4827,7 @@ function LiveHelpScreen({
   const [hash, setHash] = useState("");
   const [address, setAddress] = useState("");
   const [details, setDetails] = useState("");
+  const [recoveryPending, setRecoveryPending] = useState(false);
   const [supportMessage, setSupportMessage] = useState("");
   const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string }>>([]);
   useEffect(() => {
@@ -4908,8 +4916,10 @@ function LiveHelpScreen({
         />
         <button
           className="primary-action"
-          disabled={!network || !asset || !hash || !address}
+          disabled={recoveryPending || !network.trim() || !asset.trim() || !hash.trim() || !address.trim() || details.trim().length < 10}
           onClick={async () => {
+            if (recoveryPending) return;
+            setRecoveryPending(true);
             try {
               await request("/v1/recovery", {
                 method: "POST",
@@ -4933,11 +4943,31 @@ function LiveHelpScreen({
                   ? error.message
                   : "Could not submit recovery case.",
               );
+            } finally {
+              setRecoveryPending(false);
             }
           }}
         >
-          Submit recovery case <Send />
+          {recoveryPending ? "Submitting…" : "Submit recovery case"} <Send />
         </button>
+      </GradientPanel>
+      <GradientPanel className="flow-card">
+        <span className="eyebrow">RECOVERY STATUS</span>
+        <h2>Your submitted cases</h2>
+        {(data.recovery_cases || []).length ? (
+          <div className="support-ticket-list">
+            {(data.recovery_cases || []).slice(0, 10).map((recovery) => (
+              <div className="activity-row" key={recovery.id}>
+                <div className="activity-info">
+                  <strong>RC-{recovery.id} · {recovery.asset} / {recovery.network}</strong>
+                  <small>{recovery.status.replace("_", " ")} · no automatic credit or transfer</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>No recovery cases submitted.</p>
+        )}
       </GradientPanel>
       <GradientPanel className="flow-card">
         <span className="eyebrow">SUPPORT</span>
@@ -5031,6 +5061,7 @@ function LiveAdminScreen({
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
+  const [pendingRecovery, setPendingRecovery] = useState<number | null>(null);
   useEffect(() => {
     setVaultChain((current) =>
       admin.chains.some((chain) => chain.id === current)
@@ -5078,6 +5109,15 @@ function LiveAdminScreen({
       onNotice("Synthetic configuration saved and audit logged.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not save synthetic configuration.");
+    }
+  };
+  const updateRecovery = async (caseId: number, status: string, note: string, message: string) => {
+    if (pendingRecovery !== null) return;
+    setPendingRecovery(caseId);
+    try {
+      await post(`/v1/admin/recovery/${caseId}`, { status, note }, message);
+    } finally {
+      setPendingRecovery(null);
     }
   };
   return (
@@ -5226,30 +5266,33 @@ function LiveAdminScreen({
                     USER {row.user_id} / {row.status}
                   </small>
                 </div>
-                <button
-                  className="small-action"
-                  onClick={() =>
-                    post(
-                      `/v1/admin/recovery/${row.id}`,
-                      { status: "verified" },
-                      "Recovery marked verified.",
-                    )
-                  }
-                >
-                  Verify
-                </button>
-                <button
-                  className="small-action"
-                  onClick={() =>
-                    post(
-                      `/v1/admin/recovery/${row.id}`,
-                      { status: "rejected" },
-                      "Recovery rejected.",
-                    )
-                  }
-                >
-                  Reject
-                </button>
+                {row.status === "submitted" ? (
+                  <>
+                    <button
+                      className="small-action"
+                      disabled={pendingRecovery !== null}
+                      onClick={() => updateRecovery(row.id, "verified", "Marked verified after manual evidence review.", "Recovery marked verified. No funds were moved.")}
+                    >
+                      Mark verified
+                    </button>
+                    <button
+                      className="small-action"
+                      disabled={pendingRecovery !== null}
+                      onClick={() => updateRecovery(row.id, "treasury_review", "Escalated for custody review.", "Recovery sent to Treasury Review.")}
+                    >
+                      Treasury review
+                    </button>
+                    <button
+                      className="small-action"
+                      disabled={pendingRecovery !== null}
+                      onClick={() => updateRecovery(row.id, "rejected", "Rejected after manual evidence review.", "Recovery rejected.")}
+                    >
+                      Reject
+                    </button>
+                  </>
+                ) : (
+                  <span className="status-chip review">{row.status.replace("_", " ")}</span>
+                )}
               </div>
             ))
           ) : (
