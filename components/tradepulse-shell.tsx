@@ -6588,7 +6588,7 @@ function LiveBotsScreen({
                 </span>
                 {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
               </div>
-              {product === "memecoin" && <p>Live market data is used to internally settle results against this Memecoin allocation. No external exchange order is placed.</p>}
+              {product === "memecoin" && <p>Live market data is used to internally settle results against this Memecoin allocation.</p>}
               <button
                 className="primary-action"
                 onClick={async () => {
@@ -6700,7 +6700,7 @@ function LiveBotsScreen({
           <GradientPanel className="compound-panel">
             <span className="eyebrow">FUNDED MEMECOIN BOT BETA</span>
             <p>
-              Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results; no external exchange order is placed.
+              Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results.
             </p>
             <span className="eyebrow">CURATED BASKET</span>
             <div className="segment-control">
