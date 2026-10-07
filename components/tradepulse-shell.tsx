@@ -4582,10 +4582,23 @@ function BrowserBotHandoff() {
         }
       }
     };
+    // Browsers throttle timers while this tab is backgrounded and Telegram is
+    // open. Recheck immediately when the user returns so a confirmed handoff
+    // never waits for the throttled timer budget.
+    const resumePoll = () => {
+      if (document.visibilityState !== "visible" || inFlight) return;
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = null;
+      void poll();
+    };
+    window.addEventListener("focus", resumePoll);
+    document.addEventListener("visibilitychange", resumePoll);
     void poll();
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
       timer.current = null;
+      window.removeEventListener("focus", resumePoll);
+      document.removeEventListener("visibilitychange", resumePoll);
     };
   }, [state, token]);
   return (
