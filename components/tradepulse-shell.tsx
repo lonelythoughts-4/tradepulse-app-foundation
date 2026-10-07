@@ -6713,7 +6713,7 @@ function LiveBotsScreen({
           <GradientPanel className="compound-panel">
             <span className="eyebrow">FUNDED MEMECOIN BOT BETA</span>
             <p>
-              Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results.
+              Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh Solana launches only after a DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss.
             </p>
             <span className="eyebrow">CURATED BASKET</span>
             <div className="segment-control">
