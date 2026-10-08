@@ -7258,14 +7258,24 @@ function LiveBotsScreen({
           </div>
         </GradientPanel>
       )}
-      {data.demo && (
+      {data.demo?.state === "issued" && (
         <button
           className="demo-link"
           onClick={onOpenDemo}
         >
-          Explore the {money(data.demo.grant_usd || 2000)} virtual demo{" "}
+          Start the {money(data.demo.grant_usd || 2000)} virtual demo{" "}
           <ChevronRight />
         </button>
+      )}
+      {data.demo?.state === "active" && (
+        <p className="demo-link" role="status">
+          Demo active · {money(data.demo.grant_usd || 2000)} virtual funds · isolated from wallet
+        </p>
+      )}
+      {data.demo?.state === "expired" && (
+        <p className="demo-link" role="status">
+          Demo completed · virtual funds and demo profit have expired
+        </p>
       )}
     </div>
   );
