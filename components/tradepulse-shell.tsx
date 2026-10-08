@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { AccessibleDialog } from "./accessible-dialog";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -172,6 +173,7 @@ function StateSwapIcon({
   size = 18,
   className = "",
 }: FunctionalIconProps & { name: PublicIconName; swapKey?: string }) {
+  const reduceMotion = useReducedMotion();
   return (
     <span className={`state-icon-swap ${className}`} aria-hidden="true">
       <AnimatePresence initial={false} mode="wait">
@@ -183,10 +185,10 @@ function StateSwapIcon({
             WebkitMaskImage: `url(/icons/${name}.svg)`,
             maskImage: `url(/icons/${name}.svg)`,
           }}
-          initial={{ opacity: 0 }}
+          initial={{ opacity: reduceMotion ? 1 : 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+          exit={{ opacity: reduceMotion ? 1 : 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.15 }}
         />
       </AnimatePresence>
     </span>
@@ -324,6 +326,7 @@ function GradientPanel({
 
 function BootScreen({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
+  const reduceMotion = useReducedMotion();
   const steps = ["verifying session…", "syncing ledger…", "loading desk…"];
   useEffect(() => {
     const interval = window.setInterval(
@@ -340,7 +343,7 @@ function BootScreen({ onComplete }: { onComplete: () => void }) {
     <motion.div
       className="boot-screen"
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.65, ease }}
+      transition={{ duration: reduceMotion ? 0 : 0.65, ease }}
     >
       <div className="boot-mark">
         <PulseMark size={76} />
@@ -350,7 +353,7 @@ function BootScreen({ onComplete }: { onComplete: () => void }) {
         <strong>
           TRADE<span>PULSE</span>
         </strong>
-        <div className="boot-status">
+        <div className="boot-status" role="status" aria-live="polite">
           <span className="status-dot" />
           {steps[step]}
         </div>
@@ -386,6 +389,8 @@ function Sidebar({
         className="sidebar-collapse"
         type="button"
         aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"}
+        aria-expanded={!collapsed}
+        aria-controls="workspace-sidebar-navigation"
         onClick={() => setCollapsed((value) => !value)}
       >
         <StateSwapIcon
@@ -401,12 +406,14 @@ function Sidebar({
         </span>
       </div>
       <div className="desk-label">WORKSPACE</div>
-      <nav className="side-nav">
+      <nav id="workspace-sidebar-navigation" className="side-nav" aria-label="Workspace">
         {navItems.map(({ label, icon }) => (
           <button
             key={label}
             type="button"
             className={`nav-item ${active === label ? "active" : ""}`}
+            aria-label={label}
+            title={collapsed ? label : undefined}
             aria-current={active === label ? "page" : undefined}
             onClick={() => setActive(label)}
           >
@@ -417,6 +424,8 @@ function Sidebar({
         <button
           type="button"
           className={`nav-item ${active === "Live Desk" ? "active" : ""}`}
+          aria-label="Live Desk"
+          title={collapsed ? "Live Desk" : undefined}
           aria-current={active === "Live Desk" ? "page" : undefined}
           onClick={() => setActive("Live Desk")}
         >
@@ -427,6 +436,8 @@ function Sidebar({
           <button
             type="button"
             className={`nav-item ${active === "Admin" ? "active" : ""}`}
+            aria-label="Control room"
+            title={collapsed ? "Control room" : undefined}
             aria-current={active === "Admin" ? "page" : undefined}
             onClick={() => setActive("Admin")}
           >
@@ -436,7 +447,14 @@ function Sidebar({
         )}
       </nav>
       <div className="sidebar-bottom">
-        <button type="button" className="nav-item" onClick={() => setActive("Help")}>
+        <button
+          type="button"
+          className={`nav-item ${active === "Help" ? "active" : ""}`}
+          aria-label="Help center"
+          title={collapsed ? "Help center" : undefined}
+          aria-current={active === "Help" ? "page" : undefined}
+          onClick={() => setActive("Help")}
+        >
           <NavIcon name="help" />
           <span>Help center</span>
         </button>
@@ -481,6 +499,33 @@ function BottomNav({
   isAdmin?: boolean;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const moreMenu = useRef<HTMLDivElement>(null);
+  const moreMenuId = useId();
+  useEffect(() => {
+    if (!moreOpen) return;
+    moreMenu.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const dismissOutside = (event: PointerEvent | FocusEvent) => {
+      if (event.target instanceof Node && !moreMenu.current?.contains(event.target) && !moreButton.current?.contains(event.target)) {
+        setMoreOpen(false);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMoreOpen(false);
+      moreButton.current?.focus();
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("focusin", dismissOutside);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("focusin", dismissOutside);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [moreOpen]);
+  useEffect(() => setMoreOpen(false), [active]);
   const secondaryItems = mobileSecondaryNavItems.filter(
     (item) => item.label !== "Admin" || isAdmin,
   );
@@ -497,7 +542,10 @@ function BottomNav({
           type="button"
           className={`bottom-item ${active === label ? "active" : ""}`}
           aria-current={active === label ? "page" : undefined}
-          onClick={() => setActive(label)}
+          onClick={() => {
+            setMoreOpen(false);
+            setActive(label);
+          }}
         >
           <span className="bottom-icon">
             {active === label && <i />}
@@ -507,11 +555,12 @@ function BottomNav({
         </button>
         ))}
       <button
+        ref={moreButton}
         type="button"
         className={`bottom-item bottom-more ${secondaryActive ? "active" : ""}`}
-        aria-current={secondaryActive ? "page" : undefined}
         aria-expanded={moreOpen}
-        aria-controls="mobile-secondary-navigation"
+        aria-controls={moreMenuId}
+        aria-label={secondaryActive ? `More navigation, current page: ${active}` : "More navigation"}
         onClick={() => setMoreOpen((value) => !value)}
       >
         <span className="bottom-icon">
@@ -521,17 +570,17 @@ function BottomNav({
         <span className="bottom-label">More</span>
       </button>
       {moreOpen && (
-        <div id="mobile-secondary-navigation" className="mobile-more-menu" role="menu">
+        <div ref={moreMenu} id={moreMenuId} className="mobile-more-menu">
           {secondaryItems.map(({ label, icon }) => (
             <button
               key={label}
               type="button"
-              role="menuitem"
               className={active === label ? "active" : ""}
               aria-current={active === label ? "page" : undefined}
               onClick={() => {
                 setActive(label);
                 setMoreOpen(false);
+                moreButton.current?.focus();
               }}
             >
               <NavIcon name={icon} />
@@ -577,7 +626,7 @@ function Header({
         </span>
       </div>
       <div className="page-heading">
-        <span className="eyebrow">WORKSPACE / OVERVIEW</span>
+        <span className="eyebrow">WORKSPACE / {pageTitle.toUpperCase()}</span>
         <h1>{pageTitle}</h1>
       </div>
       <div className="welcome">
@@ -629,7 +678,12 @@ function CountUp({
   prefix?: string;
 }) {
   const [current, setCurrent] = useState(0);
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
+    if (reduceMotion) {
+      setCurrent(value);
+      return;
+    }
     let frame = 0;
     const start = performance.now();
     const tick = (now: number) => {
@@ -639,7 +693,7 @@ function CountUp({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [value]);
+  }, [value, reduceMotion]);
   return (
     <>
       {prefix}
@@ -4403,6 +4457,7 @@ type LiveTradePulseAdmin = {
     amount_usd: number;
     asset: string;
     chain: string;
+    address?: string;
     status: string;
   }>;
   recovery_cases: Array<{
@@ -4716,19 +4771,29 @@ function MarketChart({
 }) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState(0);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const priceSvgRef = useRef<SVGSVGElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStartDistance = useRef(0);
   const pinchStartZoom = useRef(1);
-  const dragStart = useRef<{ x: number; offset: number } | null>(null);
+  const dragStart = useRef<{ pointerId: number; x: number; offset: number } | null>(null);
   const clampZoom = (value: number) => Math.max(1, Math.min(8, value));
-  const onWheel = (event: any) => {
-    event.preventDefault();
-    setZoom((current) => clampZoom(current * (event.deltaY < 0 ? 1.18 : 0.85)));
+  const clearGesture = () => {
+    const captured = Array.from(pointers.current.keys());
+    pointers.current.clear();
+    pinchStartDistance.current = 0;
+    dragStart.current = null;
+    for (const pointerId of captured) {
+      if (chartRef.current?.hasPointerCapture(pointerId)) chartRef.current.releasePointerCapture(pointerId);
+    }
   };
-  const onPointerDown = (event: any) => {
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || pointers.current.size >= 2 || (event.target instanceof Element && event.target.closest("button"))) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.focus({ preventScroll: true });
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size === 1) {
-      dragStart.current = { x: event.clientX, offset };
+      dragStart.current = { pointerId: event.pointerId, x: event.clientX, offset: Math.min(offset, maxOffset) };
     } else if (pointers.current.size === 2) {
       dragStart.current = null;
       const [first, second] = Array.from(pointers.current.values());
@@ -4736,12 +4801,12 @@ function MarketChart({
       pinchStartZoom.current = zoom;
     }
   };
-  const onPointerMove = (event: any) => {
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (pointers.current.size === 1 && dragStart.current) {
-      const maxOffset = Math.max(0, points.length - Math.max(18, Math.round(points.length / zoom)));
-      const travelledPoints = Math.round(((dragStart.current.x - event.clientX) / 560) * Math.max(18, Math.round(points.length / zoom)));
+    if (pointers.current.size === 1 && dragStart.current?.pointerId === event.pointerId) {
+      const plotWidth = Math.max(1, (priceSvgRef.current?.getBoundingClientRect().width || 660) * (560 / 660));
+      const travelledPoints = Math.round(((dragStart.current.x - event.clientX) / plotWidth) * visibleCount);
       setOffset(Math.max(0, Math.min(maxOffset, dragStart.current.offset + travelledPoints)));
       return;
     }
@@ -4750,19 +4815,47 @@ function MarketChart({
     const distance = Math.hypot(first.x - second.x, first.y - second.y);
     setZoom(clampZoom(pinchStartZoom.current * (distance / pinchStartDistance.current)));
   };
-  const onPointerUp = (event: any) => {
-    pointers.current.delete(event.pointerId);
-    if (pointers.current.size < 2) {
-      pinchStartDistance.current = 0;
-      dragStart.current = null;
-    }
+  const onPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (pointers.current.has(event.pointerId)) clearGesture();
   };
   const visibleCount = Math.max(18, Math.round(points.length / zoom));
   const maxOffset = Math.max(0, points.length - visibleCount);
+  const pan = (direction: number) => setOffset((current) => Math.max(0, Math.min(maxOffset, current + direction * Math.max(1, Math.round(visibleCount / 5)))));
+  const resetView = () => { setZoom(1); setOffset(0); };
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "+" || event.key === "=") setZoom((current) => clampZoom(current * 1.18));
+    else if (event.key === "-") setZoom((current) => clampZoom(current * 0.85));
+    else if (event.key === "ArrowLeft") pan(1);
+    else if (event.key === "ArrowRight") pan(-1);
+    else if (event.key === "Home") setOffset(maxOffset);
+    else if (event.key === "End") setOffset(0);
+    else if (event.key === "0") resetView();
+    else return;
+    event.preventDefault();
+  };
   const cropEnd = points.length - Math.min(offset, maxOffset);
   const candles = makeCandles(points.slice(Math.max(0, cropEnd - visibleCount), cropEnd));
-  if (!candles.length) {
-    return <div className="market-chart market-chart-empty">Waiting for live market ticks</div>;
+  const hasCandles = candles.length > 0;
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !hasCandles) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.deltaY || (event.target instanceof Element && event.target.closest("button"))) return;
+      event.preventDefault();
+      setZoom((current) => Math.max(1, Math.min(8, current * (event.deltaY < 0 ? 1.18 : 0.85))));
+    };
+    chart.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("blur", clearGesture);
+    return () => {
+      chart.removeEventListener("wheel", onWheel);
+      window.removeEventListener("blur", clearGesture);
+      clearGesture();
+    };
+  }, [hasCandles]);
+  useEffect(() => setOffset((current) => Math.min(current, maxOffset)), [maxOffset]);
+  if (!hasCandles) {
+    return <div className="market-chart market-chart-empty" role="status">Waiting for live market ticks</div>;
   }
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));
@@ -4783,17 +4876,21 @@ function MarketChart({
   const visibleTimes = [0, Math.floor((candles.length - 1) / 2), candles.length - 1];
   return (
     <div
+      ref={chartRef}
       className="market-chart"
-      aria-label={`${market} candlestick chart with RSI; use mouse wheel or pinch to zoom, then drag to review earlier prices`}
-      onWheel={onWheel}
+      role="group"
+      tabIndex={0}
+      aria-label={`${market} candlestick chart with RSI. Use plus or minus to zoom, left or right arrows to pan, Home for earliest, End for latest, and zero to reset. Mouse wheel, pinch, and drag are also available.`}
+      onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onLostPointerCapture={onPointerEnd}
       style={{ touchAction: "none" }}
     >
       <div className="market-chart-main">
-        <svg viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles`}>
+        <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
           {priceLabels.map((label, index) => {
             const lineY = 10 + ((chartHeight - 20) * index) / 4;
             return <g key={label}><path d={`M0 ${lineY}H560`} className="market-grid-line" /><text x="570" y={lineY + 3} className="market-axis-label">{formatMarketPrice(label)}</text></g>;
@@ -4822,6 +4919,13 @@ function MarketChart({
       <div className="market-time-axis">
         {visibleTimes.map((index) => <span key={index}>{formatChartTime(candles[index]?.timestamp, index, candles.length)}</span>)}
       </div>
+      <div className="filter-chips" role="group" aria-label="Chart view controls">
+        <button type="button" onClick={() => setZoom((current) => clampZoom(current * 1.18))} disabled={zoom >= 8} aria-label="Zoom in chart" title="Zoom in (+)"><StateIcon name="plus" size={14} /></button>
+        <button type="button" onClick={() => setZoom((current) => clampZoom(current * 0.85))} disabled={zoom <= 1} aria-label="Zoom out chart" title="Zoom out (-)"><StateIcon name="minus" size={14} /></button>
+        <button type="button" onClick={() => pan(1)} disabled={offset >= maxOffset} title="Earlier prices (left arrow)">Earlier</button>
+        <button type="button" onClick={() => pan(-1)} disabled={offset <= 0} title="Later prices (right arrow)">Later</button>
+        <button type="button" onClick={resetView} disabled={zoom === 1 && offset === 0} title="Reset chart (0)">Reset</button>
+      </div>
     </div>
   );
 }
@@ -4841,6 +4945,7 @@ function LiveHelpScreen({
   const [address, setAddress] = useState("");
   const [details, setDetails] = useState("");
   const [recoveryPending, setRecoveryPending] = useState(false);
+  const fieldId = useId();
   const [supportMessage, setSupportMessage] = useState("");
   const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string }>>([]);
   useEffect(() => {
@@ -4900,30 +5005,49 @@ function LiveHelpScreen({
         <span className="eyebrow">WRONG-NETWORK RECOVERY</span>
         <h2>Submit for manual review</h2>
         <div className="alert-fields">
-          <input
-            value={network}
-            onChange={(e) => setNetwork(e.target.value)}
-            placeholder="Network"
-          />
-          <input
-            value={asset}
-            onChange={(e) => setAsset(e.target.value)}
-            placeholder="Asset"
-          />
+          <div>
+            <label className="amount-field" htmlFor={`${fieldId}-network`}>Network</label>
+            <input
+              id={`${fieldId}-network`}
+              value={network}
+              onChange={(e) => setNetwork(e.target.value)}
+              aria-label="Recovery network"
+              placeholder="Network"
+            />
+          </div>
+          <div>
+            <label className="amount-field" htmlFor={`${fieldId}-asset`}>Asset</label>
+            <input
+              id={`${fieldId}-asset`}
+              value={asset}
+              onChange={(e) => setAsset(e.target.value)}
+              aria-label="Recovery asset"
+              placeholder="Asset"
+            />
+          </div>
         </div>
+        <label className="amount-field" htmlFor={`${fieldId}-hash`}>Transaction hash</label>
         <input
+          id={`${fieldId}-hash`}
           value={hash}
           onChange={(e) => setHash(e.target.value)}
+          aria-label="Recovery transaction hash"
           placeholder="Transaction hash"
         />
+        <label className="amount-field" htmlFor={`${fieldId}-address`}>Address sent to</label>
         <input
+          id={`${fieldId}-address`}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
+          aria-label="Address the transfer was sent to"
           placeholder="Address sent to"
         />
+        <label className="amount-field" htmlFor={`${fieldId}-details`}>Recovery details, including asset and amount</label>
         <textarea
+          id={`${fieldId}-details`}
           value={details}
           onChange={(e) => setDetails(e.target.value)}
+          aria-label="Recovery details, including asset and amount"
           placeholder="What happened? Include the asset, amount, and any relevant details."
           rows={3}
         />
@@ -5000,9 +5124,12 @@ function LiveHelpScreen({
             ))}
           </div>
         )}
+        <label className="amount-field" htmlFor={`${fieldId}-support`}>Support request details</label>
         <textarea
+          id={`${fieldId}-support`}
           value={supportMessage}
           onChange={(event) => setSupportMessage(event.target.value)}
+          aria-label="Support request details"
           placeholder="Describe the issue without sharing a security code or private key."
           rows={3}
         />
@@ -5075,6 +5202,54 @@ function LiveAdminScreen({
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
   const [pendingRecovery, setPendingRecovery] = useState<number | null>(null);
+  const fundingFieldId = useId();
+  const [withdrawalReview, setWithdrawalReview] = useState<{
+    row: LiveTradePulseAdmin["withdrawals"][number];
+    action: "approve" | "reject";
+    environment: "mainnet" | "testnet";
+  } | null>(null);
+  const [withdrawalPending, setWithdrawalPending] = useState(false);
+  const withdrawalSubmitting = useRef(false);
+  const [withdrawalError, setWithdrawalError] = useState("");
+  useEffect(() => {
+    setWithdrawalReview(null);
+    setWithdrawalError("");
+  }, [environment]);
+  const reviewWithdrawal = (row: LiveTradePulseAdmin["withdrawals"][number], action: "approve" | "reject") => {
+    setWithdrawalError("");
+    setWithdrawalReview({ row: { ...row }, action, environment });
+  };
+  const reviewedWithdrawal = withdrawalReview && admin.withdrawals.find((row) => row.id === withdrawalReview.row.id);
+  const canReviewWithdrawal = (status: string, action: "approve" | "reject") =>
+    status === "pending_admin_release" || (action === "reject" && status === "approved");
+  const withdrawalReviewCurrent = Boolean(withdrawalReview && reviewedWithdrawal &&
+    withdrawalReview.environment === environment && canReviewWithdrawal(reviewedWithdrawal.status, withdrawalReview.action) &&
+    (["user_id", "amount_usd", "asset", "chain", "address"] as const).every((key) => reviewedWithdrawal[key] === withdrawalReview.row[key]));
+  const confirmWithdrawalReview = async () => {
+    if (!withdrawalReview || withdrawalSubmitting.current || !withdrawalReviewCurrent ||
+      (withdrawalReview.action === "approve" && !withdrawalReview.row.address?.trim())) return;
+    withdrawalSubmitting.current = true;
+    setWithdrawalPending(true);
+    setWithdrawalError("");
+    try {
+      await request(`/v1/admin/withdrawals/${withdrawalReview.row.id}`, {
+        method: "POST",
+        body: JSON.stringify({ action: withdrawalReview.action }),
+      }, withdrawalReview.environment);
+      onNotice(withdrawalReview.action === "approve" ? "Withdrawal approved and logged." : "Withdrawal rejected.");
+      setWithdrawalReview(null);
+      try {
+        await reload();
+      } catch {
+        onNotice("Withdrawal action saved, but the queue could not refresh. Reload the control room before taking another action.");
+      }
+    } catch (error) {
+      setWithdrawalError(error instanceof Error ? error.message : "Withdrawal action failed. Review the current status before trying again.");
+    } finally {
+      withdrawalSubmitting.current = false;
+      setWithdrawalPending(false);
+    }
+  };
   useEffect(() => {
     setVaultChain((current) =>
       admin.chains.some((chain) => chain.id === current)
@@ -5145,6 +5320,7 @@ function LiveAdminScreen({
           {(["mainnet", "testnet"] as const).map((item) => (
             <button
               className={environment === item ? "active" : ""}
+              aria-pressed={environment === item}
               key={item}
               onClick={() => onEnvironment(item)}
             >
@@ -5171,6 +5347,32 @@ function LiveAdminScreen({
           Toggle sweeps
         </button>
       </GradientPanel>
+      {withdrawalReview && (
+        <AccessibleDialog label={withdrawalReview.action === "approve" ? "Review withdrawal approval" : "Review withdrawal rejection"}
+          onClose={() => setWithdrawalReview(null)} dismissible={!withdrawalPending}>
+          <span className="eyebrow">ADMIN / FINAL CROSS-CHECK</span>
+          <h2>{withdrawalReview.action === "approve" ? "Approve this withdrawal?" : "Reject this withdrawal?"}</h2>
+          <div className="fact-block">
+            <span>ENVIRONMENT <b>{withdrawalReview.environment.toUpperCase()}</b></span>
+            <span>USER <b>{withdrawalReview.row.user_id}</b></span>
+            <span>AMOUNT <b>{money(withdrawalReview.row.amount_usd)}</b></span>
+            <span>ASSET / NETWORK <b>{withdrawalReview.row.asset} / {withdrawalReview.row.chain}</b></span>
+            <span>STATUS <b>{reviewedWithdrawal?.status || "No longer in queue"}</b></span>
+          </div>
+          <div className="mono-review">
+            <span>DESTINATION</span><code>{withdrawalReview.row.address || "Destination unavailable — approval is blocked."}</code>
+            <span>REFERENCE</span><code>{withdrawalReview.row.id}</code>
+          </div>
+          {!withdrawalReviewCurrent && <p role="alert">This request changed. Go back and refresh the queue before reviewing it again.</p>}
+          {withdrawalError && <p role="alert">{withdrawalError}</p>}
+          <button className={withdrawalReview.action === "approve" ? "primary-action" : "danger-action"}
+            disabled={withdrawalPending || !withdrawalReviewCurrent || (withdrawalReview.action === "approve" && !withdrawalReview.row.address?.trim())}
+            onClick={() => void confirmWithdrawalReview()}>
+            {withdrawalPending ? "Submitting…" : withdrawalReview.action === "approve" ? "Confirm approval" : "Confirm rejection"}
+          </button>
+          <button className="ghost-action" disabled={withdrawalPending} onClick={() => setWithdrawalReview(null)}>Go back</button>
+        </AccessibleDialog>
+      )}
       <div className="admin-grid">
         <GradientPanel className="admin-table">
           <div className="section-heading">
@@ -5236,26 +5438,16 @@ function LiveAdminScreen({
                   </small>
                 </div>
                 <button
-                  className="danger-action"
-                  onClick={() =>
-                    post(
-                      `/v1/admin/withdrawals/${row.id}`,
-                      { action: "approve" },
-                      "Withdrawal approved and logged.",
-                    )
-                  }
+                  className="small-action"
+                  disabled={!canReviewWithdrawal(row.status, "approve") || withdrawalPending}
+                  onClick={() => reviewWithdrawal(row, "approve")}
                 >
                   Approve
                 </button>
                 <button
                   className="small-action"
-                  onClick={() =>
-                    post(
-                      `/v1/admin/withdrawals/${row.id}`,
-                      { action: "reject" },
-                      "Withdrawal rejected.",
-                    )
-                  }
+                  disabled={!canReviewWithdrawal(row.status, "reject") || withdrawalPending}
+                  onClick={() => reviewWithdrawal(row, "reject")}
                 >
                   Reject
                 </button>
@@ -5392,20 +5584,29 @@ function LiveAdminScreen({
         <GradientPanel className="admin-table">
           <span className="eyebrow">ACCOUNT OPERATIONS</span>
           <h2>Fund or reset a user</h2>
+          <label className="amount-field" htmlFor={`${fundingFieldId}-user`}>Telegram user ID</label>
           <input
+            id={`${fundingFieldId}-user`}
             value={target}
+            aria-label="Telegram user ID"
             onChange={(e) => setTarget(e.target.value.replace(/\D/g, ""))}
             placeholder="Telegram user ID"
             inputMode="numeric"
           />
+          <label className="amount-field" htmlFor={`${fundingFieldId}-amount`}>Credit amount in USD</label>
           <input
+            id={`${fundingFieldId}-amount`}
             value={amount}
+            aria-label="Credit amount in USD"
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Credit amount / USD"
             inputMode="decimal"
           />
+          <label className="amount-field" htmlFor={`${fundingFieldId}-reason`}>Funding reason</label>
           <input
+            id={`${fundingFieldId}-reason`}
             value={reason}
+            aria-label="Funding reason"
             onChange={(e) => setReason(e.target.value)}
             placeholder="Funding reason"
           />
@@ -5456,6 +5657,7 @@ function LiveAdminScreen({
           <h2>Runtime controls</h2>
           <select
             value={settingKey}
+            aria-label="Runtime setting"
             onChange={(e) => setSettingKey(e.target.value)}
           >
             <option value="min_bot_investment_usd">Bot minimum</option>
@@ -5468,6 +5670,7 @@ function LiveAdminScreen({
           </select>
           <input
             value={settingValue}
+            aria-label="New runtime setting value"
             onChange={(e) => setSettingValue(e.target.value)}
             placeholder="New value"
           />
@@ -5496,11 +5699,13 @@ function LiveAdminScreen({
           <h2>Send a desk notice</h2>
           <textarea
             value={broadcast}
+            aria-label="Operational broadcast message"
             onChange={(e) => setBroadcast(e.target.value)}
             placeholder="Operational message"
           />
           <input
             value={confirm}
+            aria-label="Broadcast confirmation: type SEND ALL"
             onChange={(e) => setConfirm(e.target.value)}
             placeholder="Type SEND ALL to send all users"
           />
@@ -5536,6 +5741,7 @@ function LiveAdminScreen({
           ))}
           <input
             value={adminMember}
+            aria-label="Administrator Telegram user ID or username"
             onChange={(event) => setAdminMember(event.target.value.trim())}
             placeholder="Telegram user ID or @username"
           />
@@ -5567,6 +5773,7 @@ function LiveAdminScreen({
           </p>
           <select
             value={vaultChain}
+            aria-label="Treasury vault network"
             onChange={(event) => setVaultChain(event.target.value)}
           >
             {admin.chains.map((chain) => (
@@ -5577,6 +5784,7 @@ function LiveAdminScreen({
           </select>
           <select
             value={vaultAsset}
+            aria-label="Treasury vault asset"
             onChange={(event) => setVaultAsset(event.target.value)}
           >
             <option value="USDT">USDT</option>
@@ -5584,6 +5792,7 @@ function LiveAdminScreen({
           </select>
           <input
             value={vaultAddress}
+            aria-label="Approved treasury vault address"
             onChange={(event) =>
               setVaultAddress(event.target.value.replace(/\s/g, ""))
             }
@@ -5704,6 +5913,7 @@ function LiveDeskScreen({
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
   const [alertError, setAlertError] = useState("");
+  const alertErrorId = useId();
   const createAlert = async () => {
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
       setAlertError("Enter a positive price threshold before creating an alert.");
@@ -5790,6 +6000,7 @@ function LiveDeskScreen({
             <select
               value={asset}
               onChange={(event) => setAsset(event.target.value)}
+              aria-label="Price alert asset"
             >
               {Object.keys(data.quotes).map((item) => (
                 <option key={item}>{item}</option>
@@ -5798,6 +6009,7 @@ function LiveDeskScreen({
             <select
               value={operator}
               onChange={(event) => setOperator(event.target.value)}
+              aria-label="Price alert condition"
             >
               <option>above</option>
               <option>below</option>
@@ -5809,11 +6021,14 @@ function LiveDeskScreen({
                 if (alertError) setAlertError("");
               }}
               inputMode="decimal"
+              aria-label="Price alert threshold in US dollars"
+              aria-invalid={Boolean(alertError)}
+              aria-describedby={alertError ? alertErrorId : undefined}
               placeholder="Price"
             />
           </div>
           {alertError && (
-            <p className="alert-input-error" role="alert">
+            <p id={alertErrorId} className="alert-input-error" role="alert">
               <StateIcon name="alert-triangle" />
               {alertError}
             </p>
@@ -6016,6 +6231,11 @@ function LiveAccountScreen({
   const [support, setSupport] = useState("");
   const [notificationState, setNotificationState] = useState(data.notifications);
   const [notificationPending, setNotificationPending] = useState<string | null>(null);
+  const notificationRequestPending = useRef(false);
+  const [accountPending, setAccountPending] = useState(false);
+  const [modalFeedback, setModalFeedback] = useState<{ message: string; error: boolean } | null>(null);
+  const modalPending = accountPending || Boolean(notificationPending);
+  useEffect(() => setModalFeedback(null), [modal]);
   useEffect(() => {
     setNotificationState(data.notifications);
   }, [data.notifications]);
@@ -6023,7 +6243,9 @@ function LiveAccountScreen({
     if (openNotificationsRequest > 0) setModal("notifications");
   }, [openNotificationsRequest]);
   const updateNotification = async (key: string, label: string, enabled: boolean) => {
-    if (notificationPending) return;
+    if (notificationRequestPending.current) return;
+    notificationRequestPending.current = true;
+    setModalFeedback(null);
     const next = !enabled;
     setNotificationState((current) => ({ ...current, [key]: next }));
     setNotificationPending(key);
@@ -6035,13 +6257,16 @@ function LiveAccountScreen({
       if (result.notifications && typeof result.notifications === "object") {
         setNotificationState(result.notifications as Record<string, boolean>);
       }
-      onNotice(`${label} notification ${next ? "enabled" : "disabled"}.`);
+      const message = `${label} notification ${next ? "enabled" : "disabled"}.`;
+      setModalFeedback({ message, error: false });
+      onNotice(message);
     } catch (error) {
       setNotificationState((current) => ({ ...current, [key]: enabled }));
-      onNotice(
-        error instanceof Error ? error.message : "Notification setting could not be updated.",
-      );
+      const message = error instanceof Error ? error.message : "Notification setting could not be updated.";
+      setModalFeedback({ message, error: true });
+      onNotice(message);
     } finally {
+      notificationRequestPending.current = false;
       setNotificationPending(null);
     }
   };
@@ -6067,19 +6292,23 @@ function LiveAccountScreen({
     message: string,
     closeModal = true,
   ): Promise<boolean> => {
+    if (modalPending) return false;
+    setAccountPending(true);
+    setModalFeedback(null);
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
+      setModalFeedback({ message, error: false });
       onNotice(message);
       await reload();
       if (closeModal) setModal("");
       return true;
     } catch (error) {
-      onNotice(
-        error instanceof Error
-          ? error.message
-          : "Action could not be completed.",
-      );
+      const message = error instanceof Error ? error.message : "Action could not be completed.";
+      setModalFeedback({ message, error: true });
+      onNotice(message);
       return false;
+    } finally {
+      setAccountPending(false);
     }
   };
   return (
@@ -6183,23 +6412,25 @@ function LiveAccountScreen({
         </button>
       </div>
       {modal && (
-        <div
-          className="modal-backdrop"
-          onPointerDown={(event) => {
-            if (event.target === event.currentTarget) setModal("");
-          }}
+        <AccessibleDialog
+          className="account-modal"
+          label={{ code: "Set security code", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences", support: "Help and support" }[modal]}
+          onClose={() => setModal("")}
+          dismissible={!modalPending}
         >
-          <GradientPanel
-            className="confirm-modal account-modal"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
             <button
               className="modal-close"
               aria-label="Close"
+              disabled={modalPending}
               onClick={() => setModal("")}
             >
               <X />
             </button>
+            {modalFeedback && (
+              <p className={modalFeedback.error ? "security-feedback" : undefined} role={modalFeedback.error ? "alert" : "status"}>
+                {modalFeedback.message}
+              </p>
+            )}
             {modal === "code" && (
               <>
                 <img
@@ -6241,7 +6472,8 @@ function LiveAccountScreen({
                 </label>
                 <button
                   className="primary-action"
-                  disabled={code.length !== 6}
+                  disabled={code.length !== 6 || accountPending}
+                  aria-busy={accountPending}
                   onClick={() =>
                     post(
                       "/v1/account/security-code",
@@ -6250,7 +6482,7 @@ function LiveAccountScreen({
                     )
                   }
                 >
-                  Save security code <ShieldCheck />
+                  {accountPending ? "Saving…" : "Save security code"} <ShieldCheck />
                 </button>
               </>
             )}
@@ -6275,7 +6507,10 @@ function LiveAccountScreen({
                     <input
                       type="checkbox"
                       checked={enabled}
-                      disabled={notificationPending === key}
+                      aria-disabled={Boolean(notificationPending)}
+                      onClick={(event) => {
+                        if (notificationRequestPending.current) event.preventDefault();
+                      }}
                       onChange={() => void updateNotification(key, label, enabled)}
                     />
                     <StateSwapIcon
@@ -6356,7 +6591,8 @@ function LiveAccountScreen({
                 </label>
                 <button
                   className="primary-action"
-                  disabled={!address || !nickname.trim()}
+                  disabled={!address || !nickname.trim() || accountPending}
+                  aria-busy={accountPending}
                   onClick={() =>
                     post(
                       "/v1/account/whitelist",
@@ -6365,7 +6601,7 @@ function LiveAccountScreen({
                     )
                   }
                 >
-                  Save destination <ShieldCheck />
+                  {accountPending ? "Saving…" : "Save destination"} <ShieldCheck />
                 </button>
               </>
             )}
@@ -6380,11 +6616,13 @@ function LiveAccountScreen({
                 <textarea
                   value={support}
                   onChange={(event) => setSupport(event.target.value)}
+                  aria-label="Support request details"
                   placeholder="Describe the issue"
                 />
                 <button
                   className="primary-action"
-                  disabled={!support.trim()}
+                  disabled={!support.trim() || accountPending}
+                  aria-busy={accountPending}
                   onClick={() =>
                     post(
                       "/v1/support/tickets",
@@ -6393,7 +6631,7 @@ function LiveAccountScreen({
                     )
                   }
                 >
-                  Open support request <Send />
+                  {accountPending ? "Submitting…" : "Open support request"} <Send />
                 </button>
               </>
             )}
@@ -6408,6 +6646,8 @@ function LiveAccountScreen({
                 </p>
                 <button
                   className="danger-action"
+                  disabled={accountPending}
+                  aria-busy={accountPending}
                   onClick={() =>
                     post(
                       "/v1/account/reset",
@@ -6416,18 +6656,29 @@ function LiveAccountScreen({
                     )
                   }
                 >
-                  Reset preferences <X />
+                  {accountPending ? "Resetting…" : "Reset preferences"} <X />
                 </button>
-                <button className="ghost-action" onClick={() => setModal("")}>
+                <button className="ghost-action" disabled={accountPending} onClick={() => setModal("")}>
                   Keep my settings
                 </button>
               </>
             )}
-          </GradientPanel>
-        </div>
+        </AccessibleDialog>
       )}
     </div>
   );
+}
+
+function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const choices = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]:not(:disabled):not([aria-disabled="true"])'));
+  const index = choices.findIndex((choice) => choice === event.target);
+  if (index < 0) return;
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1
+    : (index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + choices.length) % choices.length;
+  choices[next].focus();
+  choices[next].click();
 }
 
 function LiveBotsScreen({
@@ -6454,6 +6705,7 @@ function LiveBotsScreen({
   const [selectedId, setSelectedId] = useState<number | null>(initialBotId);
   const [pendingAction, setPendingAction] = useState(false);
   const [pendingActionType, setPendingActionType] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState("");
   const [compoundOverrides, setCompoundOverrides] = useState<Record<number, number>>({});
   const [allocationDeltas, setAllocationDeltas] = useState<Record<number, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<number, string>>({});
@@ -6492,6 +6744,7 @@ function LiveBotsScreen({
   }, [selected?.id, selected?.product, memecoinMarket, request]);
   const run = async (path: string, payload: Record<string, unknown>) => {
     if (pendingAction) return false;
+    setReviewError("");
     setPendingAction(true);
     setPendingActionType(String(payload.action || "action"));
     try {
@@ -6505,7 +6758,9 @@ function LiveBotsScreen({
       await reload();
       return true;
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Action failed.");
+      const message = error instanceof Error ? error.message : "Action failed.";
+      setReviewError(message);
+      onNotice(message);
       return false;
     } finally {
       setPendingAction(false);
@@ -6574,13 +6829,12 @@ function LiveBotsScreen({
           disabled={
             Number(amount) < 20 || Number(amount) > data.wallet.available
           }
-          onClick={() => setReview(true)}
+          onClick={() => { setReviewError(""); setReview(true); }}
         >
           Review allocation <ChevronRight />
         </button>
         {review && (
-          <div className="modal-backdrop">
-            <GradientPanel className="confirm-modal">
+          <AccessibleDialog label="Confirm deployment" onClose={() => setReview(false)} dismissible={!pendingAction}>
               <span className="eyebrow">FINAL REVIEW</span>
               <h2>Confirm deployment</h2>
               <div className="fact-block">
@@ -6602,8 +6856,11 @@ function LiveBotsScreen({
                 {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
               </div>
               {product === "memecoin" && <p>Live market data is used to internally settle results against this Memecoin allocation.</p>}
+              {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
+                disabled={pendingAction}
+                aria-busy={pendingAction}
                 onClick={async () => {
                   const created = await run("/v1/bots", { product, amount: Number(amount) });
                   if (created) {
@@ -6612,13 +6869,12 @@ function LiveBotsScreen({
                   }
                 }}
               >
-                Start trade <Zap />
+                {pendingAction ? "Submitting…" : "Start trade"} <Zap />
               </button>
-              <button className="ghost-action" onClick={() => setReview(false)}>
+              <button className="ghost-action" disabled={pendingAction} onClick={() => setReview(false)}>
                 Go back
               </button>
-            </GradientPanel>
-          </div>
+          </AccessibleDialog>
         )}
       </div>
     );
@@ -6663,9 +6919,9 @@ function LiveBotsScreen({
         {selected.product === "memecoin" && (
           <GradientPanel className="compound-panel">
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
-            <div className="segment-control">
+            <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
               {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
-                <button className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{symbol}</button>
+                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{symbol}</button>
               ))}
             </div>
             <MarketChart points={memecoinSnapshot.points || []} market={`${memecoinMarket}/USDT`} />
@@ -6689,14 +6945,18 @@ function LiveBotsScreen({
         )}
         <GradientPanel className="compound-panel">
           <span className="eyebrow">COMPOUNDING</span>
-          <div className="segment-control">
+          <div className="segment-control" role="radiogroup" aria-label="Compounding" onKeyDown={handleBotChoiceKeyDown}>
             {[0, 50, 100].map((percent) => (
               <button
+                type="button"
+                role="radio"
+                aria-checked={selected.compound_percent === percent}
+                tabIndex={selected.compound_percent === percent ? 0 : -1}
                 className={
                   selected.compound_percent === percent ? "active" : ""
                 }
                 key={percent}
-                disabled={pendingAction}
+                aria-disabled={pendingAction}
                 onClick={() =>
                   run(`/v1/bots/${selected.id}/actions`, {
                     action: "compound",
@@ -6716,20 +6976,20 @@ function LiveBotsScreen({
               Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh Solana launches only after a DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss.
             </p>
             <span className="eyebrow">CURATED BASKET</span>
-            <div className="segment-control">
+            <div className="segment-control" role="group" aria-label="Curated basket">
               {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
-                <button key={symbol} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
+                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
               ))}
             </div>
             <span className="eyebrow">LEVERAGE</span>
-            <div className="segment-control">
-              {[1, 3, 5, 10].map((value) => <button key={value} className={memecoinLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
+            <div className="segment-control" role="radiogroup" aria-label="Leverage" onKeyDown={handleBotChoiceKeyDown}>
+              {[1, 3, 5, 10].map((value) => <button type="button" role="radio" aria-checked={memecoinLeverage === value} tabIndex={memecoinLeverage === value ? 0 : -1} key={value} className={memecoinLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
             </div>
             <span className="eyebrow">DECISION CADENCE</span>
-            <div className="segment-control">
-              {[60, 300, 900].map((value) => <button key={value} className={memecoinCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
+            <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
+              {[60, 300, 900].map((value) => <button type="button" role="radio" aria-checked={memecoinCadence === value} tabIndex={memecoinCadence === value ? 0 : -1} key={value} className={memecoinCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
             </div>
-            <button className={includeTrench ? "small-action active" : "small-action"} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode</button>
+            <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
             <button
               className="primary-action"
               disabled={pendingAction || memecoinAssets.length === 0}
@@ -6958,6 +7218,7 @@ function LiveWalletScreen({
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawCode, setWithdrawCode] = useState("");
   const [reviewWithdrawal, setReviewWithdrawal] = useState(false);
+  const [withdrawalError, setWithdrawalError] = useState("");
   const [submittedWithdrawal, setSubmittedWithdrawal] = useState<{
     asset: string;
     chain: string;
@@ -7129,6 +7390,7 @@ function LiveWalletScreen({
   };
   const submitWithdrawal = async () => {
     if (walletPending) return;
+    setWithdrawalError("");
     setWalletPending(true);
     try {
       const result = await request("/v1/withdrawals", {
@@ -7168,11 +7430,9 @@ function LiveWalletScreen({
       setWithdrawCode("");
       setReviewWithdrawal(false);
     } catch (error) {
-      onNotice(
-        error instanceof Error
-          ? error.message
-          : "Could not create the withdrawal request.",
-      );
+      const message = error instanceof Error ? error.message : "Could not create the withdrawal request.";
+      setWithdrawalError(message);
+      onNotice(message);
     } finally {
       setWalletPending(false);
     }
@@ -7615,14 +7875,13 @@ function LiveWalletScreen({
               Number(withdrawAmount) > data.wallet.available ||
               withdrawCode.length !== 6
             }
-            onClick={() => setReviewWithdrawal(true)}
+            onClick={() => { setWithdrawalError(""); setReviewWithdrawal(true); }}
           >
             Review withdrawal <ChevronRight />
           </button>
         </GradientPanel>
         {reviewWithdrawal && (
-          <div className="modal-backdrop">
-            <GradientPanel className="confirm-modal">
+          <AccessibleDialog label="Verify before sending" onClose={() => setReviewWithdrawal(false)} dismissible={!walletPending}>
               <span className="eyebrow">FINAL CROSS-CHECK</span>
               <h2>Verify before sending</h2>
               <div className="mono-review">
@@ -7638,17 +7897,18 @@ function LiveWalletScreen({
                 Withdrawal requests are reviewed before release. Confirm only
                 when the address and network are correct.
               </p>
-              <button className="primary-action" disabled={walletPending} onClick={submitWithdrawal}>
+              {withdrawalError && <p className="security-feedback" role="alert">{withdrawalError}</p>}
+              <button className="primary-action" disabled={walletPending} aria-busy={walletPending} onClick={submitWithdrawal}>
                 {walletPending ? "Submitting…" : "Confirm withdrawal"} <Send />
               </button>
               <button
                 className="ghost-action"
+                disabled={walletPending}
                 onClick={() => setReviewWithdrawal(false)}
               >
                 Go back
               </button>
-            </GradientPanel>
-          </div>
+          </AccessibleDialog>
         )}
       </div>
     );
@@ -8066,6 +8326,25 @@ function LiveTradePulse() {
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
   const [syntheticAmount, setSyntheticAmount] = useState("20");
+  const [syntheticReview, setSyntheticReview] = useState<{
+    kind: "long" | "short" | "auto" | "approve";
+    path: string;
+    payload: Record<string, unknown>;
+    market: string;
+    direction: string;
+    amount: number;
+    environment: "mainnet" | "testnet";
+    fee: number;
+    expiresAt?: number;
+  } | null>(null);
+  const [syntheticReviewError, setSyntheticReviewError] = useState("");
+  const [syntheticReviewPending, setSyntheticReviewPending] = useState(false);
+  const syntheticReviewSubmitting = useRef(false);
+  const [autoAcknowledged, setAutoAcknowledged] = useState(false);
+  useEffect(() => {
+    setSyntheticReview(null);
+    setSyntheticReviewError("");
+  }, [tab, webEnvironment, syntheticMarket]);
   const [synthetic, setSynthetic] = useState<{
     market: string;
     latest: { price?: number; reference?: number };
@@ -8103,8 +8382,22 @@ function LiveTradePulse() {
   // Keep the pending action identity so a top-up, order, approval, or close
   // cannot make an unrelated control render the wrong loading label.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
+  const executionModeSubmitting = useRef(false);
+  const executionModeRevision = useRef(0);
+  const confirmedExecutionMode = useRef<{ revision: number; mode: "MANUAL" | "AUTO" } | null>(null);
   const actionPending = Object.values(pendingActions).some(Boolean);
   const isActionPending = (key: string) => Boolean(pendingActions[key]);
+  const executionModePending = isActionPending("manual") || isActionPending("auto");
+  const acceptSyntheticSnapshot = (snapshot: NonNullable<typeof synthetic>, modeRevision: number) => {
+    // A read started before/during a mode change must not undo its confirmed state.
+    setSynthetic((current) => {
+      const confirmed = confirmedExecutionMode.current;
+      const mode = confirmed && confirmed.revision >= modeRevision ? confirmed.mode : current?.execution_mode;
+      return mode && (executionModeSubmitting.current || modeRevision !== executionModeRevision.current)
+        ? { ...snapshot, execution_mode: mode }
+        : snapshot;
+    });
+  };
   const headers = (targetEnvironment = webEnvironment) => ({
     "Content-Type": "application/json",
     "X-Telegram-Init-Data": telegramInitData(),
@@ -8202,15 +8495,18 @@ function LiveTradePulse() {
     // newly selected market label.
     setSynthetic(null);
     setSyntheticSignals([]);
-    const refreshSynthetic = () => Promise.all([
-      request(`/v1/synthetic/${syntheticMarket}`),
-      request(`/v1/synthetic/signals?market=${syntheticMarket}&limit=10`),
-    ]).then(([snapshot, signalData]) => {
-      if (cancelled || snapshot.market !== syntheticMarket || snapshot.market !== syntheticMarketRef.current) return;
-      setSynthetic(snapshot);
-      setSyntheticSignals(signalData.signals || []);
-    })
-      .catch((error) => setNotice(error.message));
+    const refreshSynthetic = () => {
+      const modeRevision = executionModeRevision.current;
+      return Promise.all([
+        request(`/v1/synthetic/${syntheticMarket}`),
+        request(`/v1/synthetic/signals?market=${syntheticMarket}&limit=10`),
+      ]).then(([snapshot, signalData]) => {
+        if (cancelled || snapshot.market !== syntheticMarket || snapshot.market !== syntheticMarketRef.current) return;
+        acceptSyntheticSnapshot(snapshot, modeRevision);
+        setSyntheticSignals(signalData.signals || []);
+      })
+        .catch((error) => setNotice(error.message));
+    };
     void refreshSynthetic();
     const timer = window.setInterval(refreshSynthetic, 5000);
     return () => {
@@ -8453,7 +8749,9 @@ function LiveTradePulse() {
       );
     }
   };
-  const act = async (path: string, payload: Record<string, unknown>) => {
+  const act = async (path: string, payload: Record<string, unknown>, onError?: (message: string) => void): Promise<boolean> => {
+    const changesExecutionMode = path === "/v1/synthetic/settings/execution-mode";
+    if (changesExecutionMode && executionModeSubmitting.current) return false;
     const actionKey = path.includes("/synthetic/orders")
       ? String(payload.direction || "order")
       : path.includes("/synthetic/signals/")
@@ -8467,32 +8765,85 @@ function LiveTradePulse() {
               : path.includes("disclosure")
                 ? "disclosure"
                 : "action";
-    if (isActionPending(actionKey)) return;
+    if (isActionPending(actionKey)) return false;
+    if (changesExecutionMode) {
+      executionModeSubmitting.current = true;
+      executionModeRevision.current += 1;
+    }
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      if (changesExecutionMode && (response.execution_mode === "MANUAL" || response.execution_mode === "AUTO")) {
+        confirmedExecutionMode.current = { revision: executionModeRevision.current, mode: response.execution_mode };
+      }
       applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
       // The visible product/position is updated locally. Avoid reloading the
       // entire desk after a single click, which can interrupt unrelated work.
       if (tab === "Synthetic") {
+        const modeRevision = executionModeRevision.current;
         void request(`/v1/synthetic/${syntheticMarket}`)
           .then((snapshot) => {
-            if (snapshot?.market === syntheticMarketRef.current) setSynthetic(snapshot);
+            if (snapshot?.market === syntheticMarketRef.current) acceptSyntheticSnapshot(snapshot, modeRevision);
           })
           .catch(() => undefined);
       }
+      return true;
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Action failed.");
+      const message = error instanceof Error ? error.message : "Action failed.";
+      setNotice(message);
+      onError?.(message);
+      return false;
     } finally {
+      if (changesExecutionMode) {
+        executionModeSubmitting.current = false;
+        executionModeRevision.current += 1;
+      }
       setPendingActions((current) => {
         const next = { ...current };
         delete next[actionKey];
         return next;
       });
+    }
+  };
+  const openSyntheticReview = (kind: "long" | "short" | "auto" | "approve", signal?: { id: string; market: string; direction: string; expires_at: number }) => {
+    if (!synthetic || !data || actionPending || syntheticReviewSubmitting.current || webEnvironment !== "mainnet") return;
+    const margin = Number(syntheticAmount);
+    const market = signal?.market || syntheticMarket;
+    const direction = signal?.direction || kind;
+    const mode = kind === "auto" ? "AUTO" : synthetic.execution_mode || "MANUAL";
+    const path = kind === "auto" ? "/v1/synthetic/settings/execution-mode"
+      : signal ? `/v1/synthetic/signals/${signal.id}/approve` : "/v1/synthetic/orders";
+    const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: margin }
+      : signal ? { amount: margin, idempotency_key: `web:${signal.id}:${Date.now()}` }
+      : { market, direction, amount: margin, mode: mode.toLowerCase(), idempotency_key: `web:${market}:${direction}:${Date.now()}` };
+    setAutoAcknowledged(false);
+    setSyntheticReviewError("");
+    setSyntheticReview({ kind, path, payload, market, direction, amount: margin,
+      environment: webEnvironment, expiresAt: signal?.expires_at,
+      fee: margin * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000,
+    });
+  };
+  const confirmSyntheticReview = async () => {
+    if (!syntheticReview || syntheticReviewSubmitting.current || actionPending) return;
+    if (syntheticReview.environment !== webEnvironment || webEnvironment !== "mainnet" ||
+      (syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= Date.now())) {
+      setSyntheticReviewError("This review expired or the environment changed. Go back and review again.");
+      return;
+    }
+    if (!Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 ||
+      (syntheticReview.kind === "auto" && !autoAcknowledged)) return;
+    syntheticReviewSubmitting.current = true;
+    setSyntheticReviewPending(true);
+    setSyntheticReviewError("");
+    try {
+      if (await act(syntheticReview.path, syntheticReview.payload, setSyntheticReviewError)) setSyntheticReview(null);
+    } finally {
+      syntheticReviewSubmitting.current = false;
+      setSyntheticReviewPending(false);
     }
   };
   if (loading)
@@ -9942,6 +10293,7 @@ function LiveTradePulse() {
                     <button
                       key={market}
                       className={syntheticMarket === market ? "active" : ""}
+                      aria-pressed={syntheticMarket === market}
                       onClick={() => {
                         if (market === syntheticMarket) return;
                         setSynthetic(null);
@@ -9979,15 +10331,15 @@ function LiveTradePulse() {
                           const bot = data.bots.find((item) => item.product === "synthetic");
                           if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
                         }}>{isActionPending("topup") ? "Updating…" : "Top up Synthetic"}</button>}
-                        <p>Before approval: 1:1 margin {money(Number(syntheticAmount) || 0)} · spread {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.spread_bps || 4) / 10000)} · tier fee {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}.</p>
+                        <p>Before approval: 1:1 margin {money(Number(syntheticAmount) || 0)} · spread estimate unavailable · tier fee {money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}.</p>
                         <div className="button-row">
-                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} disabled={isActionPending("manual")} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>{isActionPending("manual") ? "Saving…" : "Manual"}</button>
-                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} disabled={isActionPending("auto")} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "AUTO", auto_margin_usd: Number(syntheticAmount) })}>{isActionPending("auto") ? "Saving…" : "Auto"}</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || isActionPending("long")} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "long", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:long:${Date.now()}` })}>{isActionPending("long") ? "Submitting…" : "Long"}</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || isActionPending("short")} onClick={() => act("/v1/synthetic/orders", { market: syntheticMarket, direction: "short", amount: Number(syntheticAmount), mode: (synthetic.execution_mode || "MANUAL").toLowerCase(), idempotency_key: `web:${syntheticMarket}:short:${Date.now()}` })}>{isActionPending("short") ? "Submitting…" : "Short"}</button>
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL", auto_margin_usd: Number(syntheticAmount) })}>{isActionPending("manual") ? "Saving…" : "Manual"}</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={actionPending} onClick={() => openSyntheticReview("auto")}>{isActionPending("auto") ? "Saving…" : "Auto"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => openSyntheticReview("long")}>{isActionPending("long") ? "Submitting…" : "Review Long"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => openSyntheticReview("short")}>{isActionPending("short") ? "Submitting…" : "Review Short"}</button>
                         </div>
                         {syntheticSignals.filter((signal) => signal.expires_at * 1000 > Date.now()).slice(0, 3).map((signal) => (
-                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted || isActionPending("approve")} onClick={() => act(`/v1/synthetic/signals/${signal.id}/approve`, { amount: Number(syntheticAmount), idempotency_key: `web:${signal.id}:${Date.now()}` })}>{isActionPending("approve") ? "Approving…" : "Approve"}</button></div>
+                          <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · expires soon</small></div><button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => openSyntheticReview("approve", signal)}>{isActionPending("approve") ? "Approving…" : "Review signal"}</button></div>
                         ))}
                       </>
                     ) : data.user.is_admin ? (
@@ -9997,8 +10349,38 @@ function LiveTradePulse() {
                       <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" disabled={isActionPending("close")} onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>{isActionPending("close") ? "Closing…" : "Close"}</button></div>
                     ))}
                   </>
-                ) : <p>Loading shared tick feed…</p>}
+                ) : <p role="status">Loading shared tick feed…</p>}
               </GradientPanel>
+              {syntheticReview && (
+                <AccessibleDialog label={syntheticReview.kind === "auto" ? "Review automatic execution" : "Review synthetic order"}
+                  onClose={() => setSyntheticReview(null)}>
+                  <span className="eyebrow">{syntheticReview.environment.toUpperCase()} / FINAL REVIEW</span>
+                  <h2>{syntheticReview.kind === "auto" ? "Enable automatic execution?" : `${syntheticReview.market} · ${syntheticReview.direction.toUpperCase()}`}</h2>
+                  <div className="fact-block">
+                    <span>EXECUTION <b>{syntheticReview.kind === "auto" ? "AUTO" : "MANUAL ORDER"}</b></span>
+                    <span>{syntheticReview.kind === "auto" ? "MARGIN PER AUTO ORDER" : "MARGIN / 1:1"} <b>{Number.isFinite(syntheticReview.amount) ? money(syntheticReview.amount) : "Enter a valid amount"}</b></span>
+                    {Number.isFinite(syntheticReview.amount) && <>
+                      <span>ESTIMATED SPREAD <b>Unavailable</b></span>
+                      <span>ESTIMATED TIER FEE <b>{money(syntheticReview.fee)}</b></span>
+                    </>}
+                  </div>
+                  <p>Reserved margin can be lost. Prices continue to move during review; the existing execution rules determine the final price, spread and tier fee.</p>
+                  {syntheticReview.kind === "auto" && (
+                    <label className="toggle-row">
+                      <span>I understand Auto can place future orders without asking me to approve each one.</span>
+                      <input type="checkbox" checked={autoAcknowledged} disabled={syntheticReviewPending} onChange={(event) => setAutoAcknowledged(event.target.checked)} />
+                      <i aria-hidden="true" />
+                    </label>
+                  )}
+                  {(!Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0) && <p role="alert">Go back and enter a positive, valid USD margin.</p>}
+                  {syntheticReviewError && <p role="alert">{syntheticReviewError}</p>}
+                  <button className="primary-action" disabled={syntheticReviewPending || actionPending || !Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 || (syntheticReview.kind === "auto" && !autoAcknowledged)} onClick={() => void confirmSyntheticReview()}>
+                    {syntheticReviewPending ? "Submitting…" : syntheticReview.kind === "auto" ? "Confirm Auto execution" : syntheticReview.kind === "approve" ? "Confirm signal approval" : `Confirm ${syntheticReview.direction}`}
+                  </button>
+                  {syntheticReviewPending && <p role="status">The request is submitting. Returning to the controls does not cancel it; its result will appear on the desk.</p>}
+                  <button type="button" className="ghost-action" onClick={() => setSyntheticReview(null)}>{syntheticReviewPending ? "Return to controls" : "Go back"}</button>
+                </AccessibleDialog>
+              )}
             </div>
           )}
           {tab === "Admin" && admin && (
