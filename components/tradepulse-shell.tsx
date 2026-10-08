@@ -363,18 +363,98 @@ function BootScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+type AvatarId = "orbit" | "signal" | "prism" | "current" | "vector" | "tide";
+
+const avatarOptions: Array<{ id: AvatarId; name: string; detail: string }> = [
+  { id: "orbit", name: "Orbit", detail: "steady and observant" },
+  { id: "signal", name: "Signal", detail: "fast and focused" },
+  { id: "prism", name: "Prism", detail: "clear and adaptive" },
+  { id: "current", name: "Current", detail: "calm and responsive" },
+  { id: "vector", name: "Vector", detail: "precise and direct" },
+  { id: "tide", name: "Tide", detail: "patient and measured" },
+];
+
+function PulseAvatar({
+  id,
+  initials,
+  className = "",
+}: {
+  id: AvatarId;
+  initials?: string;
+  className?: string;
+}) {
+  return (
+    <span className={`pulse-avatar avatar-${id} ${className}`} aria-hidden="true">
+      <i />
+      <b>{initials?.slice(0, 1) || "T"}</b>
+    </span>
+  );
+}
+
+function AvatarPicker({
+  selected,
+  onSelect,
+  onClose,
+  required = false,
+}: {
+  selected: AvatarId;
+  onSelect: (id: AvatarId) => void;
+  onClose: () => void;
+  required?: boolean;
+}) {
+  return (
+    <AccessibleDialog
+      label="Choose your TradePulse avatar"
+      onClose={onClose}
+      dismissible={!required}
+    >
+      <div className="avatar-picker-dialog">
+        {!required && (
+          <button className="modal-close" type="button" onClick={onClose} aria-label="Close avatar picker">
+            <X size={16} />
+          </button>
+        )}
+        <span className="eyebrow">YOUR DESK IDENTITY</span>
+        <h2>Choose your signal</h2>
+        <p>Pick a compact avatar for your account. You can change it any time.</p>
+        <div className="avatar-picker-grid" role="list">
+          {avatarOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`avatar-choice ${selected === option.id ? "selected" : ""}`}
+              aria-pressed={selected === option.id}
+              onClick={() => onSelect(option.id)}
+            >
+              <PulseAvatar id={option.id} />
+              <span><strong>{option.name}</strong><small>{option.detail}</small></span>
+              {selected === option.id && <StateIcon name="check" />}
+            </button>
+          ))}
+        </div>
+        <button className="primary-action" type="button" onClick={() => onSelect(selected)}>
+          Use {avatarOptions.find((option) => option.id === selected)?.name || "avatar"}
+          <ChevronRight />
+        </button>
+      </div>
+    </AccessibleDialog>
+  );
+}
+
 function Sidebar({
   active,
   setActive,
   profileName = "Jordan Davis",
   profileTier = "Pro account",
   isAdmin = true,
+  avatarId = "orbit",
 }: {
   active: string;
   setActive: (value: string) => void;
   profileName?: string;
   profileTier?: string;
   isAdmin?: boolean;
+  avatarId?: AvatarId;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const initials =
@@ -465,7 +545,7 @@ function Sidebar({
           onClick={() => setActive("Account")}
           aria-label="Open account controls"
         >
-          <div className="avatar">{initials}</div>
+          <PulseAvatar id={avatarId} initials={initials} className="avatar" />
           <div>
             <strong>{profileName}</strong>
             <small>{profileTier}</small>
@@ -597,6 +677,8 @@ function BottomNav({
 function Header({
   setActive,
   onNotifications,
+  avatarId = "orbit",
+  onAvatarClick,
   profileName = "Jordan",
   environment = "LIVE",
   isAdmin = true,
@@ -605,6 +687,8 @@ function Header({
 }: {
   setActive: (view: string) => void;
   onNotifications?: () => void;
+  avatarId?: AvatarId;
+  onAvatarClick?: () => void;
   profileName?: string;
   environment?: string;
   isAdmin?: boolean;
@@ -660,9 +744,9 @@ function Header({
           type="button"
           className="top-avatar top-avatar-button"
           aria-label={`Open ${profileName} account controls`}
-          onClick={() => setActive("Account")}
+          onClick={() => (onAvatarClick ? onAvatarClick() : setActive("Account"))}
         >
-          {initials}
+          <PulseAvatar id={avatarId} initials={initials} />
         </button>
       </div>
     </header>
@@ -6213,12 +6297,16 @@ function LiveAccountScreen({
   request,
   reload,
   onNotice,
+  avatarId = "orbit",
+  onAvatarClick,
   openNotificationsRequest = 0,
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
+  avatarId?: AvatarId;
+  onAvatarClick?: () => void;
   openNotificationsRequest?: number;
 }) {
   const [modal, setModal] = useState<
@@ -6325,7 +6413,9 @@ function LiveAccountScreen({
         </div>
       </div>
       <GradientPanel className="profile-card">
-        <div className="top-avatar">{initials}</div>
+        <button className="profile-avatar-button" type="button" onClick={onAvatarClick} aria-label="Change account avatar">
+          <PulseAvatar id={avatarId} initials={initials} />
+        </button>
         <div>
           <strong>{data.user.first_name || "Telegram user"}</strong>
           <small>
@@ -8243,6 +8333,9 @@ function LiveWalletScreen({
 
 function LiveTradePulse() {
   const [data, setData] = useState<LiveDashboard | null>(null);
+  const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
   const [tab, setTab] = useState<
     | "Dashboard"
     | "Bots"
@@ -8261,6 +8354,32 @@ function LiveTradePulse() {
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
   const [loading, setLoading] = useState(true);
+  const avatarStorageKey = data ? `tradepulse.avatar:${data.user.id}` : "";
+  useEffect(() => {
+    if (!data) return;
+    let stored = "";
+    try {
+      stored = window.localStorage.getItem(avatarStorageKey) || "";
+    } catch {
+      /* storage is optional */
+    }
+    const valid = avatarOptions.some((option) => option.id === stored);
+    if (valid) setAvatarId(stored as AvatarId);
+    else {
+      setAvatarPickerRequired(true);
+      setAvatarPickerOpen(true);
+    }
+  }, [data?.user.id]);
+  const chooseAvatar = (next: AvatarId) => {
+    setAvatarId(next);
+    try {
+      if (avatarStorageKey) window.localStorage.setItem(avatarStorageKey, next);
+    } catch {
+      /* in-memory selection still applies */
+    }
+    setAvatarPickerRequired(false);
+    setAvatarPickerOpen(false);
+  };
   const [amount, setAmount] = useState("20");
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
   const [alertPrice, setAlertPrice] = useState("");
@@ -9073,6 +9192,7 @@ function LiveTradePulse() {
         profileName={profileName}
         profileTier={data.user.tier || "TradePulse account"}
         isAdmin={data.user.is_admin}
+        avatarId={avatarId}
       />
       <main className="main-content">
         <Header
@@ -9083,12 +9203,22 @@ function LiveTradePulse() {
           isAdmin={data.user.is_admin}
           pageTitle={chromeActive}
           notificationCount={unreadNoticeCount}
+          avatarId={avatarId}
+          onAvatarClick={() => setAvatarPickerOpen(true)}
         />
         <NoticeCenter center={noticeCenter} onPreferences={() => {
           noticeCenter.setOpen(false);
           setTab("Account");
           setOpenNotificationsRequest((request) => request + 1);
         }} />
+        {avatarPickerOpen && (
+          <AvatarPicker
+            selected={avatarId}
+            onSelect={chooseAvatar}
+            onClose={() => setAvatarPickerOpen(false)}
+            required={avatarPickerRequired}
+          />
+        )}
         <div className="content-wrap">
           {notice && (
             <div className="toast-inline" role="status">
@@ -10142,6 +10272,8 @@ function LiveTradePulse() {
               request={request}
               reload={load}
               onNotice={setNotice}
+              avatarId={avatarId}
+              onAvatarClick={() => setAvatarPickerOpen(true)}
               openNotificationsRequest={openNotificationsRequest}
             />
           )}
