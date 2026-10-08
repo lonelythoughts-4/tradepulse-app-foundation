@@ -8476,7 +8476,7 @@ function LiveTradePulse() {
   }, [tab, webEnvironment, syntheticMarket]);
   const [synthetic, setSynthetic] = useState<{
     market: string;
-    latest: { price?: number; reference?: number };
+    latest: { price?: number; reference?: number; bid?: number; ask?: number };
     ticks: Array<{ price?: number; reference?: number; timestamp?: number; created_at?: number }>;
     account?: {
       available_usd: number;
@@ -9004,6 +9004,17 @@ function LiveTradePulse() {
       setSyntheticReviewPending(false);
     }
   };
+  const syntheticSpreadRate = synthetic?.latest
+    ? (() => {
+        const reference = Number(synthetic.latest.reference ?? synthetic.latest.price);
+        const bid = Number(synthetic.latest.bid);
+        const ask = Number(synthetic.latest.ask);
+        return reference > 0 && bid > 0 && ask > 0 ? (ask - bid) / reference : null;
+      })()
+    : null;
+  const estimatedSyntheticSpread = syntheticSpreadRate === null
+    ? null
+    : (Number(syntheticAmount) || 0) * syntheticSpreadRate;
   if (loading)
     return (
       <div className="boot-screen">
@@ -10507,7 +10518,7 @@ function LiveTradePulse() {
                         <div className="fact-block">
                           <span>Margin · 1:1 <b>{money(Number(syntheticAmount) || 0)}</b></span>
                           <span>Estimated tier fee <b>{money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}</b></span>
-                          <span>Estimated spread <b>Unavailable</b></span>
+                          <span>Estimated spread <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                         </div>
                         <div className="button-row" role="group" aria-label="Execution mode">
                           <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("manual") ? "Saving…" : "Manual"}</button>
@@ -10547,7 +10558,7 @@ function LiveTradePulse() {
                     <span>EXECUTION <b>{syntheticReview.kind === "auto" ? "AUTO" : "MANUAL ORDER"}</b></span>
                     <span>{syntheticReview.kind === "auto" ? "MARGIN PER AUTO ORDER" : "MARGIN / 1:1"} <b>{Number.isFinite(syntheticReview.amount) ? money(syntheticReview.amount) : "Enter a valid amount"}</b></span>
                     {Number.isFinite(syntheticReview.amount) && <>
-                      <span>ESTIMATED SPREAD <b>Unavailable</b></span>
+                      <span>ESTIMATED SPREAD <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                       <span>ESTIMATED TIER FEE <b>{money(syntheticReview.fee)}</b></span>
                     </>}
                   </div>
