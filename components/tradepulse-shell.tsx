@@ -813,10 +813,16 @@ type VisualDeskModel = {
     state?: string;
     grant_usd?: number;
     expires_at?: number;
-    redemption_ends_at?: number;
     profit_snapshot_usd?: number;
     gift_credit_usd?: number;
     converted_at?: number;
+    pool_state?: string;
+    pool_available_usd?: number;
+    pool_locked_usd?: number;
+    pool_realised_pnl_usd?: number;
+    credit_available_usd?: number;
+    credit_locked_usd?: number;
+    credit_active?: boolean;
   } | null;
 };
 
@@ -1137,45 +1143,50 @@ function DemoBanner({
 }) {
   const active = demo?.state === "active";
   const grant = demo?.grant_usd ?? 2000;
-  const feeCredit = Number(demo?.gift_credit_usd || 0);
+  // A zero authoritative balance means the credit was spent or is locked in
+  // an open position.  Only older payloads without the new field may fall
+  // back to the historical issued amount.
+  const tradingCredit = demo?.credit_available_usd === undefined
+    ? Number(demo?.gift_credit_usd || 0)
+    : Number(demo.credit_available_usd || 0);
   // An unstarted virtual offer should never obscure a funded desk. Once it is
   // active, show its actual status instead of repeating the launch invitation.
-  if (!demo || (!active && demo.state !== "issued" && feeCredit <= 0)) return null;
+  if (!demo || (!active && demo.state !== "issued" && tradingCredit <= 0)) return null;
   if (demo.state === "issued" && hasFundedDesk) return null;
   return (
     <GradientPanel className="demo-banner reveal-card">
       <div>
         <span className="eyebrow">
-          {feeCredit > 0
-            ? "DEMO FEE CREDIT"
+          {tradingCredit > 0
+            ? "DEMO TRADING CREDIT"
             : active
               ? "PRACTICE MODE ACTIVE"
               : "PRACTICE MODE"}
         </span>
         <h2>
-          {feeCredit > 0
-            ? `${money(feeCredit)} fee credit locked`
+          {tradingCredit > 0
+            ? `${money(tradingCredit)} trading credit available`
             : active
               ? "Your virtual demo is active"
-              : `Try a ${money(grant)} virtual memecoin demo`}
+              : `Try a ${money(grant)} shared virtual demo`}
         </h2>
         <p>
-          {feeCredit > 0
-            ? "This non-withdrawable credit is already applied against an eligible future mainnet performance fee; it is not cash or wallet balance."
+          {tradingCredit > 0
+            ? "Non-withdrawable trading credit for eligible Memecoin and Synthetic orders. It is not cash or wallet balance."
             : active
-              ? "Virtual funds are isolated and can never be withdrawn. A fee credit is calculated only after a qualifying verified mainnet deposit and eligible realised demo profit."
+              ? "One shared virtual pool can be assigned across Memecoin and Synthetic. It expires unless a qualifying verified mainnet deposit arrives while the demo is active."
               : "Explore the desk with zero risk. Your balance stays untouched."}
         </p>
       </div>
       <img
-        src={active || feeCredit > 0 ? "/illustrations/demo-hourglass.png" : "/illustrations/demo-banner.png"}
-        alt={active || feeCredit > 0 ? "Virtual demo status" : "Paper money plane flying toward a virtual demo"}
+        src={active || tradingCredit > 0 ? "/illustrations/demo-hourglass.png" : "/illustrations/demo-banner.png"}
+        alt={active || tradingCredit > 0 ? "Virtual demo status" : "Paper money plane flying toward a virtual demo"}
         className="illustration-demo-banner pointer-events-none select-none"
         draggable={false}
         decoding="async"
         loading="eager"
       />
-      {!active && feeCredit <= 0 && (
+      {!active && tradingCredit <= 0 && (
         <button aria-label="Try demo" onClick={onStart}>
           <ChevronRight size={17} />
         </button>
@@ -2530,18 +2541,18 @@ function DemoScreen() {
         <span className="eyebrow">PRACTICE MODE · DEMO</span>
         <h2>Demo trading</h2>
         <p>
-          This demo uses <strong>$50.00 virtual funds</strong>. They are not
+          This demo uses <strong>$2,000.00 shared virtual funds</strong>. They are not
           real money, cannot be withdrawn, and never touch your wallet.
         </p>
         <div className="virtual-label">VIRTUAL / NON-WITHDRAWABLE</div>
         <button className="primary-action">
-          Activate memecoin demo <ChevronRight />
+          Activate shared demo <ChevronRight />
         </button>
       </GradientPanel>
       <GradientPanel className="demo-activation">
         <div>
           <span className="eyebrow">DEMO ACTIVE</span>
-          <h2>$50.00 virtual memecoin</h2>
+          <h2>$2,000.00 shared virtual pool</h2>
           <div className="demo-expiry-card">
             <img
               src="/illustrations/demo-hourglass.png"
@@ -2554,7 +2565,7 @@ function DemoScreen() {
               <strong>
                 Expires in <span className="mono">23:59:42</span>
               </strong>
-              <small>Virtual funds reset when the demo window closes.</small>
+              <small>Assign the pool across Memecoin and Synthetic; unused value expires with the demo.</small>
             </div>
             <span className="amber-chip">ENDING SOON</span>
           </div>
@@ -2627,7 +2638,7 @@ function BotsScreen({
         <EmptyBots />
       )}
       <button className="demo-link" onClick={() => setView("demo")}>
-        Explore the $50 virtual demo <ChevronRight />
+        Explore the $2,000 shared virtual demo <ChevronRight />
       </button>
     </div>
   );
@@ -4454,6 +4465,9 @@ type LiveDashboard = {
     state: string;
     capital_usd: number;
     compound_percent: number;
+    demo_trial?: number;
+    demo_credit_only?: boolean;
+    environment?: string;
   }>;
   deposits: Array<{
     id: string;
@@ -4505,10 +4519,16 @@ type LiveDashboard = {
     state?: string;
     grant_usd?: number;
     expires_at?: number;
-    redemption_ends_at?: number;
     profit_snapshot_usd?: number;
     gift_credit_usd?: number;
     converted_at?: number;
+    pool_state?: string;
+    pool_available_usd?: number;
+    pool_locked_usd?: number;
+    pool_realised_pnl_usd?: number;
+    credit_available_usd?: number;
+    credit_locked_usd?: number;
+    credit_active?: boolean;
   } | null;
   popup_ttl_seconds: number;
   notices: Array<{ id: string; kind: string; title: string; body: string }>;
@@ -4521,6 +4541,7 @@ type LiveDashboard = {
   quote_fresh: boolean;
   memecoin?: {
     authorization?: { accepted_at?: number; settings_json?: string } | null;
+    demo_authorization?: { accepted_at?: number; settings_json?: string } | null;
     health?: { status?: string; assets?: number; latest_tick_at?: number | null };
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
   };
@@ -5291,7 +5312,7 @@ function LiveAdminScreen({
   const [withdrawalReview, setWithdrawalReview] = useState<{
     row: LiveTradePulseAdmin["withdrawals"][number];
     action: "approve" | "reject";
-    environment: "mainnet" | "testnet";
+    environment: "mainnet" | "testnet" | "demo";
   } | null>(null);
   const [withdrawalPending, setWithdrawalPending] = useState(false);
   const withdrawalSubmitting = useRef(false);
@@ -5749,7 +5770,7 @@ function LiveAdminScreen({
             <option value="deposit_min_usd">Deposit minimum</option>
             <option value="withdraw_min_usd">Withdrawal minimum</option>
             <option value="demo_active_days">Demo duration</option>
-            <option value="demo_conversion_percent">Demo gift rate</option>
+            <option value="demo_conversion_percent">Demo trading-credit rate</option>
             <option value="community_url">Community link</option>
             <option value="popup_ttl_seconds">Popup cleanup seconds</option>
           </select>
@@ -6734,7 +6755,7 @@ function LiveAccountScreen({
                 <p>
                   This clears personal desk preferences and alerts only. It
                   cannot change your balance, bots, deposits, withdrawals,
-                  security code, trial history, or fee credit.
+                  security code, trial history, or demo trading credit.
                 </p>
                 <button
                   className="danger-action"
@@ -6773,6 +6794,12 @@ function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
   choices[next].click();
 }
 
+function createMemecoinOrderIdempotencyKey(userId: number, botId: number) {
+  const nonce = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `memecoin:${userId}:${botId}:${nonce}`;
+}
+
 function LiveBotsScreen({
   data,
   request,
@@ -6806,8 +6833,15 @@ function LiveBotsScreen({
   const [memecoinAssets, setMemecoinAssets] = useState<string[]>(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
   const [memecoinLeverage, setMemecoinLeverage] = useState(3);
   const [memecoinCadence, setMemecoinCadence] = useState(300);
+  const [memecoinAutoEnabled, setMemecoinAutoEnabled] = useState(false);
   const [includeTrench, setIncludeTrench] = useState(false);
   const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
+  const [memecoinOrder, setMemecoinOrder] = useState<{
+    direction: "long" | "short";
+    source: "wallet" | "demo" | "credit";
+    amount: string;
+    idempotencyKey: string;
+  } | null>(null);
   useEffect(() => {
     setSelectedId(initialBotId);
     setView(initialBotId ? "detail" : "fleet");
@@ -6822,6 +6856,41 @@ function LiveBotsScreen({
     }));
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
+  const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
+  useEffect(() => {
+    if (!selected || selected.product !== "memecoin") return;
+    // New and projected credit-only Memecoin desks must never imply that
+    // automatic trading was enabled. Saved funded/demo settings can opt in.
+    setMemecoinAssets(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
+    setMemecoinLeverage(3);
+    setMemecoinCadence(300);
+    setMemecoinAutoEnabled(false);
+    setIncludeTrench(false);
+    if (selected.demo_credit_only) return;
+    const encoded = selected.demo_trial
+      ? data.memecoin?.demo_authorization?.settings_json
+      : data.memecoin?.authorization?.settings_json;
+    if (!encoded) return;
+    try {
+      const settings = JSON.parse(encoded) as Record<string, unknown>;
+      const assets = Array.isArray(settings.assets)
+        ? settings.assets.map((item) => String(item).toUpperCase()).filter((item) => ["DOGE", "SHIB", "PEPE", "WIF", "BONK"].includes(item))
+        : [];
+      if (assets.length) setMemecoinAssets(assets);
+      if ([1, 3, 5, 10].includes(Number(settings.leverage))) setMemecoinLeverage(Number(settings.leverage));
+      if ([60, 300, 900].includes(Number(settings.cadence_seconds))) setMemecoinCadence(Number(settings.cadence_seconds));
+      if (typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
+      if (typeof settings.include_trench === "boolean") setIncludeTrench(settings.include_trench);
+    } catch {
+      // An older authorization record should not prevent the default controls
+      // from rendering or change the customer's existing allocation.
+    }
+  }, [selected?.id, selected?.product, selected?.demo_trial, selected?.demo_credit_only, data.memecoin?.authorization?.settings_json, data.memecoin?.demo_authorization?.settings_json]);
+  useEffect(() => {
+    if (memecoinAssets.length && !memecoinAssets.includes(memecoinMarket)) {
+      setMemecoinMarket(memecoinAssets[0]);
+    }
+  }, [memecoinAssets, memecoinMarket]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
     let cancelled = false;
@@ -6970,9 +7039,24 @@ function LiveBotsScreen({
         )}
       </div>
     );
-  if (view === "detail" && selected) {
-    const paused = selected.state === "paused";
-    const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
+    if (view === "detail" && selected) {
+      const paused = selected.state === "paused";
+      const isDemoCreditOnlyBot = selected.product === "memecoin" && Boolean(selected.demo_credit_only);
+      const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization" && !isDemoCreditOnlyBot;
+      const isDemoBot = Boolean(selected.demo_trial) && !isDemoCreditOnlyBot;
+      const isVirtualMemecoinBot = isDemoBot || isDemoCreditOnlyBot;
+      const isClosing = selected.state === "closing";
+      const activeDemoPool = data.demo?.pool_state === "active" && Number(data.demo.pool_available_usd || 0) > 0;
+      const activeDemoCredit = Number(data.demo?.credit_available_usd || 0) > 0;
+      const selectedMemecoinCategories = new Set(memecoinAssets.map((asset) => asset === "DOGE" || asset === "SHIB" ? "bluechip" : "midcap"));
+      const permittedCadences = [60, 300, 900].filter((value) => (
+        [...selectedMemecoinCategories].every((category) => (
+          category === "bluechip" ? value === 60 || value === 300 : value === 300
+        ))
+      ));
+      const permittedLeverage = Math.min(...[...selectedMemecoinCategories].map((category) => category === "bluechip" ? 10 : 5), includeTrench ? 3 : 10);
+      const savedCadence = permittedCadences.includes(memecoinCadence) ? memecoinCadence : (permittedCadences.includes(300) ? 300 : permittedCadences[0]);
+      const savedLeverage = Math.min(memecoinLeverage, permittedLeverage);
     return (
       <div className="bot-detail">
         <button className="back-action" onClick={() => setView("fleet")}>
@@ -6981,38 +7065,38 @@ function LiveBotsScreen({
         <GradientPanel className="detail-hero">
           <div className="detail-ring">
             <BotRing
-              percent={paused || awaitingAuthorization ? 0 : 72}
-              state={paused || awaitingAuthorization ? "paused" : "running"}
+              percent={paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? 0 : 72}
+              state={paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? "paused" : "running"}
             />
           </div>
           <div>
             <span className="eyebrow">{selected.name.toUpperCase()} BOT</span>
             <h2>{selected.name}</h2>
-            <span className={`status-chip ${paused || awaitingAuthorization ? "paused" : "running"}`}>
+            <span className={`status-chip ${paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? "paused" : "running"}`}>
               <i />
-              {awaitingAuthorization ? "authorization required" : paused ? "paused" : "running"}
+              {isClosing ? "closing protected positions" : isDemoCreditOnlyBot ? "manual trading credit" : awaitingAuthorization ? "authorization required" : paused ? "paused" : "running"}
             </span>
           </div>
         </GradientPanel>
         <div className="detail-stats">
           <GradientPanel>
-            <span>ALLOCATION</span>
-            <strong>{money(selected.capital_usd)}</strong>
+            <span>{isDemoBot ? "DEMO AVAILABLE" : isDemoCreditOnlyBot ? "CREDIT AVAILABLE" : "ALLOCATION"}</span>
+            <strong>{money(isDemoBot ? Number(data.demo?.pool_available_usd || 0) : isDemoCreditOnlyBot ? Number(data.demo?.credit_available_usd || 0) : selected.capital_usd)}</strong>
           </GradientPanel>
           <GradientPanel>
-            <span>COMPOUNDING</span>
-            <strong>{selected.compound_percent}%</strong>
+            <span>{isDemoBot ? "DEMO LOCKED" : isDemoCreditOnlyBot ? "CREDIT LOCKED" : "COMPOUNDING"}</span>
+            <strong>{isDemoBot ? money(Number(data.demo?.pool_locked_usd || 0)) : isDemoCreditOnlyBot ? money(Number(data.demo?.credit_locked_usd || 0)) : `${selected.compound_percent}%`}</strong>
           </GradientPanel>
           <GradientPanel>
-            <span>HIGH-WATER MARK</span>
-            <strong>{money(data.wallet.hwm)}</strong>
+            <span>{isDemoBot ? "DEMO P&L" : isDemoCreditOnlyBot ? "EXECUTION" : "HIGH-WATER MARK"}</span>
+            <strong>{isDemoBot ? money(Number(data.demo?.pool_realised_pnl_usd || 0)) : isDemoCreditOnlyBot ? "Manual only" : money(data.wallet.hwm)}</strong>
           </GradientPanel>
         </div>
         {selected.product === "memecoin" && (
           <GradientPanel className="compound-panel">
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
             <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
-              {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
+              {memecoinAssets.map((symbol) => (
                 <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{symbol}</button>
               ))}
             </div>
@@ -7030,92 +7114,115 @@ function LiveBotsScreen({
                 ))}
               </div>
             )}
-            {(memecoinSnapshot.events || []).slice(-4).map((event) => (
-              <p key={event.id}><b>{event.kind.replaceAll("_", " ")}</b> · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>
-            ))}
-          </GradientPanel>
-        )}
-        <GradientPanel className="compound-panel">
-          <span className="eyebrow">COMPOUNDING</span>
-          <div className="segment-control" role="radiogroup" aria-label="Compounding" onKeyDown={handleBotChoiceKeyDown}>
-            {[0, 50, 100].map((percent) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected.compound_percent === percent}
-                tabIndex={selected.compound_percent === percent ? 0 : -1}
-                className={
-                  selected.compound_percent === percent ? "active" : ""
-                }
-                key={percent}
-                aria-disabled={pendingAction}
-                onClick={() =>
-                  run(`/v1/bots/${selected.id}/actions`, {
-                    action: "compound",
-                    percent,
-                  })
-                }
-              >
-                {percent}%
-              </button>
-            ))}
-          </div>
-        </GradientPanel>
-        {awaitingAuthorization && (
-          <GradientPanel className="compound-panel">
-            <span className="eyebrow">FUNDED MEMECOIN BOT BETA</span>
-            <p>
-              Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh Solana launches only after a DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss.
-            </p>
+              {(memecoinSnapshot.events || []).slice(-4).map((event) => (
+                <p key={event.id}><b>{event.kind.replaceAll("_", " ")}</b> · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>
+              ))}
+              {(selected.state === "running" || isDemoCreditOnlyBot) && (
+                <button
+                  className="small-action"
+                  disabled={pendingAction || (isDemoBot ? !activeDemoPool : isDemoCreditOnlyBot ? !activeDemoCredit : false)}
+                  onClick={() => setMemecoinOrder({
+                    direction: "long",
+                    source: isDemoBot ? "demo" : isDemoCreditOnlyBot ? "credit" : "wallet",
+                    amount: "20",
+                    idempotencyKey: createMemecoinOrderIdempotencyKey(data.user.id, selected.id),
+                  })}
+                >
+                  Review manual order <ChevronRight />
+                </button>
+              )}
+            </GradientPanel>
+          )}
+          {!isVirtualMemecoinBot && !isClosing && (
+            <GradientPanel className="compound-panel">
+              <span className="eyebrow">COMPOUNDING</span>
+              <div className="segment-control" role="radiogroup" aria-label="Compounding" onKeyDown={handleBotChoiceKeyDown}>
+                {[0, 50, 100].map((percent) => (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected.compound_percent === percent}
+                    tabIndex={selected.compound_percent === percent ? 0 : -1}
+                    className={
+                      selected.compound_percent === percent ? "active" : ""
+                    }
+                    key={percent}
+                    aria-disabled={pendingAction}
+                    onClick={() =>
+                      run(`/v1/bots/${selected.id}/actions`, {
+                        action: "compound",
+                        percent,
+                      })
+                    }
+                  >
+                    {percent}%
+                  </button>
+                ))}
+              </div>
+            </GradientPanel>
+          )}
+          {selected.product === "memecoin" && !isDemoCreditOnlyBot && !isClosing && (
+            <GradientPanel className="compound-panel">
+              <span className="eyebrow">{isDemoBot ? "SHARED DEMO CONTROLS" : awaitingAuthorization ? "FUNDED MEMECOIN BOT BETA" : "MEMECOIN STRATEGY CONTROLS"}</span>
+              <p>
+                {isDemoBot
+                  ? "Choose how the shared virtual pool may be used by this Memecoin strategy. The pool remains separate from your wallet and from Synthetic; manual orders always require a separate review."
+                  : awaitingAuthorization
+                  ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh Solana launches only after a DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
+                  : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
+              </p>
             <span className="eyebrow">CURATED BASKET</span>
             <div className="segment-control" role="group" aria-label="Curated basket">
               {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
-                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
+                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
               ))}
             </div>
             <span className="eyebrow">LEVERAGE</span>
             <div className="segment-control" role="radiogroup" aria-label="Leverage" onKeyDown={handleBotChoiceKeyDown}>
-              {[1, 3, 5, 10].map((value) => <button type="button" role="radio" aria-checked={memecoinLeverage === value} tabIndex={memecoinLeverage === value ? 0 : -1} key={value} className={memecoinLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
+              {[1, 3, 5, 10].filter((value) => value <= permittedLeverage).map((value) => <button type="button" role="radio" aria-checked={savedLeverage === value} tabIndex={savedLeverage === value ? 0 : -1} key={value} className={savedLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
             </div>
             <span className="eyebrow">DECISION CADENCE</span>
-            <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
-              {[60, 300, 900].map((value) => <button type="button" role="radio" aria-checked={memecoinCadence === value} tabIndex={memecoinCadence === value ? 0 : -1} key={value} className={memecoinCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
-            </div>
-            <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
-            <button
-              className="primary-action"
-              disabled={pendingAction || memecoinAssets.length === 0}
-              onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", settings: { basket: "curated", assets: memecoinAssets, auto_enabled: true, include_trench: includeTrench, cadence_seconds: memecoinCadence, leverage: memecoinLeverage } })}
-            >
-              Authorize Memecoin Bot Beta <StateIcon name="check" />
-            </button>
-          </GradientPanel>
-        )}
-        <div className="detail-actions">
-          <div className="amount-input">
-            <span>$</span>
-            <input
-              value={amount}
-              onChange={(event) =>
-                setAmount(event.target.value.replace(/[^0-9.]/g, ""))
-              }
-              inputMode="decimal"
-              aria-label="Product top-up amount"
-            />
-          </div>
-          <button
-            className="small-action"
-            disabled={Number(amount) < 20 || pendingAction}
-            onClick={() =>
-              run(`/v1/bots/${selected.id}/actions`, {
-                action: "topup",
-                amount: Number(amount),
-              })
-            }
-          >
-            {pendingActionType === "topup" ? "Updating…" : "Top up allocation"} <Plus />
-          </button>
-          <button
+              <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
+                {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
+              </div>
+              <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
+              <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
+              <button
+                className="primary-action"
+                disabled={pendingAction || memecoinAssets.length === 0}
+                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "curated", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
+              >
+                {isDemoBot ? "Save demo controls" : awaitingAuthorization ? "Authorize Memecoin Bot Beta" : "Save strategy controls"} <StateIcon name="check" />
+              </button>
+            </GradientPanel>
+          )}
+          <div className="detail-actions">
+            {!isVirtualMemecoinBot && !isClosing && <>
+              <div className="amount-input">
+                <span>$</span>
+                <input
+                  value={amount}
+                  onChange={(event) =>
+                    setAmount(event.target.value.replace(/[^0-9.]/g, ""))
+                  }
+                  inputMode="decimal"
+                  aria-label="Product top-up amount"
+                />
+              </div>
+              <button
+                className="small-action"
+                disabled={Number(amount) < 20 || pendingAction}
+                onClick={() =>
+                  run(`/v1/bots/${selected.id}/actions`, {
+                    action: "topup",
+                    amount: Number(amount),
+                  })
+                }
+              >
+                {pendingActionType === "topup" ? "Updating…" : "Top up allocation"} <Plus />
+              </button>
+            </>}
+          {!isDemoCreditOnlyBot && !isClosing && <button
             className="primary-action"
             disabled={awaitingAuthorization || pendingAction}
             onClick={() =>
@@ -7127,25 +7234,74 @@ function LiveBotsScreen({
               name={paused ? "play" : "pause"}
               swapKey={paused ? "bot-resume" : "bot-pause"}
             />
-          </button>
-          <button
-            className="danger-action"
-            disabled={pendingAction}
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Close ${selected.name}? Its current allocation will return to your available balance.`,
-                )
-              )
-                void run(`/v1/bots/${selected.id}/actions`, {
-                  action: "close",
-                });
-            }}
-          >
-            Close bot <X />
-          </button>
+          </button>}
+            {!isVirtualMemecoinBot && <button
+                className="danger-action"
+                disabled={pendingAction}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      isClosing
+                        ? `Continue closing ${selected.name}? Any in-flight position remains protected until settlement completes.`
+                        : `Close ${selected.name}? Its current allocation will return to your available balance.`,
+                    )
+                  )
+                    void run(`/v1/bots/${selected.id}/actions`, {
+                      action: "close",
+                    });
+                }}
+              >
+                {isClosing ? "Finish closing bot" : "Close bot"} <X />
+              </button>}
+          </div>
+          {memecoinOrder && (
+            <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!pendingAction}>
+              <span className="eyebrow">MANUAL MEMECOIN ORDER</span>
+              <h2>Review order</h2>
+              <p>Manual orders use the same fresh-price, liquidity, position, and settlement safeguards as automatic entries.</p>
+              <div className="segment-control" role="radiogroup" aria-label="Memecoin order direction" onKeyDown={handleBotChoiceKeyDown}>
+                {(["long", "short"] as const).map((direction) => <button type="button" role="radio" aria-checked={memecoinOrder.direction === direction} tabIndex={memecoinOrder.direction === direction ? 0 : -1} key={direction} className={memecoinOrder.direction === direction ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, direction } : current)}>{direction === "long" ? "Long" : "Short"}</button>)}
+              </div>
+              {!isDemoBot && !isDemoCreditOnlyBot && <div className="segment-control" role="radiogroup" aria-label="Memecoin order funding source" onKeyDown={handleBotChoiceKeyDown}>
+                <button type="button" role="radio" aria-checked={memecoinOrder.source === "wallet"} tabIndex={memecoinOrder.source === "wallet" ? 0 : -1} className={memecoinOrder.source === "wallet" ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, source: "wallet" } : current)}>Wallet allocation</button>
+                {activeDemoCredit && <button type="button" role="radio" aria-checked={memecoinOrder.source === "credit"} tabIndex={memecoinOrder.source === "credit" ? 0 : -1} className={memecoinOrder.source === "credit" ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, source: "credit" } : current)}>Demo trading credit</button>}
+              </div>}
+              <div className="amount-input">
+                <span>$</span>
+                <input value={memecoinOrder.amount} onChange={(event) => setMemecoinOrder((current) => current ? { ...current, amount: event.target.value.replace(/[^0-9.]/g, "") } : current)} inputMode="decimal" aria-label="Memecoin order margin" />
+              </div>
+              <div className="fact-block">
+                <span>MARKET <b>{memecoinMarket}</b></span>
+                <span>LEVERAGE <b>{savedLeverage}×</b></span>
+                <span>FUNDING <b>{memecoinOrder.source === "demo" ? "SHARED DEMO" : memecoinOrder.source === "credit" ? "TRADING CREDIT" : "WALLET ALLOCATION"}</b></span>
+              </div>
+              {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
+              <button
+                className="primary-action"
+                disabled={pendingAction || Number(memecoinOrder.amount) <= 0 || (isDemoBot && !activeDemoPool) || (isDemoCreditOnlyBot && !activeDemoCredit)}
+                aria-busy={pendingAction}
+                onClick={async () => {
+                  const placed = await run("/v1/memecoin/orders", {
+                    action: "order",
+                    bot_id: selected.id,
+                    symbol: memecoinMarket,
+                    direction: memecoinOrder.direction,
+                    amount: Number(memecoinOrder.amount),
+                    leverage: savedLeverage,
+                    cadence_seconds: savedCadence,
+                    funding_source: memecoinOrder.source,
+                    idempotency_key: memecoinOrder.idempotencyKey,
+                    settings: { include_trench: includeTrench },
+                  });
+                  if (placed) setMemecoinOrder(null);
+                }}
+              >
+                {pendingAction ? "Submitting…" : "Confirm order"} <StateIcon name="check" />
+              </button>
+              <button className="ghost-action" disabled={pendingAction} onClick={() => setMemecoinOrder(null)}>Go back</button>
+            </AccessibleDialog>
+          )}
         </div>
-      </div>
     );
   }
   return (
@@ -7155,9 +7311,9 @@ function LiveBotsScreen({
           <span className="eyebrow">BOT FLEET</span>
           <h2>Bot fleet</h2>
           <p>
-            {displayBots.filter((bot) => bot.state === "running").length} running
+            {runningStrategies.length} running
             strategy
-            {displayBots.filter((bot) => bot.state === "running").length === 1
+            {runningStrategies.length === 1
               ? ""
               : "ies"}{" "}
             / {money(displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0))}{" "}
@@ -7190,39 +7346,39 @@ function LiveBotsScreen({
             <GradientPanel className="fleet-bot-card reveal-card" key={bot.id}>
               <div className="fleet-bot-head">
                 <BotRing
-                  percent={bot.state === "running" ? 72 : 0}
-                  state={bot.state === "paused" ? "paused" : "running"}
+                  percent={bot.state === "running" && !bot.demo_credit_only ? 72 : 0}
+                  state={bot.state === "paused" || bot.demo_credit_only ? "paused" : "running"}
                 />
                 <div>
                   <div className="bot-title">
                     <strong>{bot.name}</strong>
-                    <span className={`status-chip ${bot.state}`}>
+                    <span className={`status-chip ${bot.demo_credit_only ? "paused" : bot.state}`}>
                       <i />
-                      {bot.state}
+                      {bot.demo_credit_only ? "manual credit" : bot.state}
                     </span>
                   </div>
-                  <span className="eyebrow">ALLOCATION</span>
+                  <span className="eyebrow">{bot.demo_credit_only ? "CREDIT AVAILABLE" : "ALLOCATION"}</span>
                   <strong className="fleet-amount">
-                    {money(bot.capital_usd)}
+                    {money(bot.demo_credit_only ? Number(data.demo?.credit_available_usd || 0) : bot.capital_usd)}
                   </strong>
                 </div>
               </div>
               <div className="fleet-metrics">
                 <div>
-                  <span>COMPOUND</span>
-                  <strong>{bot.compound_percent}%</strong>
+                  <span>{bot.demo_credit_only ? "EXECUTION" : "COMPOUND"}</span>
+                  <strong>{bot.demo_credit_only ? "Manual" : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
                   <span>STATUS</span>
-                  <strong className={bot.state === "running" ? "up" : "down"}>
-                    {bot.state}
+                  <strong className={bot.state === "running" && !bot.demo_credit_only ? "up" : "down"}>
+                    {bot.demo_credit_only ? "manual only" : bot.state}
                   </strong>
                 </div>
                 <MiniSparkline negative={bot.state === "paused"} />
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
-                  COMPOUND {bot.compound_percent}%
+                  {bot.demo_credit_only ? "MANUAL ONLY" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
                 <button
                   className="small-action"
@@ -8463,7 +8619,7 @@ function LiveTradePulse() {
     market: string;
     direction: string;
     amount: number;
-    environment: "mainnet" | "testnet";
+    environment: "mainnet" | "testnet" | "demo";
     fee: number;
     expiresAt?: number;
     signalId?: string;
@@ -8480,10 +8636,20 @@ function LiveTradePulse() {
     return () => window.clearInterval(timer);
   }, [tab]);
   const [autoAcknowledged, setAutoAcknowledged] = useState(false);
+  const [syntheticFundingSource, setSyntheticFundingSource] = useState<"wallet" | "demo" | "credit">("wallet");
   useEffect(() => {
     setSyntheticReview(null);
     setSyntheticReviewError("");
   }, [tab, webEnvironment, syntheticMarket]);
+  useEffect(() => {
+    const poolActive = Boolean(data?.demo && (data.demo.pool_state === "active" || data.demo.state === "active"));
+    const creditAvailable = Number(data?.demo?.credit_available_usd || 0) > 0;
+    if (syntheticFundingSource === "demo" && !poolActive) {
+      setSyntheticFundingSource("wallet");
+    } else if (syntheticFundingSource === "credit" && !creditAvailable) {
+      setSyntheticFundingSource("wallet");
+    }
+  }, [data?.demo?.state, data?.demo?.pool_state, data?.demo?.credit_available_usd, syntheticFundingSource]);
   const [synthetic, setSynthetic] = useState<{
     market: string;
     latest: { price?: number; reference?: number; bid?: number; ask?: number };
@@ -8511,6 +8677,7 @@ function LiveTradePulse() {
     execution_mode?: "MANUAL" | "AUTO";
     auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>;
     settings?: Record<string, string>;
+    demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
   } | null>(null);
   const [syntheticSignals, setSyntheticSignals] = useState<Array<{
     id: string;
@@ -8978,21 +9145,29 @@ function LiveTradePulse() {
     const market = signal?.market || syntheticMarket;
     const direction = signal?.direction || kind;
     const mode = kind === "auto" ? "AUTO" : synthetic.execution_mode || "MANUAL";
+    const usingPool = syntheticFundingSource === "demo" && Boolean(synthetic.demo?.active);
+    const usingCredit = syntheticFundingSource === "credit" && Number(synthetic.demo?.credit_available_usd || 0) > 0;
+    if (kind === "auto" && (usingPool || usingCredit)) {
+      setSyntheticReviewError("AUTO uses wallet allocation only. Select Wallet for automatic execution; demo pool and trading credit require a manual review.");
+      return;
+    }
+    const executionEnvironment: "mainnet" | "demo" = usingPool ? "demo" : "mainnet";
+    const requestFundingSource = usingPool ? "demo" : usingCredit ? "credit" : "mainnet";
     const path = kind === "auto" ? "/v1/synthetic/settings/execution-mode"
       : signal ? `/v1/synthetic/signals/${signal.id}/approve` : "/v1/synthetic/orders";
     const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: margin }
-      : signal ? { amount: margin, idempotency_key: `signal:${data.user.id}:${signal.id}` }
-      : { market, direction, amount: margin, mode: mode.toLowerCase(), idempotency_key: `web:${market}:${direction}:${Date.now()}` };
+      : signal ? { amount: margin, funding_source: requestFundingSource, idempotency_key: `signal:${requestFundingSource}:${data.user.id}:${signal.id}` }
+      : { market, direction, amount: margin, mode: mode.toLowerCase(), funding_source: requestFundingSource, idempotency_key: `web:${requestFundingSource}:${market}:${direction}:${Date.now()}` };
     setAutoAcknowledged(false);
     setSyntheticReviewError("");
     setSyntheticReview({ kind, path, payload, market, direction, amount: margin,
-      environment: webEnvironment, expiresAt: signal?.expires_at, signalId: signal?.id,
+      environment: executionEnvironment, expiresAt: signal?.expires_at, signalId: signal?.id,
       fee: margin * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000,
     });
   };
   const confirmSyntheticReview = async () => {
     if (!syntheticReview || syntheticReviewSubmitting.current || actionPending) return;
-    if (syntheticReview.environment !== webEnvironment || webEnvironment !== "mainnet" ||
+    if (webEnvironment !== "mainnet" || !["mainnet", "demo"].includes(syntheticReview.environment) ||
       (syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= Date.now())) {
       setSyntheticReviewError("This review expired or the environment changed. Go back and review again.");
       return;
@@ -9304,14 +9479,14 @@ function LiveTradePulse() {
                 <GradientPanel className="demo-banner">
                   <div>
                     <span className="eyebrow">
-                      MEMECOIN DEMO · VIRTUAL ONLY
+                      SHARED DEMO · VIRTUAL ONLY
                     </span>
                     <h2>{money(data.demo.grant_usd || 2000)} launch offer</h2>
                     <p>
-                      Starts once, lasts 14 days after activation, and is never
-                      wallet money or withdrawable. A future qualifying verified
-                      mainnet deposit may create a capped, non-withdrawable fee
-                      credit from eligible realised demo profit.
+                      Starts once with a shared $2,000 pool for Memecoin and
+                      Synthetic. It is never wallet money or withdrawable. A
+                      qualifying verified mainnet deposit while active may create
+                      capped, non-withdrawable trading credit from realised demo profit.
                     </p>
                   </div>
                   <button
@@ -9325,13 +9500,13 @@ function LiveTradePulse() {
               {data.demo?.state === "active" && (
                 <GradientPanel className="demo-banner">
                   <div>
-                    <span className="eyebrow">MEMECOIN DEMO ACTIVE</span>
+                    <span className="eyebrow">SHARED DEMO ACTIVE</span>
                     <h2>Virtual funds are isolated</h2>
                     <p>
-                      The demo and its profit expire under the configured terms.
-                      Any eligible bonus is a capped performance-fee credit
-                      after a qualifying verified mainnet deposit; it is not
-                      cash or a balance.
+                      One virtual pool can be assigned across Memecoin and
+                      Synthetic. It and any unrealised remainder expire unless a
+                      qualifying verified mainnet deposit arrives while active;
+                      any resulting trading credit is non-withdrawable.
                     </p>
                   </div>
                 </GradientPanel>
@@ -10437,7 +10612,7 @@ function LiveTradePulse() {
               <p>
                 This clears alerts and restores notification preferences. It
                 cannot change balances, bots, deposits, withdrawals, security,
-                trial history, or fee credit.
+                trial history, or demo trading credit.
               </p>
               <button
                 className="ghost-action"
@@ -10521,12 +10696,17 @@ function LiveTradePulse() {
                           </div>
                         )}
                         <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
+                        {(synthetic.demo?.active || Number(synthetic.demo?.credit_available_usd || 0) > 0) && <div className="button-row" role="group" aria-label="Synthetic funding source">
+                          <button className={syntheticFundingSource === "wallet" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "wallet"} onClick={() => setSyntheticFundingSource("wallet")}>Wallet</button>
+                          {synthetic.demo?.active && <button className={syntheticFundingSource === "demo" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "demo"} onClick={() => setSyntheticFundingSource("demo")}>Demo pool · {money(synthetic.demo.available_usd)}</button>}
+                          {Number(synthetic.demo?.credit_available_usd || 0) > 0 && <button className={syntheticFundingSource === "credit" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "credit"} onClick={() => setSyntheticFundingSource("credit")}>Trading credit · {money(Number(synthetic.demo?.credit_available_usd || 0))}</button>}
+                        </div>}
                         {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || isActionPending("topup")} onClick={() => {
                           const bot = data.bots.find((item) => item.product === "synthetic");
                           if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
                         }}>{isActionPending("topup") ? "Updating…" : "Top up Synthetic"}</button>}
                         <div className="fact-block">
-                          <span>Margin · 1:1 <b>{money(Number(syntheticAmount) || 0)}</b></span>
+                          <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
                           <span>Estimated tier fee <b>{money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}</b></span>
                           <span>Estimated spread <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                         </div>
@@ -10728,7 +10908,7 @@ function LiveTradePulse() {
                   <option value="withdraw_min_usd">Withdrawal minimum</option>
                   <option value="demo_active_days">Demo duration</option>
                   <option value="demo_conversion_percent">
-                    Demo conversion percent
+                    Demo trading-credit rate
                   </option>
                   <option value="community_url">Community link</option>
                   <option value="popup_ttl_seconds">
