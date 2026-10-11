@@ -895,6 +895,10 @@ type Bot = {
   gain: string;
   state: BotState;
   compound: string;
+  truth?: {
+    status: string;
+    source: string;
+  };
 };
 const bots: Bot[] = [
   {
@@ -958,6 +962,9 @@ function BotCard({
   bot: (typeof bots)[number];
   onOpen?: () => void;
 }) {
+  const factual = bot.truth;
+  const factualTone = factual?.status === "running" || factual?.status === "demo active" ? "running" : "paused";
+  const paused = factual ? factualTone === "paused" : bot.state === "paused";
   return (
     <GradientPanel
       className={`bot-card reveal-card ${onOpen ? "bot-card-openable" : ""}`}
@@ -971,7 +978,7 @@ function BotCard({
         }
       }}
     >
-      {bot.state === "paused" && (
+      {paused && (
         <img
           src="/illustrations/engine-paused.png"
           alt="Paused synthetic engine"
@@ -982,27 +989,31 @@ function BotCard({
         />
       )}
       <div className="bot-card-top">
-        <BotRing percent={bot.percent} state={bot.state} />
+        {!factual && <BotRing percent={bot.percent} state={bot.state} />}
         <div className="bot-copy">
           <div className="bot-title">
             <strong>{bot.name}</strong>
-            <span className={`status-chip ${bot.state}`}>
+            <span className={`status-chip ${factual ? factualTone : bot.state}`}>
               <i />
-              {bot.state}
+              {factual?.status || bot.state}
             </span>
           </div>
-          <span className="bot-allocation">Allocation {bot.allocation}</span>
-          <div className="bot-equity">
-            <strong>{bot.equity}</strong>
-            <span className={bot.state === "paused" ? "down" : "up"}>
-              {bot.gain}
-            </span>
-          </div>
+          <span className="bot-allocation">
+            {factual ? `${factual.source} · ${bot.allocation}` : `Allocation ${bot.allocation}`}
+          </span>
+          {!factual && (
+            <div className="bot-equity">
+              <strong>{bot.equity}</strong>
+              <span className={bot.state === "paused" ? "down" : "up"}>
+                {bot.gain}
+              </span>
+            </div>
+          )}
         </div>
       </div>
       <div className="bot-card-bottom">
-        <MiniSparkline negative={bot.state === "paused"} />
-        <span className="compound-chip">COMPOUND {bot.compound}</span>
+        {!factual && <MiniSparkline negative={bot.state === "paused"} />}
+        {bot.compound && <span className="compound-chip">{factual ? bot.compound : `COMPOUND ${bot.compound}`}</span>}
       </div>
     </GradientPanel>
   );
@@ -1141,8 +1152,13 @@ function DemoBanner({
   onStart?: () => void;
   hasFundedDesk?: boolean;
 }) {
-  const active = demo?.state === "active";
-  const grant = demo?.grant_usd ?? 2000;
+  const active = (demo?.pool_state || demo?.state) === "active";
+  const grant = Number(demo?.grant_usd || 0);
+  const grantLabel = grant > 0 ? money(grant) : "shared";
+  const available = Number(demo?.pool_available_usd || 0);
+  const locked = Number(demo?.pool_locked_usd || 0);
+  const realised = Number(demo?.pool_realised_pnl_usd || 0);
+  const activeEndsAt = Number(demo?.expires_at || 0);
   // A zero authoritative balance means the credit was spent or is locked in
   // an open position.  Only older payloads without the new field may fall
   // back to the historical issued amount.
@@ -1160,22 +1176,22 @@ function DemoBanner({
           {tradingCredit > 0
             ? "DEMO TRADING CREDIT"
             : active
-              ? "PRACTICE MODE ACTIVE"
-              : "PRACTICE MODE"}
+              ? "SHARED VIRTUAL DEMO ACTIVE"
+              : "SHARED VIRTUAL DEMO"}
         </span>
         <h2>
           {tradingCredit > 0
             ? `${money(tradingCredit)} trading credit available`
             : active
               ? "Your virtual demo is active"
-              : `Try a ${money(grant)} shared virtual demo`}
+              : `Start a ${grantLabel} virtual demo`}
         </h2>
         <p>
           {tradingCredit > 0
             ? "Non-withdrawable trading credit for eligible Memecoin and Synthetic orders. It is not cash or wallet balance."
             : active
-              ? "One shared virtual pool can be assigned across Memecoin and Synthetic. It expires unless a qualifying verified mainnet deposit arrives while the demo is active."
-              : "Explore the desk with zero risk. Your balance stays untouched."}
+              ? `Virtual funds: ${money(available)} available · ${money(locked)} locked. Realized demo profit: ${money(realised)}.${activeEndsAt ? ` Ends ${new Date(activeEndsAt * 1000).toLocaleString()}.` : ""}`
+              : "One shared virtual pool can be assigned across supported Memecoin and Synthetic activity. It is separate from your wallet."}
         </p>
       </div>
       <img
@@ -1187,7 +1203,7 @@ function DemoBanner({
         loading="eager"
       />
       {!active && tradingCredit <= 0 && (
-        <button aria-label="Try demo" onClick={onStart}>
+        <button aria-label="Review virtual demo terms" onClick={onStart}>
           <ChevronRight size={17} />
         </button>
       )}
@@ -4593,8 +4609,6 @@ type LiveTradePulseAdmin = {
   sweeps_enabled: boolean;
 };
 
-const TELEGRAM_BOT_URL = "https://t.me/demo1vbot";
-const TELEGRAM_BOT_USERNAME = "demo1vbot";
 type TelegramWebApp = {
   initData?: string;
   ready?: () => void;
@@ -4655,10 +4669,13 @@ function BrowserBotHandoff() {
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
   const [botUrl, setBotUrl] = useState("");
+  const [botUsername, setBotUsername] = useState("");
+  const [expiresIn, setExpiresIn] = useState(300);
+  const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
   useEffect(
     () => () => {
-      if (timer.current) window.clearInterval(timer.current);
+      if (timer.current) window.clearTimeout(timer.current);
     },
     [],
   );
@@ -4681,8 +4698,11 @@ function BrowserBotHandoff() {
         if (cancelled) return;
         setToken(handoff.token);
         setBotUrl(handoff.bot_url);
+        setBotUsername(typeof handoff.bot_username === "string" ? handoff.bot_username : "");
+        const handoffExpiry = Number(handoff.expires_in);
+        setExpiresIn(Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300);
         setState("ready");
-        setMessage("Open Telegram, confirm this browser, then return here automatically.");
+        setMessage(`Open ${handoff.bot_username ? `@${handoff.bot_username} in Telegram` : "TradePulse in Telegram"}, confirm this browser, then return here automatically. This secure link expires in five minutes.`);
       } catch (error) {
         if (cancelled) return;
         setState("error");
@@ -4697,18 +4717,20 @@ function BrowserBotHandoff() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
   useEffect(() => {
     if (state !== "waiting" || !token) return;
-    const deadline = Date.now() + 300_000;
+    const deadline = Date.now() + expiresIn * 1_000;
     let inFlight = false;
+    let terminal = false;
     const poll = async () => {
       if (inFlight) return;
       inFlight = true;
       if (Date.now() >= deadline) {
         timer.current = null;
+        terminal = true;
         setState("error");
-        setMessage("That connection expired. Refresh this page to create a new secure link.");
+        setMessage("That secure browser link expired before it was confirmed.");
         inFlight = false;
         return;
       }
@@ -4727,18 +4749,23 @@ function BrowserBotHandoff() {
           ? await response.json()
           : { error: (await response.text()).slice(0, 240) };
         if (!response.ok || !result.ready) {
+          terminal = true;
+          timer.current = null;
           throw new Error(result.error || "Could not finish browser connection.");
         }
         timer.current = null;
+        terminal = true;
         window.location.replace("/");
       } catch (error) {
-        if (error instanceof Error && error.message.includes("finish")) {
+        if (error instanceof Error) {
+          terminal = true;
+          timer.current = null;
           setState("error");
           setMessage(error.message);
         }
       } finally {
         inFlight = false;
-        if (timer.current === null && Date.now() < deadline) {
+        if (!terminal && timer.current === null && Date.now() < deadline) {
           timer.current = window.setTimeout(poll, 1000);
         }
       }
@@ -4761,32 +4788,43 @@ function BrowserBotHandoff() {
       window.removeEventListener("focus", resumePoll);
       document.removeEventListener("visibilitychange", resumePoll);
     };
-  }, [state, token]);
+  }, [state, token, expiresIn]);
+  const retry = () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = null;
+    setToken("");
+    setBotUrl("");
+    setBotUsername("");
+    setMessage("");
+    setState("preparing");
+    setAttempt((current) => current + 1);
+  };
   return (
     <div className="browser-handoff">
-      <a
-        className="primary-action"
-        href={botUrl || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-disabled={state !== "ready"}
-        onClick={(event) => {
-          if (state !== "ready" || !botUrl) {
-            event.preventDefault();
-            return;
-          }
-          setState("waiting");
-          setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
-        }}
-      >
-        {state === "preparing"
-          ? "Preparing secure link…"
-          : state === "waiting"
-          ? "Confirming in Telegram…"
-          : "Continue with Telegram"}{" "}
-        <ChevronRight />
-      </a>
+      {state === "ready" && botUrl ? (
+        <a
+          className="primary-action"
+          href={botUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => {
+            setState("waiting");
+            setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
+          }}
+        >
+          {botUsername ? `Open @${botUsername} in Telegram` : "Open TradePulse in Telegram"} <ChevronRight />
+        </a>
+      ) : (
+        <button className="primary-action" type="button" disabled>
+          {state === "waiting" ? "Confirming in Telegram…" : "Preparing secure link…"} <ChevronRight />
+        </button>
+      )}
       {message && <small role="status">{message}</small>}
+      {state === "error" && (
+        <button className="small-action" type="button" onClick={retry}>
+          Create a new secure link
+        </button>
+      )}
     </div>
   );
 }
@@ -7063,12 +7101,6 @@ function LiveBotsScreen({
           <StateIcon name="arrow-left" /> Fleet overview
         </button>
         <GradientPanel className="detail-hero">
-          <div className="detail-ring">
-            <BotRing
-              percent={paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? 0 : 72}
-              state={paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? "paused" : "running"}
-            />
-          </div>
           <div>
             <span className="eyebrow">{selected.name.toUpperCase()} BOT</span>
             <h2>{selected.name}</h2>
@@ -7342,43 +7374,56 @@ function LiveBotsScreen({
       </div>
       {displayBots.length ? (
         <div className="fleet-bot-grid">
-          {displayBots.map((bot) => (
+          {displayBots.map((bot) => {
+            const sharedDemo = Boolean(bot.demo_trial) && !bot.demo_credit_only;
+            const status = bot.demo_credit_only
+              ? "manual trading credit"
+              : sharedDemo
+                ? `demo ${data.demo?.pool_state || data.demo?.state || bot.state}`
+                : bot.state.replace(/_/g, " ");
+            const statusTone = status === "running" || status === "demo active" ? "running" : "paused";
+            const allocation = bot.demo_credit_only
+              ? Number(data.demo?.credit_available_usd || 0) + Number(data.demo?.credit_locked_usd || 0)
+              : sharedDemo
+                ? Number(data.demo?.pool_available_usd || 0) + Number(data.demo?.pool_locked_usd || 0)
+                : bot.capital_usd;
+            const source = bot.demo_credit_only
+              ? "TRADING CREDIT"
+              : sharedDemo
+                ? "VIRTUAL FUNDS"
+                : "ALLOCATION";
+            return (
             <GradientPanel className="fleet-bot-card reveal-card" key={bot.id}>
               <div className="fleet-bot-head">
-                <BotRing
-                  percent={bot.state === "running" && !bot.demo_credit_only ? 72 : 0}
-                  state={bot.state === "paused" || bot.demo_credit_only ? "paused" : "running"}
-                />
                 <div>
                   <div className="bot-title">
                     <strong>{bot.name}</strong>
-                    <span className={`status-chip ${bot.demo_credit_only ? "paused" : bot.state}`}>
+                    <span className={`status-chip ${statusTone}`}>
                       <i />
-                      {bot.demo_credit_only ? "manual credit" : bot.state}
+                      {status}
                     </span>
                   </div>
-                  <span className="eyebrow">{bot.demo_credit_only ? "CREDIT AVAILABLE" : "ALLOCATION"}</span>
+                  <span className="eyebrow">{source}</span>
                   <strong className="fleet-amount">
-                    {money(bot.demo_credit_only ? Number(data.demo?.credit_available_usd || 0) : bot.capital_usd)}
+                    {money(allocation)}
                   </strong>
                 </div>
               </div>
               <div className="fleet-metrics">
                 <div>
-                  <span>{bot.demo_credit_only ? "EXECUTION" : "COMPOUND"}</span>
-                  <strong>{bot.demo_credit_only ? "Manual" : `${bot.compound_percent}%`}</strong>
+                  <span>{bot.demo_credit_only ? "EXECUTION" : sharedDemo ? "POOL" : "COMPOUND"}</span>
+                  <strong>{bot.demo_credit_only ? "Manual only" : sharedDemo ? "Shared across products" : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
                   <span>STATUS</span>
-                  <strong className={bot.state === "running" && !bot.demo_credit_only ? "up" : "down"}>
-                    {bot.demo_credit_only ? "manual only" : bot.state}
+                  <strong className={statusTone === "running" ? "up" : "down"}>
+                    {status}
                   </strong>
                 </div>
-                <MiniSparkline negative={bot.state === "paused"} />
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
-                  {bot.demo_credit_only ? "MANUAL ONLY" : `COMPOUND ${bot.compound_percent}%`}
+                  {bot.demo_credit_only ? "MANUAL ONLY" : sharedDemo ? "SHARED VIRTUAL DEMO" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
                 <button
                   className="small-action"
@@ -7391,7 +7436,8 @@ function LiveBotsScreen({
                 </button>
               </div>
             </GradientPanel>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyBots onLaunch={() => setView("create")} />
@@ -7419,13 +7465,13 @@ function LiveBotsScreen({
           className="demo-link"
           onClick={onOpenDemo}
         >
-          Start the {money(data.demo.grant_usd || 2000)} virtual demo{" "}
+          Start the {Number(data.demo.grant_usd || 0) > 0 ? money(Number(data.demo.grant_usd)) : "shared"} virtual demo{" "}
           <ChevronRight />
         </button>
       )}
       {data.demo?.state === "active" && (
         <p className="demo-link" role="status">
-          Demo active · {money(data.demo.grant_usd || 2000)} virtual funds · isolated from wallet
+          Shared virtual demo · {money(Number(data.demo.pool_available_usd || 0))} available · {money(Number(data.demo.pool_locked_usd || 0))} locked · isolated from wallet
         </p>
       )}
       {data.demo?.state === "expired" && (
@@ -8583,6 +8629,7 @@ function LiveTradePulse() {
   const [syntheticMarket, setSyntheticMarket] = useState<"SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100">(
     "SYN-25",
   );
+  const [demoReviewOpen, setDemoReviewOpen] = useState(false);
   const syntheticMarketRef = useRef(syntheticMarket);
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
     "mainnet",
@@ -8735,7 +8782,12 @@ function LiveTradePulse() {
   const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async () => {
     // Reuse the existing authenticated dashboard contract so the notice
     // center remains compatible while the API service is upgraded separately.
+    // This request already exists on the established notice cadence; applying
+    // its authoritative projection also closes demo expiry/conversion gaps
+    // without adding a second lifecycle poll.
     const result = await request("/v1/dashboard");
+    setData(result);
+    setWebEnvironment(result.environment);
     return result.notices || [];
   });
   const load = async (targetEnvironment = webEnvironment) => {
@@ -8748,7 +8800,7 @@ function LiveTradePulse() {
       const webApp = openedInsideTelegram() ? await waitForTelegramWebApp() : undefined;
       webApp?.ready?.();
       webApp?.expand?.();
-      const next = await request("/v1/dashboard", {}, targetEnvironment, 60_000);
+      const next = await request("/v1/dashboard", {}, targetEnvironment, 12_000);
       setData(next);
       setWebEnvironment(next.environment);
     } catch (error) {
@@ -8767,7 +8819,18 @@ function LiveTradePulse() {
     void load();
   }, []);
   useEffect(() => {
-    if (!notice) return;
+    const demo = data?.demo;
+    const state = demo?.pool_state || demo?.state;
+    const endsAt = Number(demo?.expires_at || 0);
+    if (state !== "active" || !Number.isFinite(endsAt) || endsAt <= 0) return;
+    const timer = window.setTimeout(
+      () => void load(),
+      Math.max(0, endsAt * 1000 - Date.now()) + 100,
+    );
+    return () => window.clearTimeout(timer);
+  }, [data?.demo?.expires_at, data?.demo?.pool_state, data?.demo?.state, webEnvironment]);
+  useEffect(() => {
+    if (!notice || !data) return;
     const timer = window.setTimeout(() => setNotice(""), 6500);
     return () => window.clearTimeout(timer);
   }, [notice]);
@@ -9109,6 +9172,11 @@ function LiveTradePulse() {
       }
       applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
+      if (path === "/v1/demo/start") {
+        // Starting the demo creates the visible Memecoin projection. Refresh
+        // the actual dashboard rather than fabricating a local bot card.
+        await load();
+      }
       // The visible product/position is updated locally. Avoid reloading the
       // entire desk after a single click, which can interrupt unrelated work.
       if (tab === "Synthetic") {
@@ -9140,7 +9208,7 @@ function LiveTradePulse() {
     }
   };
   const openSyntheticReview = (kind: "long" | "short" | "auto" | "approve", signal?: { id: string; market: string; direction: string; expires_at: number }) => {
-    if (!synthetic || !data || actionPending || syntheticReviewSubmitting.current || webEnvironment !== "mainnet") return;
+    if (!synthetic || !data || syntheticReviewSubmitting.current || webEnvironment !== "mainnet") return;
     const margin = Number(syntheticAmount);
     const market = signal?.market || syntheticMarket;
     const direction = signal?.direction || kind;
@@ -9148,7 +9216,8 @@ function LiveTradePulse() {
     const usingPool = syntheticFundingSource === "demo" && Boolean(synthetic.demo?.active);
     const usingCredit = syntheticFundingSource === "credit" && Number(synthetic.demo?.credit_available_usd || 0) > 0;
     if (kind === "auto" && (usingPool || usingCredit)) {
-      setSyntheticReviewError("AUTO uses wallet allocation only. Select Wallet for automatic execution; demo pool and trading credit require a manual review.");
+      setSyntheticReviewError("");
+      setNotice("Auto uses wallet allocation only. Select Wallet for automatic execution; virtual funds and trading credit require a manual review.");
       return;
     }
     const executionEnvironment: "mainnet" | "demo" = usingPool ? "demo" : "mainnet";
@@ -9166,7 +9235,7 @@ function LiveTradePulse() {
     });
   };
   const confirmSyntheticReview = async () => {
-    if (!syntheticReview || syntheticReviewSubmitting.current || actionPending) return;
+    if (!syntheticReview || syntheticReviewSubmitting.current) return;
     if (webEnvironment !== "mainnet" || !["mainnet", "demo"].includes(syntheticReview.environment) ||
       (syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= Date.now())) {
       setSyntheticReviewError("This review expired or the environment changed. Go back and review again.");
@@ -9202,28 +9271,27 @@ function LiveTradePulse() {
     : (Number(syntheticAmount) || 0) * syntheticSpreadRate;
   if (loading)
     return (
-      <div className="boot-screen">
+      <main className="boot-screen" aria-busy="true">
         <div className="boot-copy">
           <strong>
             TRADE<span>PULSE</span>
           </strong>
-          <div className="boot-status">
+          <div className="boot-status" role="status" aria-live="polite">
             <span className="status-dot" />
-            Loading your desk…
+            Checking your secure desk session…
           </div>
         </div>
-      </div>
+      </main>
     );
   if (!data)
     return (
-      <div className="onboarding-screen">
+      <main className="onboarding-screen">
         <img
           src="/illustrations/session-door-clean.png"
           alt="Secure Telegram session required"
           className="onboarding-hero"
         />
         <div className="onboarding-copy">
-          <span className="eyebrow">SECURE ACCESS</span>
           <h1>
             {openedInsideTelegram()
               ? "Telegram session unavailable."
@@ -9232,33 +9300,14 @@ function LiveTradePulse() {
           <p>
             {notice ||
               (openedInsideTelegram()
-                ? "Close this Mini App, return to @demo1vbot, and open TradePulse again from its menu button."
-                : "Continue once in Telegram. When your identity is confirmed, this browser returns to your desk automatically.")}
+                ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button."
+                : "Review your wallet, bot, and market controls from one Telegram-confirmed TradePulse desk.")}
           </p>
-          {openedInsideTelegram() ? (
-            <>
-              <a
-                className="primary-action"
-                href={TELEGRAM_BOT_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Return to TradePulse <ChevronRight />
-              </a>
-              {/* A signed Mini App session can occasionally be stale in an
-                  already-open Telegram webview.  Offer the same verified
-                  browser-to-bot handoff instead of leaving the user blocked. */}
-              <BrowserBotHandoff />
-            </>
-          ) : (
-            <BrowserBotHandoff />
-          )}
-          <small>
-            TradePulse never asks for a password, seed phrase, or security code
-            to connect a browser.
-          </small>
+          <BrowserBotHandoff />
+          <small>To connect this browser, TradePulse will not ask for your Telegram password, wallet recovery phrase, or any one-time code. Your withdrawal security code is used only to confirm a withdrawal.</small>
+          <small>Trading and digital assets carry risk. TradePulse does not promise returns or provide financial advice.</small>
         </div>
-      </div>
+      </main>
     );
   if (!data.user.onboarding_complete)
     return (
@@ -9316,10 +9365,22 @@ function LiveTradePulse() {
     name: bot.product === "memecoin" ? "Memecoin" : "Synthetic Indices",
     allocation: money(bot.capital_usd),
     equity: money(bot.capital_usd),
-    percent: bot.state === "running" ? 72 : 0,
-    gain: bot.state === "running" ? "Live" : "Paused",
+    percent: 0,
+    gain: "",
     state: bot.state === "paused" ? "paused" : "running",
-    compound: `${bot.compound_percent}%`,
+    compound: bot.demo_trial || bot.demo_credit_only ? "" : `COMPOUND ${bot.compound_percent}%`,
+    truth: {
+      status: bot.demo_credit_only
+        ? "manual trading credit"
+        : bot.demo_trial
+          ? `demo ${data.demo?.pool_state || data.demo?.state || bot.state}`
+          : bot.state.replace(/_/g, " "),
+      source: bot.demo_credit_only
+        ? "Non-withdrawable trading credit"
+        : bot.demo_trial
+          ? "Shared virtual demo"
+          : "Allocation",
+    },
   }));
   const visualModel: VisualDeskModel = {
     wallet: data.wallet,
@@ -9407,6 +9468,34 @@ function LiveTradePulse() {
           setTab("Account");
           setOpenNotificationsRequest((request) => request + 1);
         }} />
+        {demoReviewOpen && data.demo?.state === "issued" && (
+          <AccessibleDialog
+            label="Review shared virtual demo terms"
+            onClose={() => setDemoReviewOpen(false)}
+          >
+            <span className="eyebrow">SHARED VIRTUAL DEMO</span>
+            <h2>Review virtual demo terms</h2>
+            <div className="fact-block">
+              <span>VIRTUAL FUNDS <b>{Number(data.demo.grant_usd || 0) > 0 ? money(Number(data.demo.grant_usd)) : "Offer unavailable"}</b></span>
+              <span>ACTIVATION DEADLINE <b>{data.demo.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
+              <span>FUNDING <b>Shared across Memecoin + Synthetic</b></span>
+            </div>
+            <p>Virtual funds are separate from your wallet and cannot be withdrawn. Memecoin Auto and Trench Mode retain their existing demo safeguards. Synthetic orders using virtual funds require manual review; Synthetic Auto requires wallet funding.</p>
+            <p>A qualifying first verified mainnet deposit while this demo is active ends it immediately. Only realized demo profit may create capped, non-withdrawable trading credit. Unused virtual funds, unrealized results, and unclaimed demo profit expire at the active-demo deadline.</p>
+            <button
+              type="button"
+              className="primary-action"
+              data-dialog-initial-focus
+              disabled={isActionPending("action") || Number(data.demo.grant_usd || 0) <= 0}
+              onClick={async () => {
+                if (await act("/v1/demo/start", {})) setDemoReviewOpen(false);
+              }}
+            >
+              {isActionPending("action") ? "Starting…" : "Start virtual demo"}
+            </button>
+            <button type="button" className="ghost-action" disabled={isActionPending("action")} onClick={() => setDemoReviewOpen(false)}>Go back</button>
+          </AccessibleDialog>
+        )}
         {avatarPickerOpen && (
           <AvatarPicker
             selected={avatarId}
@@ -9481,9 +9570,9 @@ function LiveTradePulse() {
                     <span className="eyebrow">
                       SHARED DEMO · VIRTUAL ONLY
                     </span>
-                    <h2>{money(data.demo.grant_usd || 2000)} launch offer</h2>
+                    <h2>{Number(data.demo.grant_usd || 0) > 0 ? `${money(data.demo.grant_usd)} launch offer` : "Virtual demo offer"}</h2>
                     <p>
-                      Starts once with a shared $2,000 pool for Memecoin and
+                      Starts once with the displayed shared virtual pool for Memecoin and
                       Synthetic. It is never wallet money or withdrawable. A
                       qualifying verified mainnet deposit while active may create
                       capped, non-withdrawable trading credit from realised demo profit.
@@ -9549,7 +9638,7 @@ function LiveTradePulse() {
                 setWalletEntry("gas");
                 setTab("Wallet");
               }}
-              onStartDemo={() => act("/v1/demo/start", {})}
+              onStartDemo={() => setDemoReviewOpen(true)}
               onViewActivity={() => {
                 setWalletEntry("activity");
                 setTab("Wallet");
@@ -9681,7 +9770,7 @@ function LiveTradePulse() {
               request={request}
               reload={load}
               onNotice={setNotice}
-              onOpenDemo={() => setTab("Dashboard")}
+              onOpenDemo={() => setDemoReviewOpen(true)}
               initialBotId={botEntryId}
             />
           )}
@@ -10675,8 +10764,8 @@ function LiveTradePulse() {
                 </div>
                 <p>{webEnvironment === "testnet" && data.user.is_admin
                   ? "Admin testnet · Virtual funds only. Mainnet balances are unaffected."
-                  : "Shared market prices. Higher volatility means larger price swings, not higher expected returns."}</p>
-                <span className="live-indicator"><i />LIVE · 1s</span>
+                  : "Shared synthetic model quote. Higher volatility means larger price swings, not higher expected returns."}</p>
+                <span className="live-indicator"><i />MODEL FEED · 1s</span>
                 {synthetic ? (
                   <>
                     <MarketChart points={chartPoints} market={syntheticMarket} />
@@ -10717,16 +10806,17 @@ function LiveTradePulse() {
                         <p>{synthetic.execution_mode === "AUTO"
                           ? "Auto enabled across synthetic markets. Manual orders and signal approvals remain separate orders."
                           : "Manual mode. Review and confirm each order; existing positions stay open."}</p>
+                        {synthetic.execution_mode === "AUTO" && syntheticFundingSource !== "wallet" && <p role="status">Auto remains wallet-funded. The selected virtual source applies only to manually reviewed orders.</p>}
                         {synthetic.execution_mode === "AUTO" && <p role="status">{synthetic.auto_activity?.[0]
                           ? `Last Auto event: ${synthetic.auto_activity[0].event_type === "auto_signal_rejected" ? "Order not opened" : synthetic.auto_activity[0].event_type === "position_opened" ? "Order opened" : "Activity recorded"}${synthetic.auto_activity[0].market ? ` · ${synthetic.auto_activity[0].market}` : ""}${synthetic.auto_activity[0].reason ? ` · ${synthetic.auto_activity[0].reason}` : ""} · ${new Date(synthetic.auto_activity[0].timestamp * 1000).toLocaleString()}`
                           : "No recent Auto activity reported. Enabled does not mean an order has executed."}</p>}
                         <div className="button-row" role="group" aria-label="Manual orders">
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => openSyntheticReview("long")}>{isActionPending("long") ? "Submitting…" : "Review Long"}</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || actionPending} onClick={() => openSyntheticReview("short")}>{isActionPending("short") ? "Submitting…" : "Review Short"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("long")}>{isActionPending("long") ? "Submitting…" : "Review Long"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("short")}>{isActionPending("short") ? "Submitting…" : "Review Short"}</button>
                         </div>
                         {syntheticSignals.filter((signal) => signal.expires_at * 1000 > signalNow).slice(0, 3).map((signal) => {
                           const submitted = Boolean(signalResults[signal.id]) || synthetic.positions.some((position) => position.signal_id === signal.id);
-                          return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - signalNow) / 1000))}s</small></div><button className="small-action" aria-label={`${submitted ? "Submitted" : "Review"} ${signal.market} ${signal.direction} signal`} disabled={!synthetic.live_disclosure_accepted || actionPending || submitted} onClick={() => openSyntheticReview("approve", signal)}>{isActionPending(`approve:${signal.id}`) ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>;
+                          return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - signalNow) / 1000))}s</small></div><button className="small-action" aria-label={`${submitted ? "Submitted" : "Review"} ${signal.market} ${signal.direction} signal`} disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending || submitted} onClick={() => openSyntheticReview("approve", signal)}>{isActionPending(`approve:${signal.id}`) ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>;
                         })}
                         {signalLoadError ? <p role="status">{signalLoadError}</p> : !syntheticSignals.some((signal) => signal.expires_at * 1000 > signalNow) && <p role="status">No current signals. Waiting for the next update.</p>}
                       </>
@@ -10763,10 +10853,10 @@ function LiveTradePulse() {
                   )}
                   {(!Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0) && <p role="alert">Go back and enter a positive, valid USD margin.</p>}
                   {syntheticReviewError && <p role="alert">{syntheticReviewError}</p>}
-                  <button className="primary-action" disabled={syntheticReviewPending || actionPending || Boolean(syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= signalNow) || !Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 || (syntheticReview.kind === "auto" && !autoAcknowledged)} onClick={() => void confirmSyntheticReview()}>
+                  <button className="primary-action" disabled={syntheticReviewPending || Boolean(syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= signalNow) || !Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 || (syntheticReview.kind === "auto" && !autoAcknowledged)} onClick={() => void confirmSyntheticReview()}>
                     {syntheticReviewPending ? "Submitting…" : syntheticReview.kind === "auto" ? "Confirm Auto execution" : syntheticReview.kind === "approve" ? "Confirm signal approval" : `Confirm ${syntheticReview.direction}`}
                   </button>
-                  {syntheticReviewPending && <p role="status">The request is submitting. Returning to the controls does not cancel it; its result will appear on the desk.</p>}
+                  {syntheticReviewPending && <p role="status">The request is submitting. You may return to the controls; this does not cancel it. Its result will appear on the desk.</p>}
                   <button type="button" className="ghost-action" onClick={() => setSyntheticReview(null)}>{syntheticReviewPending ? "Return to controls" : "Go back"}</button>
                 </AccessibleDialog>
               )}

@@ -9,14 +9,7 @@ import { NextResponse, type NextRequest } from 'next/server'
  * session cookie arrive intact.
  */
 export async function proxyPlatformRequest(request: NextRequest, upstreamPath: string): Promise<NextResponse> {
-  // Keep the production desk reachable even if the Vercel project loses its
-  // environment variable during a redeploy.  The API still enforces Telegram
-  // HMAC or the signed browser session on every protected request.
-  // The current Vercel project contains an obsolete API-origin variable. Keep
-  // this deployment pointed at the verified production tunnel until that
-  // project setting is removed; all protected requests still pass through the
-  // server-side Telegram/session checks.
-  const origin = 'https://returning-lifetime-explain-names.trycloudflare.com'
+  const origin = process.env.TRADEPULSE_API_ORIGIN?.trim().replace(/\/+$/, '')
   if (!origin) return NextResponse.json({ error: 'TradePulse service is not configured.' }, { status: 503 })
 
   const originUrl = new URL(`${origin}/`)
