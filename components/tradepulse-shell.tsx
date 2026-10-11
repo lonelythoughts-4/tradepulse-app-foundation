@@ -9476,8 +9476,8 @@ function LiveTradePulse() {
             <span className="eyebrow">SHARED VIRTUAL DEMO</span>
             <h2>Review virtual demo terms</h2>
             <div className="fact-block">
-              <span>VIRTUAL FUNDS <b>{Number(data.demo.grant_usd || 0) > 0 ? money(Number(data.demo.grant_usd)) : "Offer unavailable"}</b></span>
-              <span>ACTIVATION DEADLINE <b>{data.demo.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
+              <span>VIRTUAL FUNDS <b>{Number(data?.demo?.grant_usd || 0) > 0 ? money(Number(data?.demo?.grant_usd)) : "Offer unavailable"}</b></span>
+              <span>ACTIVATION DEADLINE <b>{data?.demo?.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
               <span>FUNDING <b>Shared across Memecoin + Synthetic</b></span>
             </div>
             <p>Virtual funds are separate from your wallet and cannot be withdrawn. Memecoin Auto and Trench Mode retain their existing demo safeguards. Synthetic orders using virtual funds require manual review; Synthetic Auto requires wallet funding.</p>
@@ -9486,7 +9486,7 @@ function LiveTradePulse() {
               type="button"
               className="primary-action"
               data-dialog-initial-focus
-              disabled={isActionPending("action") || Number(data.demo.grant_usd || 0) <= 0}
+              disabled={isActionPending("action") || Number(data?.demo?.grant_usd || 0) <= 0}
               onClick={async () => {
                 if (await act("/v1/demo/start", {})) setDemoReviewOpen(false);
               }}
