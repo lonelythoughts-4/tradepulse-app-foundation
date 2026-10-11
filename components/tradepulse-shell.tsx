@@ -7460,21 +7460,21 @@ function LiveBotsScreen({
           </div>
         </GradientPanel>
       )}
-      {data.demo?.state === "issued" && (
+      {data?.demo?.state === "issued" && (
         <button
           className="demo-link"
           onClick={onOpenDemo}
         >
-          Start the {Number(data.demo.grant_usd || 0) > 0 ? money(Number(data.demo.grant_usd)) : "shared"} virtual demo{" "}
+          Start the {Number(data?.demo?.grant_usd || 0) > 0 ? money(Number(data?.demo?.grant_usd)) : "shared"} virtual demo{" "}
           <ChevronRight />
         </button>
       )}
-      {data.demo?.state === "active" && (
+      {data?.demo?.state === "active" && (
         <p className="demo-link" role="status">
-          Shared virtual demo · {money(Number(data.demo.pool_available_usd || 0))} available · {money(Number(data.demo.pool_locked_usd || 0))} locked · isolated from wallet
+          Shared virtual demo · {money(Number(data?.demo?.pool_available_usd || 0))} available · {money(Number(data?.demo?.pool_locked_usd || 0))} locked · isolated from wallet
         </p>
       )}
-      {data.demo?.state === "expired" && (
+      {data?.demo?.state === "expired" && (
         <p className="demo-link" role="status">
           Demo completed · virtual funds and demo profit have expired
         </p>
@@ -10877,6 +10877,8 @@ function LiveTradePulse() {
               <strong>Loading control room…</strong>
             </div>
           )}
+          {/* Retained only as a historical reference; the live admin screen above owns these controls. */}
+          {/*
           {false && tab === "Admin" && (
             <div className="admin-grid">
               <GradientPanel className="admin-table">
@@ -11024,6 +11026,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
+          */}
           {false && tab === "Admin" && (
             <div className="admin-grid">
               <GradientPanel className="admin-table">
@@ -11201,6 +11204,7 @@ function LiveTradePulse() {
               </GradientPanel>
             </div>
           )}
+          {/*
           {false && tab === "Admin" && (
             <div className="admin-screen">
               {admin ? (
@@ -11343,6 +11347,7 @@ function LiveTradePulse() {
               )}
             </div>
           )}
+          */}
         </div>
       </main>
       <BottomNav
