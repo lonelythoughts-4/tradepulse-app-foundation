@@ -6878,6 +6878,7 @@ function LiveBotsScreen({
     DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap",
   });
   const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; category?: string; venue?: string; chain?: string; chain_label?: string; token_address?: string; eligible?: boolean }>>([]);
+  const [memecoinInsights, setMemecoinInsights] = useState<Record<string, { available?: boolean; completed_positions?: number; participant_count?: number; positive_position_rate?: number }>>({});
   const [basketPickerOpen, setBasketPickerOpen] = useState(false);
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
@@ -6972,6 +6973,11 @@ function LiveBotsScreen({
     if (catalogueName) return catalogueName;
     return symbol.length > 16 ? `${symbol.slice(0, 6)}…${symbol.slice(-4)}` : symbol;
   };
+  const memecoinInsightLabel = (symbol: string) => {
+    const insight = memecoinInsights[symbol];
+    if (!insight?.available) return "All-time settled market evidence is not published until the privacy-safe sample threshold is met.";
+    return `All-time settled mainnet result: ${insight.positive_position_rate}% of ${insight.completed_positions} completed wallet-funded positions closed positive across ${insight.participant_count} participants. Historical results are not a forecast.`;
+  };
   useEffect(() => {
     if (memecoinAssets.length && !memecoinAssets.includes(memecoinMarket)) {
       setMemecoinMarket(memecoinAssets[0]);
@@ -6989,6 +6995,20 @@ function LiveBotsScreen({
     const timer = window.setInterval(refresh, 1000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [selected?.id, selected?.product, memecoinMarket, request]);
+  useEffect(() => {
+    if (!selected || selected.product !== "memecoin" || !memecoinAssets.length) return;
+    let cancelled = false;
+    const query = memecoinAssets.map((symbol) => `symbol=${encodeURIComponent(symbol)}`).join("&");
+    void request(`/v1/memecoin/insights?${query}`)
+      .then((response) => {
+        if (cancelled || !Array.isArray(response.insights)) return;
+        setMemecoinInsights(Object.fromEntries(response.insights
+          .filter((item: { symbol?: string }) => Boolean(item.symbol))
+          .map((item: { symbol: string; available?: boolean; completed_positions?: number; participant_count?: number; positive_position_rate?: number }) => [item.symbol, item])));
+      })
+      .catch(() => { if (!cancelled) setMemecoinInsights({}); });
+    return () => { cancelled = true; };
+  }, [selected?.id, selected?.product, memecoinAssets, request]);
   const run = async (path: string, payload: Record<string, unknown>) => {
     if (pendingAction) return false;
     setReviewError("");
@@ -7185,7 +7205,7 @@ function LiveBotsScreen({
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
             <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
               {memecoinAssets.map((symbol) => (
-                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{memecoinMarketLabel(symbol)}</button>
+                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} title={memecoinInsightLabel(symbol)} aria-label={`${memecoinMarketLabel(symbol)}. ${memecoinInsightLabel(symbol)}`} onClick={() => setMemecoinMarket(symbol)}>{memecoinMarketLabel(symbol)}</button>
               ))}
             </div>
             <MarketChart points={memecoinSnapshot.points || []} market={`${memecoinMarket}/USDT`} />
