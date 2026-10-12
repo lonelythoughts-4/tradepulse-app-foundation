@@ -6966,6 +6966,24 @@ function LiveBotsScreen({
     if (catalogueName) return catalogueName;
     return symbol.length > 16 ? `${symbol.slice(0, 6)}…${symbol.slice(-4)}` : symbol;
   };
+  const memecoinPositionIdentity = (symbol: string) => {
+    const catalogueAsset = memecoinCatalog.find((asset) => asset.symbol === symbol);
+    const [chain, tokenAddress] = symbol.split(":", 2);
+    const chainLabel = catalogueAsset?.chain_label || ({
+      solana: "Solana",
+      base: "Base",
+      bsc: "BNB Chain",
+      ethereum: "Ethereum",
+    } as Record<string, string>)[chain.toLowerCase()];
+    const shortenedAddress = tokenAddress && tokenAddress.length > 14
+      ? `${tokenAddress.slice(0, 6)}…${tokenAddress.slice(-6)}`
+      : tokenAddress;
+    return {
+      chainLabel,
+      label: catalogueAsset?.name || (chainLabel && shortenedAddress ? `${chainLabel} · ${shortenedAddress}` : memecoinMarketLabel(symbol)),
+      title: catalogueAsset?.name ? `${catalogueAsset.name} · ${symbol}` : symbol,
+    };
+  };
   const memecoinInsightLabel = (symbol: string) => {
     const insight = memecoinInsights[symbol];
     if (!insight?.available) return "All-time settled market evidence is not published until the privacy-safe sample threshold is met.";
@@ -7229,15 +7247,16 @@ function LiveBotsScreen({
             <MarketChart points={memecoinSnapshot.points || []} market={`${memecoinMarket}/USDT`} />
             {(memecoinSnapshot.positions || []).length > 0 && (
               <div className="support-ticket-list">
-                {(memecoinSnapshot.positions || []).slice(0, 5).map((position) => (
-                  <div className="activity-row" key={position.id}>
+                {(memecoinSnapshot.positions || []).slice(0, 5).map((position) => {
+                  const identity = memecoinPositionIdentity(position.symbol);
+                  return <div className="activity-row" key={position.id}>
                     <div className="activity-info">
-                      <strong>{position.symbol} · {position.direction.toUpperCase()} · {position.status}</strong>
+                      <strong title={identity.title}>{identity.chainLabel && <PaymentMark asset={identity.chainLabel} compact />} {identity.label} · {position.direction.toUpperCase()} · {position.status}</strong>
                       <small>Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
                     </div>
                     {position.status === "open" && <button className="small-action" disabled={pendingAction} onClick={() => run(`/v1/memecoin/positions/${position.id}/close`, {})}>Close <X /></button>}
-                  </div>
-                ))}
+                  </div>;
+                })}
               </div>
             )}
               {(memecoinSnapshot.events || []).slice(-4).map((event) => (
