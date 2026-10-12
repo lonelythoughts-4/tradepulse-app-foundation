@@ -2664,7 +2664,6 @@ function Dashboard({
   bots,
   model,
   onManage,
-  onTopUp,
   onStartDemo,
   onViewActivity,
   onOpenBot,
@@ -2672,12 +2671,10 @@ function Dashboard({
   bots: Bot[];
   model?: VisualDeskModel;
   onManage?: () => void;
-  onTopUp?: () => void;
   onStartDemo?: () => void;
   onViewActivity?: () => void;
   onOpenBot?: (bot: Bot) => void;
 }) {
-  const gasLow = model && model.wallet.tank < model.wallet.tank_capacity * 0.25;
   return (
     <div className="dashboard-grid">
       <BalanceHero wallet={model?.wallet} />
@@ -2708,26 +2705,6 @@ function Dashboard({
         </div>
       </section>
       <PriceStrip quotes={model?.quotes} />
-      {gasLow && (
-        <div className="gas-low-banner">
-          <img
-            src="/illustrations/gas-gauge.png"
-            alt="Low gas gauge"
-            className="gas-gauge-art"
-          />
-          <div>
-            <span className="eyebrow">NETWORK FEES</span>
-            <strong>Gas tank running low</strong>
-            <small>
-              {money(model.wallet.tank)} of {money(model.wallet.tank_capacity)}{" "}
-              remains for bot actions and withdrawals.
-            </small>
-          </div>
-          <button className="amber-chip" onClick={onTopUp}>
-            TOP UP
-          </button>
-        </div>
-      )}
       <Activity ledger={model?.ledger} onViewAll={onViewActivity} />
       <DemoBanner
         demo={model?.demo}
@@ -6378,7 +6355,7 @@ function LiveAccountScreen({
   const [address, setAddress] = useState("");
   const [support, setSupport] = useState("");
   const [notificationState, setNotificationState] = useState(data.notifications);
-  const enabledNotificationCount = ["fills", "fees", "deposits", "tank_low", "hwm_breaks"].filter((key) => Boolean(notificationState[key])).length;
+  const enabledNotificationCount = ["fills", "fees", "deposits", "hwm_breaks"].filter((key) => Boolean(notificationState[key])).length;
   const [notificationPending, setNotificationPending] = useState<string | null>(null);
   const notificationRequestPending = useRef(false);
   const [accountPending, setAccountPending] = useState(false);
@@ -6519,7 +6496,7 @@ function LiveAccountScreen({
           <div>
             <strong>Notifications</strong>
             <small>
-              {enabledNotificationCount} of 5 preferences enabled
+              {enabledNotificationCount} of 4 preferences enabled
             </small>
           </div>
           <ChevronRight />
@@ -6645,7 +6622,6 @@ function LiveAccountScreen({
                   ["fills", "Order executions"],
                   ["fees", "Fees charged"],
                   ["deposits", "Deposits"],
-                  ["tank_low", "Low network-fee balance"],
                   ["hwm_breaks", "New profit high (high-water mark)"],
                 ].map(([key, label]) => {
                   const enabled = Boolean(notificationState[key]);
@@ -7667,8 +7643,6 @@ function LiveWalletScreen({
     chain: string;
     amount: number;
   } | null>(null);
-  const [tankAmount, setTankAmount] = useState("20");
-  const [tankAutofill, setTankAutofill] = useState(data.wallet.tank_autofill);
   const [balancesVisible, setBalancesVisible] = useState(true);
   const [walletPending, setWalletPending] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<
@@ -7680,9 +7654,6 @@ function LiveWalletScreen({
     requestRef.current = request;
     walletUpdateRef.current = onWalletUpdate;
   }, [request, onWalletUpdate]);
-  useEffect(() => {
-    setTankAutofill(data.wallet.tank_autofill);
-  }, [data.wallet.tank_autofill]);
   useEffect(() => {
     if (!intent) {
       setQrDataUrl("");
@@ -7746,50 +7717,6 @@ function LiveWalletScreen({
     setDepositPending(false);
     setReviewWithdrawal(false);
     setSubmittedWithdrawal(null);
-  };
-  const toggleTankAutofill = async () => {
-    if (walletPending) return;
-    const previous = tankAutofill;
-    setTankAutofill(!previous);
-    setWalletPending(true);
-    try {
-      const result = await request("/v1/tank/actions", {
-        method: "POST",
-        body: JSON.stringify({ action: "autofill" }),
-      });
-      onWalletUpdate({ wallet: { tank_autofill: Boolean(result.enabled) } });
-      onNotice(`Auto-fill ${previous ? "disabled" : "enabled"}.`);
-    } catch (error) {
-      setTankAutofill(previous);
-      onNotice(
-        error instanceof Error ? error.message : "Could not update auto-fill.",
-      );
-    } finally {
-      setWalletPending(false);
-    }
-  };
-  const topUpTank = async () => {
-    if (walletPending) return;
-    setWalletPending(true);
-    try {
-      const result = await request("/v1/tank/actions", {
-        method: "POST",
-        body: JSON.stringify({ action: "topup", amount: Number(tankAmount) }),
-      });
-      onWalletUpdate({
-        wallet: result.wallet || {
-          available: Math.max(0, data.wallet.available - Number(tankAmount)),
-          tank: Number(result.tank_usd ?? data.wallet.tank),
-        },
-      });
-      onNotice("Gas tank top-up applied.");
-    } catch (error) {
-      onNotice(
-        error instanceof Error ? error.message : "Could not top up the gas tank.",
-      );
-    } finally {
-      setWalletPending(false);
-    }
   };
   const isEvmAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value);
   const isSolanaAddress = (value: string) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
@@ -8484,78 +8411,6 @@ function LiveWalletScreen({
         </GradientPanel>
       </div>
     );
-  if (view === "gas")
-    return (
-      <div className="wallet-flow">
-        <button className="back-action" onClick={showOverview}>
-          <StateIcon name="arrow-left" /> Wallet overview
-        </button>
-        <GradientPanel className="gas-card">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">NETWORK GAS TANK</span>
-              <h2>Keep actions moving</h2>
-            </div>
-            <Fuel size={18} />
-          </div>
-          <div className="gas-meter">
-            <div>
-              <strong>
-                {Math.round(
-                  (data.wallet.tank / Math.max(data.wallet.tank_capacity, 1)) *
-                    100,
-                )}
-                %
-              </strong>
-              <small>
-                {money(data.wallet.tank)} of {money(data.wallet.tank_capacity)}
-              </small>
-            </div>
-            <div className="gas-track">
-              <i
-                style={{
-                  width: `${Math.min(100, (data.wallet.tank / Math.max(data.wallet.tank_capacity, 1)) * 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-          <label className="toggle-row">
-            <span>
-              Auto-fill when low<small>Uses available balance</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={tankAutofill}
-              onChange={toggleTankAutofill}
-            />
-            <i />
-          </label>
-          <label className="amount-field">
-            <span>TOP UP TANK / USD</span>
-            <input
-              value={tankAmount}
-              onChange={(e) => setTankAmount(e.target.value)}
-              inputMode="decimal"
-            />
-          </label>
-          <button
-            className="primary-action"
-            disabled={
-              walletPending ||
-              Number(tankAmount) <= 0 ||
-              Number(tankAmount) > data.wallet.available
-            }
-            onClick={() => void topUpTank()}
-          >
-            {walletPending ? "Updating…" : "Top up gas tank"} <Fuel />
-          </button>
-        </GradientPanel>
-      </div>
-    );
-  const tankPercent = Math.min(
-    100,
-    (data.wallet.tank / Math.max(data.wallet.tank_capacity, 1)) * 100,
-  );
   return (
     <div className="wallet-grid">
       <div className="wallet-stat-grid">
@@ -8587,50 +8442,6 @@ function LiveWalletScreen({
           masked={!balancesVisible}
         />
       </div>
-      <GradientPanel className="gas-card">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">NETWORK GAS TANK</span>
-            <h2>Keep actions moving</h2>
-          </div>
-          <Fuel size={18} />
-        </div>
-        <div className="gas-meter">
-          <div>
-            <strong>{Math.round(tankPercent)}%</strong>
-            <small>{money(data.wallet.tank)} remaining</small>
-          </div>
-          <div className="gas-track">
-            <i style={{ width: `${tankPercent}%` }} />
-          </div>
-        </div>
-        <label className="toggle-row">
-          <span>
-            Auto-fill when low<small>Uses available balance</small>
-          </span>
-          <input
-            type="checkbox"
-            checked={tankAutofill}
-            onChange={toggleTankAutofill}
-          />
-          <i />
-        </label>
-        <label className="amount-field">
-          <span>TOP UP TANK / USD</span>
-          <input
-            value={tankAmount}
-            onChange={(event) => setTankAmount(event.target.value)}
-            inputMode="decimal"
-          />
-        </label>
-        <button
-          className="small-action"
-          disabled={walletPending || Number(tankAmount) <= 0 || Number(tankAmount) > data.wallet.available}
-          onClick={() => void topUpTank()}
-        >
-          {walletPending ? "Updating…" : "Top up gas tank"} <Fuel />
-        </button>
-      </GradientPanel>
       <div className="wallet-actions">
         <button onClick={() => setView("deposit")}>
           <span>
@@ -8644,13 +8455,6 @@ function LiveWalletScreen({
             <Send />
           </span>
           <strong>Withdraw</strong>
-          <ChevronRight />
-        </button>
-        <button onClick={() => setView("gas")}>
-          <span>
-            <Fuel />
-          </span>
-          <strong>Gas tank</strong>
           <ChevronRight />
         </button>
         <button onClick={() => setView("history")}>
@@ -9794,10 +9598,6 @@ function LiveTradePulse() {
               onManage={() => {
                 setBotEntryId(null);
                 setTab("Bots");
-              }}
-              onTopUp={() => {
-                setWalletEntry("gas");
-                setTab("Wallet");
               }}
               onStartDemo={() => setDemoReviewOpen(true)}
               onViewActivity={() => {
