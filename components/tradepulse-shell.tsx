@@ -7020,9 +7020,29 @@ function LiveBotsScreen({
         body: JSON.stringify(payload),
       });
       onNotice(response.message || "Saved successfully.");
-      // Server state is shared with Telegram. Always refresh it instead of
-      // showing an optimistic pause, close, top-up, or recompound result.
-      await reload();
+      // The action response already carries the authoritative bot and wallet
+      // projection. Apply it directly so a confirmed choice does not wait for
+      // the unrelated full-desk refresh. Telegram still observes the same
+      // stored state, and responses without this projection retain the normal
+      // reload fallback.
+      if (response.bot || response.wallet) {
+        setData((current) => {
+          if (!current) return current;
+          const updatedBot = response.bot as { id?: string | number; state?: string; capital_usd?: number; compound_percent?: number } | null | undefined;
+          const nextBots = updatedBot?.id
+            ? current.bots.map((bot) => String(bot.id) === String(updatedBot.id) ? { ...bot, ...updatedBot } : bot)
+            : payload.action === "close" && !response.pending
+              ? current.bots.filter((bot) => bot.id !== selected?.id)
+              : current.bots;
+          return {
+            ...current,
+            bots: nextBots,
+            wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet,
+          };
+        });
+      } else {
+        await reload();
+      }
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Action failed.";
