@@ -6818,6 +6818,7 @@ function LiveBotsScreen({
   data,
   request,
   reload,
+  onActionResult,
   onNotice,
   onOpenDemo,
   initialBotId = null,
@@ -6825,6 +6826,7 @@ function LiveBotsScreen({
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
   reload: () => Promise<void>;
+  onActionResult: (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => void;
   onNotice: (message: string) => void;
   onOpenDemo: () => void;
   initialBotId?: string | null;
@@ -6838,6 +6840,7 @@ function LiveBotsScreen({
   const [selectedId, setSelectedId] = useState<string | null>(initialBotId);
   const [pendingAction, setPendingAction] = useState(false);
   const [pendingActionType, setPendingActionType] = useState<string | null>(null);
+  const actionInFlightRef = useRef(false);
   const [reviewError, setReviewError] = useState("");
   const [closeReview, setCloseReview] = useState(false);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
@@ -6881,6 +6884,20 @@ function LiveBotsScreen({
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
+  useEffect(() => {
+    setCompoundOverrides((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const [botId, percent] of Object.entries(current)) {
+        const bot = data.bots.find((item) => item.id === botId);
+        if (bot && bot.compound_percent === percent) {
+          delete next[botId];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [data.bots]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
     // New and projected credit-only Memecoin desks must never imply that
@@ -6986,7 +7003,8 @@ function LiveBotsScreen({
     return () => { cancelled = true; };
   }, [selected?.id, selected?.product, memecoinAssets, request]);
   const run = async (path: string, payload: Record<string, unknown>) => {
-    if (pendingAction) return false;
+    if (actionInFlightRef.current) return false;
+    actionInFlightRef.current = true;
     setReviewError("");
     setPendingAction(true);
     setPendingActionType(String(payload.action || "action"));
@@ -6996,26 +7014,11 @@ function LiveBotsScreen({
         body: JSON.stringify(payload),
       });
       onNotice(response.message || "Saved successfully.");
-      // The action response already carries the authoritative bot and wallet
-      // projection. Apply it directly so a confirmed choice does not wait for
-      // the unrelated full-desk refresh. Telegram still observes the same
-      // stored state, and responses without this projection retain the normal
-      // reload fallback.
-      if (response.bot || response.wallet) {
-        setData((current) => {
-          if (!current) return current;
-          const updatedBot = response.bot as { id?: string | number; state?: string; capital_usd?: number; compound_percent?: number } | null | undefined;
-          const nextBots = updatedBot?.id
-            ? current.bots.map((bot) => String(bot.id) === String(updatedBot.id) ? { ...bot, ...updatedBot } : bot)
-            : payload.action === "close" && !response.pending
-              ? current.bots.filter((bot) => bot.id !== selected?.id)
-              : current.bots;
-          return {
-            ...current,
-            bots: nextBots,
-            wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet,
-          };
-        });
+      // The parent owns the desk snapshot. Apply an authoritative response
+      // there rather than reaching across component scope; only responses
+      // without a usable projection require the slower full refresh.
+      if (response.bot || response.wallet || response.position) {
+        onActionResult(path, payload, response);
       } else {
         await reload();
       }
@@ -7026,9 +7029,28 @@ function LiveBotsScreen({
       onNotice(message);
       return false;
     } finally {
+      actionInFlightRef.current = false;
       setPendingAction(false);
       setPendingActionType(null);
     }
+  };
+  const updateCompound = async (percent: number) => {
+    const botId = selected?.id;
+    if (!botId || pendingAction || selected.compound_percent === percent) return;
+    const hadOverride = Object.prototype.hasOwnProperty.call(compoundOverrides, botId);
+    const previous = compoundOverrides[botId] ?? selected.compound_percent;
+    setCompoundOverrides((current) => ({ ...current, [botId]: percent }));
+    const saved = await run(`/v1/bots/${botId}/actions`, {
+      action: "compound",
+      percent,
+    });
+    if (saved) return;
+    setCompoundOverrides((current) => {
+      if (hadOverride) return { ...current, [botId]: previous };
+      const next = { ...current };
+      delete next[botId];
+      return next;
+    });
   };
   const productLabel =
     product === "memecoin" ? "Memecoin" : "Synthetic Indices";
@@ -7252,12 +7274,7 @@ function LiveBotsScreen({
                     }
                     key={percent}
                     aria-disabled={pendingAction}
-                    onClick={() =>
-                      run(`/v1/bots/${selected.id}/actions`, {
-                        action: "compound",
-                        percent,
-                      })
-                    }
+                    onClick={() => void updateCompound(percent)}
                   >
                     {percent}%
                   </button>
@@ -9730,6 +9747,7 @@ function LiveTradePulse() {
               data={data}
               request={request}
               reload={load}
+              onActionResult={applyActionResult}
               onNotice={setNotice}
               onOpenDemo={() => setDemoReviewOpen(true)}
               initialBotId={botEntryId}
