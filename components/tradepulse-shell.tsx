@@ -887,7 +887,7 @@ function BalanceHero({ wallet }: { wallet?: VisualDeskModel["wallet"] }) {
 
 type BotState = "running" | "paused";
 type Bot = {
-  id?: number;
+  id?: string | number;
   name: string;
   allocation: string;
   equity: string;
@@ -6863,6 +6863,7 @@ function LiveBotsScreen({
   const [pendingAction, setPendingAction] = useState(false);
   const [pendingActionType, setPendingActionType] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState("");
+  const [closeReview, setCloseReview] = useState(false);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
@@ -6873,6 +6874,14 @@ function LiveBotsScreen({
   const [memecoinCadence, setMemecoinCadence] = useState(300);
   const [memecoinAutoEnabled, setMemecoinAutoEnabled] = useState(false);
   const [includeTrench, setIncludeTrench] = useState(false);
+  const [memecoinAssetCategories, setMemecoinAssetCategories] = useState<Record<string, string>>({
+    DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap",
+  });
+  const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; category?: string; venue?: string; eligible?: boolean }>>([]);
+  const [basketPickerOpen, setBasketPickerOpen] = useState(false);
+  const [basketPickerLoading, setBasketPickerLoading] = useState(false);
+  const [basketPickerError, setBasketPickerError] = useState("");
+  const [basketQuery, setBasketQuery] = useState("");
   const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
@@ -6904,6 +6913,7 @@ function LiveBotsScreen({
     setMemecoinCadence(300);
     setMemecoinAutoEnabled(false);
     setIncludeTrench(false);
+    setMemecoinAssetCategories({ DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap" });
     if (selected.demo_credit_only) return;
     const encoded = selected.demo_trial
       ? data.memecoin?.demo_authorization?.settings_json
@@ -6912,9 +6922,19 @@ function LiveBotsScreen({
     try {
       const settings = JSON.parse(encoded) as Record<string, unknown>;
       const assets = Array.isArray(settings.assets)
-        ? settings.assets.map((item) => String(item).toUpperCase()).filter((item) => ["DOGE", "SHIB", "PEPE", "WIF", "BONK"].includes(item))
+        ? settings.assets.map((item) => {
+            const value = String(item).trim();
+            return value.length > 20 ? value : value.toUpperCase();
+          }).filter(Boolean)
         : [];
       if (assets.length) setMemecoinAssets(assets);
+      if (settings.asset_categories && typeof settings.asset_categories === "object") {
+        setMemecoinAssetCategories((current) => ({ ...current, ...Object.fromEntries(
+          Object.entries(settings.asset_categories as Record<string, unknown>)
+            .filter(([, category]) => ["bluechip", "midcap", "microcap"].includes(String(category)))
+            .map(([asset, category]) => [asset, String(category)]),
+        ) }));
+      }
       if ([1, 3, 5, 10].includes(Number(settings.leverage))) setMemecoinLeverage(Number(settings.leverage));
       if ([60, 300, 900].includes(Number(settings.cadence_seconds))) setMemecoinCadence(Number(settings.cadence_seconds));
       if (typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
@@ -6924,6 +6944,34 @@ function LiveBotsScreen({
       // from rendering or change the customer's existing allocation.
     }
   }, [selected?.id, selected?.product, selected?.demo_trial, selected?.demo_credit_only, data.memecoin?.authorization?.settings_json, data.memecoin?.demo_authorization?.settings_json]);
+  const openBasketPicker = async () => {
+    setBasketPickerOpen(true);
+    setBasketPickerError("");
+    setBasketQuery("");
+    setBasketPickerLoading(true);
+    try {
+      const response = await request("/v1/memecoin/catalog");
+      const assets = Array.isArray(response.assets)
+        ? response.assets.filter((asset: { eligible?: boolean; symbol?: string }) => Boolean(asset.eligible) && Boolean(asset.symbol))
+        : [];
+      setMemecoinCatalog(assets);
+      setMemecoinAssetCategories((current) => ({
+        ...current,
+        ...Object.fromEntries(assets
+          .filter((asset: { category?: string }) => ["bluechip", "midcap", "microcap"].includes(String(asset.category)))
+          .map((asset: { symbol: string; category?: string }) => [asset.symbol, String(asset.category)])),
+      }));
+    } catch (error) {
+      setBasketPickerError(error instanceof Error ? error.message : "Eligible strategy markets are temporarily unavailable.");
+    } finally {
+      setBasketPickerLoading(false);
+    }
+  };
+  const memecoinMarketLabel = (symbol: string) => {
+    const catalogueName = memecoinCatalog.find((asset) => asset.symbol === symbol)?.name;
+    if (catalogueName) return catalogueName;
+    return symbol.length > 16 ? `${symbol.slice(0, 6)}…${symbol.slice(-4)}` : symbol;
+  };
   useEffect(() => {
     if (memecoinAssets.length && !memecoinAssets.includes(memecoinMarket)) {
       setMemecoinMarket(memecoinAssets[0]);
@@ -7086,15 +7134,23 @@ function LiveBotsScreen({
       const isClosing = selected.state === "closing";
       const activeDemoPool = data.demo?.pool_state === "active" && Number(data.demo.pool_available_usd || 0) > 0;
       const activeDemoCredit = Number(data.demo?.credit_available_usd || 0) > 0;
-      const selectedMemecoinCategories = new Set(memecoinAssets.map((asset) => asset === "DOGE" || asset === "SHIB" ? "bluechip" : "midcap"));
+      const selectedMemecoinCategories = new Set(memecoinAssets.map((asset) => memecoinAssetCategories[asset] || "microcap"));
+      const baseCadenceCategories = [...selectedMemecoinCategories].filter((category) => category !== "microcap");
+      const cadenceCategories = baseCadenceCategories.length ? baseCadenceCategories : [...selectedMemecoinCategories];
       const permittedCadences = [60, 300, 900].filter((value) => (
-        [...selectedMemecoinCategories].every((category) => (
-          category === "bluechip" ? value === 60 || value === 300 : value === 300
+        cadenceCategories.every((category) => (
+          category === "bluechip" ? value === 60 || value === 300 : category === "midcap" ? value === 300 : value === 900
         ))
       ));
-      const permittedLeverage = Math.min(...[...selectedMemecoinCategories].map((category) => category === "bluechip" ? 10 : 5), includeTrench ? 3 : 10);
+      const permittedLeverage = Math.min(...[...selectedMemecoinCategories].map((category) => category === "bluechip" ? 10 : category === "midcap" ? 5 : 3), includeTrench ? 3 : 10);
       const savedCadence = permittedCadences.includes(memecoinCadence) ? memecoinCadence : (permittedCadences.includes(300) ? 300 : permittedCadences[0]);
       const savedLeverage = Math.min(memecoinLeverage, permittedLeverage);
+      const selectedMarketCategory = memecoinAssetCategories[memecoinMarket] || "microcap";
+      const manualCadence = selectedMarketCategory === "microcap" ? 900 : savedCadence;
+      const filteredBasketAssets = memecoinCatalog.filter((asset) => {
+        const label = `${asset.symbol} ${asset.name || ""} ${asset.category || ""}`.toLowerCase();
+        return label.includes(basketQuery.trim().toLowerCase());
+      });
     return (
       <div className="bot-detail">
         <button className="back-action" onClick={() => setView("fleet")}>
@@ -7129,7 +7185,7 @@ function LiveBotsScreen({
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
             <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
               {memecoinAssets.map((symbol) => (
-                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{symbol}</button>
+                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} onClick={() => setMemecoinMarket(symbol)}>{memecoinMarketLabel(symbol)}</button>
               ))}
             </div>
             <MarketChart points={memecoinSnapshot.points || []} market={`${memecoinMarket}/USDT`} />
@@ -7203,12 +7259,15 @@ function LiveBotsScreen({
                   ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh Solana launches only after a DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
               </p>
-            <span className="eyebrow">CURATED BASKET</span>
-            <div className="segment-control" role="group" aria-label="Curated basket">
+            <span className="eyebrow">STRATEGY BASKET</span>
+            <div className="segment-control" role="group" aria-label="Strategy basket">
               {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
                 <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
               ))}
             </div>
+            <button type="button" className="small-action" disabled={pendingAction} onClick={() => void openBasketPicker()}>
+              Browse eligible markets <ChevronRight />
+            </button>
             <span className="eyebrow">LEVERAGE</span>
             <div className="segment-control" role="radiogroup" aria-label="Leverage" onKeyDown={handleBotChoiceKeyDown}>
               {[1, 3, 5, 10].filter((value) => value <= permittedLeverage).map((value) => <button type="button" role="radio" aria-checked={savedLeverage === value} tabIndex={savedLeverage === value ? 0 : -1} key={value} className={savedLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
@@ -7218,13 +7277,13 @@ function LiveBotsScreen({
                 {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
               </div>
               <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
-              <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
+              <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
               <button
                 className="primary-action"
                 disabled={pendingAction || memecoinAssets.length === 0}
-                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "curated", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
+                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
               >
-                {isDemoBot ? "Save demo controls" : awaitingAuthorization ? "Authorize Memecoin Bot Beta" : "Save strategy controls"} <StateIcon name="check" />
+                {pendingActionType === "authorize" ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? "Authorize Memecoin Bot Beta" : "Save strategy controls"} <StateIcon name="check" />
               </button>
             </GradientPanel>
           )}
@@ -7270,20 +7329,7 @@ function LiveBotsScreen({
             {!isVirtualMemecoinBot && <button
                 className="danger-action"
                 disabled={pendingAction}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      isClosing
-                        ? `Continue closing ${selected.name}? Any in-flight position remains protected until settlement completes.`
-                        : selected.product === "synthetic"
-                          ? `Close ${selected.name}? Close every open Synthetic position first. Once none remain, its available allocation will return to your balance.`
-                          : `Close ${selected.name}? Its current allocation will return to your available balance.`,
-                    )
-                  )
-                    void run(`/v1/bots/${selected.id}/actions`, {
-                      action: "close",
-                    });
-                }}
+                onClick={() => { setReviewError(""); setCloseReview(true); }}
               >
                 {isClosing ? "Finish closing bot" : "Close bot"} <X />
               </button>}
@@ -7305,8 +7351,9 @@ function LiveBotsScreen({
                 <input value={memecoinOrder.amount} onChange={(event) => setMemecoinOrder((current) => current ? { ...current, amount: event.target.value.replace(/[^0-9.]/g, "") } : current)} inputMode="decimal" aria-label="Memecoin order margin" />
               </div>
               <div className="fact-block">
-                <span>MARKET <b>{memecoinMarket}</b></span>
+                <span>MARKET <b>{memecoinMarketLabel(memecoinMarket)}</b></span>
                 <span>LEVERAGE <b>{savedLeverage}×</b></span>
+                <span>CADENCE <b>{manualCadence === 60 ? "1 MINUTE" : manualCadence === 300 ? "5 MINUTES" : "15 MINUTES"}</b></span>
                 <span>FUNDING <b>{memecoinOrder.source === "demo" ? "SHARED DEMO" : memecoinOrder.source === "credit" ? "TRADING CREDIT" : "WALLET ALLOCATION"}</b></span>
               </div>
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
@@ -7322,7 +7369,7 @@ function LiveBotsScreen({
                     direction: memecoinOrder.direction,
                     amount: Number(memecoinOrder.amount),
                     leverage: savedLeverage,
-                    cadence_seconds: savedCadence,
+                    cadence_seconds: manualCadence,
                     funding_source: memecoinOrder.source,
                     idempotency_key: memecoinOrder.idempotencyKey,
                     settings: { include_trench: includeTrench },
@@ -7333,6 +7380,56 @@ function LiveBotsScreen({
                 {pendingAction ? "Submitting…" : "Confirm order"} <StateIcon name="check" />
               </button>
               <button className="ghost-action" disabled={pendingAction} onClick={() => setMemecoinOrder(null)}>Go back</button>
+            </AccessibleDialog>
+          )}
+          {closeReview && (
+            <AccessibleDialog label={`Close ${selected.name}`} onClose={() => setCloseReview(false)} dismissible={!pendingAction}>
+              <span className="eyebrow">FINAL REVIEW</span>
+              <h2>Close {selected.name}?</h2>
+              <p>{isClosing
+                ? "The bot is already closing. Any in-flight position remains protected until settlement finishes."
+                : selected.product === "synthetic"
+                  ? "Close every open Synthetic position first. Once none remain, the available product allocation returns to your balance."
+                  : "The product’s available allocation returns to your balance. Any open position remains protected until its settlement finishes."}</p>
+              {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
+              <button className="danger-action" disabled={pendingAction} aria-busy={pendingAction} onClick={async () => {
+                const closed = await run(`/v1/bots/${selected.id}/actions`, { action: "close" });
+                if (closed) setCloseReview(false);
+              }}>{pendingAction ? "Closing…" : isClosing ? "Continue closing bot" : "Close bot"} <X /></button>
+              <button className="ghost-action" disabled={pendingAction} onClick={() => setCloseReview(false)}>Go back</button>
+            </AccessibleDialog>
+          )}
+          {basketPickerOpen && (
+            <AccessibleDialog label="Choose eligible strategy markets" onClose={() => setBasketPickerOpen(false)} dismissible={!basketPickerLoading}>
+              <span className="eyebrow">TRADABLE STRATEGY BASKET</span>
+              <h2>Choose eligible markets</h2>
+              <p>Only markets currently passing TradePulse eligibility checks appear here. A selected market is checked again for a fresh price, liquidity, and risk limits before any order opens.</p>
+              <div className="amount-input">
+                <input value={basketQuery} onChange={(event) => setBasketQuery(event.target.value)} placeholder="Search eligible markets" aria-label="Search eligible strategy markets" autoComplete="off" />
+              </div>
+              {memecoinAssets.length > 0 && <>
+                <span className="eyebrow">SELECTED</span>
+                <div className="segment-control" role="list" aria-label="Selected strategy markets">
+                  {memecoinAssets.map((symbol) => <button type="button" role="listitem" key={symbol} className="active" disabled={memecoinAssets.length === 1} onClick={() => setMemecoinAssets((current) => current.filter((item) => item !== symbol))}>{memecoinMarketLabel(symbol)} <X /></button>)}
+                </div>
+              </>}
+              {basketPickerLoading && <div className="activity-row" role="status"><div className="activity-info"><strong>Loading eligible markets</strong><small>Checking the current executable catalogue.</small></div></div>}
+              {basketPickerError && <p className="security-feedback" role="alert">{basketPickerError}</p>}
+              {!basketPickerLoading && !basketPickerError && <>
+                <span className="eyebrow">AVAILABLE NOW</span>
+                {filteredBasketAssets.length ? <div className="support-ticket-list">
+                  {filteredBasketAssets.map((asset) => {
+                    const chosen = memecoinAssets.includes(asset.symbol);
+                    const category = asset.category || "market";
+                    return <div className="activity-row" key={asset.symbol}>
+                      <div className="activity-info"><strong>{asset.name || memecoinMarketLabel(asset.symbol)}</strong><small>{asset.symbol} · {category}{asset.venue ? ` · ${asset.venue}` : ""}</small></div>
+                      <button type="button" className={chosen ? "small-action active" : "small-action"} disabled={chosen && memecoinAssets.length === 1} aria-pressed={chosen} onClick={() => setMemecoinAssets((current) => chosen ? current.filter((item) => item !== asset.symbol) : [...current, asset.symbol])}>{chosen ? "Selected" : "Add"}</button>
+                    </div>;
+                  })}
+                </div> : <div className="activity-row"><div className="activity-info"><strong>No eligible markets match</strong><small>Try a symbol or market name from the current catalogue.</small></div></div>}
+              </>}
+              {memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") && !includeTrench && <p className="security-feedback" role="status">Enable Trench Mode before saving a basket that includes a new-launch market.</p>}
+              <button type="button" className="primary-action" onClick={() => setBasketPickerOpen(false)} disabled={basketPickerLoading}>Done <StateIcon name="check" /></button>
             </AccessibleDialog>
           )}
         </div>
@@ -8546,6 +8643,7 @@ function LiveWalletScreen({
 }
 
 function LiveTradePulse() {
+  const reduceMotion = useReducedMotion();
   const [data, setData] = useState<LiveDashboard | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
@@ -8678,6 +8776,8 @@ function LiveTradePulse() {
   const syntheticReviewSubmitting = useRef(false);
   const [signalResults, setSignalResults] = useState<Record<string, string>>({});
   const [signalLoadError, setSignalLoadError] = useState("");
+  const [syntheticLoadError, setSyntheticLoadError] = useState("");
+  const [syntheticReloadRevision, setSyntheticReloadRevision] = useState(0);
   const [signalNow, setSignalNow] = useState(() => Date.now());
   useEffect(() => {
     if (tab !== "Synthetic") return;
@@ -8863,6 +8963,7 @@ function LiveTradePulse() {
     setSynthetic(null);
     setSyntheticSignals([]);
     setSignalLoadError("");
+    setSyntheticLoadError("");
     let refreshing = false;
     const refreshSynthetic = () => {
       if (refreshing || cancelled) return;
@@ -8870,9 +8971,18 @@ function LiveTradePulse() {
       const modeRevision = executionModeRevision.current;
       return request(`/v1/synthetic/${syntheticMarket}`).then((snapshot) => {
         if (cancelled || snapshot.market !== syntheticMarket || snapshot.market !== syntheticMarketRef.current) return;
+        setSyntheticLoadError("");
         acceptSyntheticSnapshot(snapshot, modeRevision);
       })
-        .catch((error) => { if (!cancelled) setNotice(error.message); })
+        .catch((error) => {
+          if (!cancelled) {
+            setSyntheticLoadError(
+              error instanceof Error && error.message
+                ? error.message
+                : "Market data is temporarily unavailable.",
+            );
+          }
+        })
         .finally(() => { refreshing = false; });
     };
     // Short-lived signals must not wait for the slower account snapshot.
@@ -8902,7 +9012,7 @@ function LiveTradePulse() {
       window.clearInterval(timer);
       window.clearInterval(signalTimer);
     };
-  }, [tab, data, syntheticMarket, webEnvironment]);
+  }, [tab, data, syntheticMarket, webEnvironment, syntheticReloadRevision]);
   useEffect(() => {
     if (tab !== "Synthetic" || !data) return;
     let cancelled = false;
@@ -9074,7 +9184,7 @@ function LiveTradePulse() {
   const applyActionResult = (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => {
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (botAction) {
-      const botId = Number(botAction[1]);
+      const botId = botAction[1];
       const action = String(payload.action || "");
       const amount = Number(payload.amount || 0);
       const percent = Number(payload.percent || 0);
@@ -9267,6 +9377,19 @@ function LiveTradePulse() {
   const estimatedSyntheticSpread = syntheticSpreadRate === null
     ? null
     : (Number(syntheticAmount) || 0) * syntheticSpreadRate;
+  const latestAutoActivity = synthetic?.auto_activity?.[0];
+  const autoActivitySummary = latestAutoActivity
+    ? latestAutoActivity.event_type === "auto_signal_rejected"
+      ? "No order opened"
+      : latestAutoActivity.event_type === "position_opened"
+        ? "Order opened"
+        : "Auto activity recorded"
+    : "No Auto activity yet";
+  const autoActivityDetail = latestAutoActivity
+    ? [latestAutoActivity.market, latestAutoActivity.reason, `Updated ${new Date(latestAutoActivity.timestamp * 1000).toLocaleTimeString()}`]
+      .filter(Boolean)
+      .join(" · ")
+    : "Eligible signals open only when the wallet allocation and quote checks pass.";
   if (loading)
     return (
       <main className="boot-screen" aria-busy="true">
@@ -9642,7 +9765,7 @@ function LiveTradePulse() {
                 setTab("Wallet");
               }}
               onOpenBot={(bot) => {
-                setBotEntryId(bot.id || null);
+                setBotEntryId(bot.id === undefined ? null : String(bot.id));
                 setTab("Bots");
               }}
             />
@@ -10805,9 +10928,12 @@ function LiveTradePulse() {
                           ? "Auto enabled across synthetic markets. Manual orders and signal approvals remain separate orders."
                           : "Manual mode. Review and confirm each order; existing positions stay open."}</p>
                         {synthetic.execution_mode === "AUTO" && syntheticFundingSource !== "wallet" && <p role="status">Auto remains wallet-funded. The selected virtual source applies only to manually reviewed orders.</p>}
-                        {synthetic.execution_mode === "AUTO" && <p role="status">{synthetic.auto_activity?.[0]
-                          ? `Last Auto event: ${synthetic.auto_activity[0].event_type === "auto_signal_rejected" ? "Order not opened" : synthetic.auto_activity[0].event_type === "position_opened" ? "Order opened" : "Activity recorded"}${synthetic.auto_activity[0].market ? ` · ${synthetic.auto_activity[0].market}` : ""}${synthetic.auto_activity[0].reason ? ` · ${synthetic.auto_activity[0].reason}` : ""} · ${new Date(synthetic.auto_activity[0].timestamp * 1000).toLocaleString()}`
-                          : "No recent Auto activity reported. Enabled does not mean an order has executed."}</p>}
+                        {synthetic.execution_mode === "AUTO" && <div className="activity-row" role="status" aria-live="polite">
+                          <div className="activity-info">
+                            <strong>{autoActivitySummary}</strong>
+                            <small>{autoActivityDetail}</small>
+                          </div>
+                        </div>}
                         <div className="button-row" role="group" aria-label="Manual orders">
                           <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("long")}>{isActionPending("long") ? "Submitting…" : "Review Long"}</button>
                           <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("short")}>{isActionPending("short") ? "Submitting…" : "Review Short"}</button>
@@ -10825,7 +10951,21 @@ function LiveTradePulse() {
                       <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" disabled={isActionPending("close")} onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>{isActionPending("close") ? "Closing…" : "Close"}</button></div>
                     ))}
                   </>
-                ) : <p role="status">Loading market prices…</p>}
+                ) : <div className="activity-row" role="status" aria-live="polite">
+                  <div className="activity-info">
+                    <strong>{syntheticLoadError ? "Market data is temporarily unavailable" : `Loading ${syntheticMarket}`}</strong>
+                    <small>{syntheticLoadError ? "The desk will retry automatically. Existing orders and positions are unchanged." : "Retrieving the current model quote and order state."}</small>
+                  </div>
+                  {syntheticLoadError ? (
+                    <button type="button" className="small-action" onClick={() => setSyntheticReloadRevision((value) => value + 1)}>Retry</button>
+                  ) : (
+                    <motion.span
+                      aria-hidden="true"
+                      animate={reduceMotion ? undefined : { rotate: 360 }}
+                      transition={reduceMotion ? undefined : { duration: 1, ease: "linear", repeat: Infinity }}
+                    ><StateIcon name="refresh" /></motion.span>
+                  )}
+                </div>}
               </GradientPanel>
               {syntheticReview && (
                 <AccessibleDialog label={syntheticReview.kind === "auto" ? "Review automatic execution" : "Review synthetic order"}
