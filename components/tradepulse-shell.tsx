@@ -6877,7 +6877,7 @@ function LiveBotsScreen({
   const [memecoinAssetCategories, setMemecoinAssetCategories] = useState<Record<string, string>>({
     DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap",
   });
-  const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; category?: string; venue?: string; eligible?: boolean }>>([]);
+  const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; category?: string; venue?: string; chain?: string; chain_label?: string; token_address?: string; eligible?: boolean }>>([]);
   const [basketPickerOpen, setBasketPickerOpen] = useState(false);
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
@@ -7256,7 +7256,7 @@ function LiveBotsScreen({
                 {isDemoBot
                   ? "Choose how the shared virtual pool may be used by this Memecoin strategy. The pool remains separate from your wallet and from Synthetic; manual orders always require a separate review."
                   : awaitingAuthorization
-                  ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh Solana launches only after a DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
+                  ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh launches on supported networks only after a same-network DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
               </p>
             <span className="eyebrow">STRATEGY BASKET</span>
@@ -7422,7 +7422,7 @@ function LiveBotsScreen({
                     const chosen = memecoinAssets.includes(asset.symbol);
                     const category = asset.category || "market";
                     return <div className="activity-row" key={asset.symbol}>
-                      <div className="activity-info"><strong>{asset.name || memecoinMarketLabel(asset.symbol)}</strong><small>{asset.symbol} · {category}{asset.venue ? ` · ${asset.venue}` : ""}</small></div>
+                      <div className="activity-info"><strong>{asset.chain_label && <PaymentMark asset={asset.chain_label} compact />} {asset.name || memecoinMarketLabel(asset.symbol)}</strong><small>{asset.chain_label ? `${asset.chain_label} · ` : ""}{asset.symbol} · {category}{asset.venue ? ` · ${asset.venue}` : ""}</small></div>
                       <button type="button" className={chosen ? "small-action active" : "small-action"} disabled={chosen && memecoinAssets.length === 1} aria-pressed={chosen} onClick={() => setMemecoinAssets((current) => chosen ? current.filter((item) => item !== asset.symbol) : [...current, asset.symbol])}>{chosen ? "Selected" : "Add"}</button>
                     </div>;
                   })}
