@@ -4475,7 +4475,7 @@ type LiveDashboard = {
     tank_autofill: boolean;
   };
   bots: Array<{
-    id: number;
+    id: string;
     name: string;
     product: string;
     state: string;
@@ -6832,7 +6832,7 @@ function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
   choices[next].click();
 }
 
-function createMemecoinOrderIdempotencyKey(userId: number, botId: number) {
+function createMemecoinOrderIdempotencyKey(userId: number, botId: string) {
   const nonce = globalThis.crypto?.randomUUID?.()
     ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `memecoin:${userId}:${botId}:${nonce}`;
@@ -6851,7 +6851,7 @@ function LiveBotsScreen({
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
   onOpenDemo: () => void;
-  initialBotId?: number | null;
+  initialBotId?: string | null;
 }) {
   const [view, setView] = useState<"fleet" | "create" | "detail">(
     initialBotId ? "detail" : "fleet",
@@ -6859,14 +6859,14 @@ function LiveBotsScreen({
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
   const [amount, setAmount] = useState("20");
   const [review, setReview] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(initialBotId);
+  const [selectedId, setSelectedId] = useState<string | null>(initialBotId);
   const [pendingAction, setPendingAction] = useState(false);
   const [pendingActionType, setPendingActionType] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState("");
-  const [compoundOverrides, setCompoundOverrides] = useState<Record<number, number>>({});
-  const [allocationDeltas, setAllocationDeltas] = useState<Record<number, number>>({});
-  const [stateOverrides, setStateOverrides] = useState<Record<number, string>>({});
-  const [closedBotIds, setClosedBotIds] = useState<number[]>([]);
+  const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
+  const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
+  const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
+  const [closedBotIds, setClosedBotIds] = useState<string[]>([]);
   const [memecoinMarket, setMemecoinMarket] = useState("DOGE");
   const [memecoinAssets, setMemecoinAssets] = useState<string[]>(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
   const [memecoinLeverage, setMemecoinLeverage] = useState(3);
@@ -7275,7 +7275,9 @@ function LiveBotsScreen({
                     window.confirm(
                       isClosing
                         ? `Continue closing ${selected.name}? Any in-flight position remains protected until settlement completes.`
-                        : `Close ${selected.name}? Its current allocation will return to your available balance.`,
+                        : selected.product === "synthetic"
+                          ? `Close ${selected.name}? Close every open Synthetic position first. Once none remain, its available allocation will return to your balance.`
+                          : `Close ${selected.name}? Its current allocation will return to your available balance.`,
                     )
                   )
                     void run(`/v1/bots/${selected.id}/actions`, {
@@ -8562,7 +8564,7 @@ function LiveTradePulse() {
   const [walletEntry, setWalletEntry] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
-  const [botEntryId, setBotEntryId] = useState<number | null>(null);
+  const [botEntryId, setBotEntryId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -8780,14 +8782,10 @@ function LiveTradePulse() {
     }
   };
   const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async () => {
-    // Reuse the existing authenticated dashboard contract so the notice
-    // center remains compatible while the API service is upgraded separately.
-    // This request already exists on the established notice cadence; applying
-    // its authoritative projection also closes demo expiry/conversion gaps
-    // without adding a second lifecycle poll.
-    const result = await request("/v1/dashboard");
-    setData(result);
-    setWebEnvironment(result.environment);
+    // Notification polling must not replace the desk projection. Replacing
+    // it tears down the Synthetic live effects every 30 seconds and looks
+    // like an unexplained full-page refresh while Auto is enabled.
+    const result = await request("/v1/account/notices");
     return result.notices || [];
   });
   const load = async (targetEnvironment = webEnvironment) => {
