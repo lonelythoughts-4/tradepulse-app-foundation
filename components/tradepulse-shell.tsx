@@ -7006,7 +7006,11 @@ function LiveBotsScreen({
         .catch(() => { if (!cancelled) setMemecoinSnapshot({}); });
     };
     refresh();
-    const timer = window.setInterval(refresh, 1000);
+    // This endpoint includes chart history, positions and events. Polling the
+    // full projection every second can starve an authorization request on a
+    // constrained connection; execution still revalidates the live tick on
+    // the server, independently of this display refresh.
+    const timer = window.setInterval(refresh, 5_000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [selected?.id, selected?.product, memecoinMarket, request]);
   useEffect(() => {
