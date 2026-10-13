@@ -8776,7 +8776,19 @@ function LiveTradePulse() {
         headers: { ...headers(targetEnvironment), ...(options.headers || {}) },
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "Request failed.");
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Never leave a previously rendered desk looking operational after
+          // its Telegram proof or browser handoff has expired. The reconnect
+          // surface is the only safe recovery path; retrying market reads
+          // cannot recreate an authenticated session.
+          setSynthetic(null);
+          setSyntheticSignals([]);
+          setNotice("Your secure desk session ended. Reconnect with Telegram to continue.");
+          setData(null);
+        }
+        throw new Error(body.error || "Request failed.");
+      }
       return body;
     } finally {
       window.clearTimeout(timeout);
@@ -10784,7 +10796,7 @@ function LiveTradePulse() {
                 </div>
                 <p>{webEnvironment === "testnet" && data.user.is_admin
                   ? "Admin testnet · Virtual funds only. Mainnet balances are unaffected."
-                  : "Shared synthetic model quote. Higher volatility means larger price swings, not higher expected returns."}</p>
+                  : "Model-generated quote. Higher tiers increase price movement—not expected return."}</p>
                 <span className="live-indicator"><i />MODEL FEED · 1s</span>
                 {synthetic ? (
                   <>
