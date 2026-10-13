@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
@@ -8756,7 +8756,7 @@ function LiveTradePulse() {
     "X-Telegram-Init-Data": telegramInitData(),
     "X-TradePulse-Environment": targetEnvironment,
   });
-  const request = async (
+  const request = useCallback(async (
     path: string,
     options: RequestInit = {},
     targetEnvironment = webEnvironment,
@@ -8788,7 +8788,7 @@ function LiveTradePulse() {
     } finally {
       window.clearTimeout(timeout);
     }
-  };
+  }, [webEnvironment]);
   const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async () => {
     // Notification polling must not replace the desk projection. Replacing
     // it tears down the Synthetic live effects every 30 seconds and looks
