@@ -394,11 +394,13 @@ function PulseAvatar({
 function AvatarPicker({
   selected,
   onSelect,
+  onConfirm,
   onClose,
   required = false,
 }: {
   selected: AvatarId;
   onSelect: (id: AvatarId) => void;
+  onConfirm: (id: AvatarId) => void;
   onClose: () => void;
   required?: boolean;
 }) {
@@ -432,7 +434,7 @@ function AvatarPicker({
             </button>
           ))}
         </div>
-        <button className="primary-action" type="button" onClick={() => onSelect(selected)}>
+        <button className="primary-action" type="button" onClick={() => onConfirm(selected)}>
           Use {avatarOptions.find((option) => option.id === selected)?.name || "avatar"}
           <ChevronRight />
         </button>
@@ -4438,6 +4440,7 @@ type LiveDashboard = {
     username?: string;
     tier: string;
     fee_credit_usd: number;
+    avatar_id?: AvatarId | null;
     is_admin: boolean;
     onboarding_complete: boolean;
   };
@@ -8547,21 +8550,38 @@ function LiveTradePulse() {
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
   const [loading, setLoading] = useState(true);
   const avatarStorageKey = data ? `tradepulse.avatar:${data.user.id}` : "";
+  async function persistAvatar(next: AvatarId) {
+    try {
+      const response = await request("/v1/account/avatar", {
+        method: "POST",
+        body: JSON.stringify({ avatar_id: next }),
+      });
+      if (response.avatar_id !== next) throw new Error("The saved avatar did not match your selection.");
+      setData((current) => current ? { ...current, user: { ...current.user, avatar_id: next } } : current);
+    } catch {
+      setNotice("Your avatar is saved on this device and will sync when the desk reconnects.");
+    }
+  }
   useEffect(() => {
     if (!data) return;
+    const accountAvatar = data.user.avatar_id || "";
     let stored = "";
     try {
       stored = window.localStorage.getItem(avatarStorageKey) || "";
     } catch {
       /* storage is optional */
     }
-    const valid = avatarOptions.some((option) => option.id === stored);
-    if (valid) setAvatarId(stored as AvatarId);
+    const preferred = accountAvatar || stored;
+    const valid = avatarOptions.some((option) => option.id === preferred);
+    if (valid) {
+      setAvatarId(preferred as AvatarId);
+      if (!accountAvatar && stored === preferred) void persistAvatar(preferred as AvatarId);
+    }
     else {
       setAvatarPickerRequired(true);
       setAvatarPickerOpen(true);
     }
-  }, [data?.user.id]);
+  }, [data?.user.id, data?.user.avatar_id]);
   const chooseAvatar = (next: AvatarId) => {
     setAvatarId(next);
     try {
@@ -8571,6 +8591,7 @@ function LiveTradePulse() {
     }
     setAvatarPickerRequired(false);
     setAvatarPickerOpen(false);
+    void persistAvatar(next);
   };
   const [amount, setAmount] = useState("20");
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
@@ -9500,7 +9521,8 @@ function LiveTradePulse() {
         {avatarPickerOpen && (
           <AvatarPicker
             selected={avatarId}
-            onSelect={chooseAvatar}
+            onSelect={setAvatarId}
+            onConfirm={chooseAvatar}
             onClose={() => setAvatarPickerOpen(false)}
             required={avatarPickerRequired}
           />
