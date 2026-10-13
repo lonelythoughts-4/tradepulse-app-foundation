@@ -7628,11 +7628,6 @@ function LiveBotsScreen({
           Shared virtual demo · {money(Number(data?.demo?.pool_available_usd || 0))} available · {money(Number(data?.demo?.pool_locked_usd || 0))} locked · isolated from wallet
         </p>
       )}
-      {data?.demo?.state === "expired" && (
-        <p className="demo-link" role="status">
-          Demo completed · virtual funds and demo profit have expired
-        </p>
-      )}
     </div>
   );
 }
