@@ -4710,7 +4710,7 @@ type LiveTradePulseAdmin = {
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
-    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number };
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number };
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
@@ -4719,12 +4719,14 @@ type LiveTradePulseAdmin = {
       imported_users: number;
       completed_events: number;
       scheduled_events: number;
+      blocked_events?: number;
       completed_withdrawals?: number;
       completed_topups?: number;
       event_participants?: number;
       active_event_bots?: number;
       next_scheduled_at?: number | null;
     }>;
+    forecast: Array<{ date: string; deposits: number; withdrawals: number; topups: number; total: number }>;
   };
   sweeps_enabled: boolean;
 };
@@ -5510,6 +5512,7 @@ function LiveAdminScreen({
   const [autouserPending, setAutouserPending] = useState(false);
   const fundingFieldId = useId();
   const autouserFileId = useId();
+  const autouserFileRef = useRef<HTMLInputElement>(null);
   const [withdrawalReview, setWithdrawalReview] = useState<{
     row: LiveTradePulseAdmin["withdrawals"][number];
     action: "approve" | "reject";
@@ -5626,6 +5629,7 @@ function LiveAdminScreen({
       form.append("confirmed", "true");
       const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 60_000);
       setAutouserFile(null);
+      if (autouserFileRef.current) autouserFileRef.current.value = "";
       setAutouserMinimum("");
       setAutouserMaximum("");
       setAutouserConfirmed(false);
@@ -5998,7 +6002,7 @@ function LiveAdminScreen({
           </p>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user CSV</label>
-          <input id={autouserFileId} type="file" accept=".csv,text/csv" aria-label="Auto-user CSV upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
+          <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,text/csv" aria-label="Auto-user CSV upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
           <label className="amount-field">Minimum simulated deposit in USD
             <input value={autouserMinimum} inputMode="decimal" onChange={(event) => setAutouserMinimum(event.target.value)} placeholder="Minimum / USD" />
           </label>
@@ -6015,14 +6019,22 @@ function LiveAdminScreen({
           <div className="admin-row">
             <div>
               <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
-              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {Number(admin.autousers?.totals?.active_event_bots || 0).toLocaleString()} active event bots / {Number(admin.autousers?.totals?.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(admin.autousers?.totals?.completed_topups || 0).toLocaleString()} top-ups</small>
+              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {Number(admin.autousers?.totals?.blocked_events || 0).toLocaleString()} waiting for funds / {Number(admin.autousers?.totals?.active_event_bots || 0).toLocaleString()} active event bots</small>
             </div>
           </div>
+          {(admin.autousers?.forecast || []).slice(0, 3).map((day) => (
+            <div className="admin-row" key={day.date}>
+              <div>
+                <strong>{day.date} / {Number(day.total || 0).toLocaleString()} predicted events</strong>
+                <small className="mono">{Number(day.deposits || 0).toLocaleString()} deposits / {Number(day.withdrawals || 0).toLocaleString()} withdrawals / {Number(day.topups || 0).toLocaleString()} top-ups</small>
+              </div>
+            </div>
+          ))}
           {(admin.autousers?.runs || []).slice(0, 5).map((run) => (
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active / {Number(run.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(run.completed_topups || 0).toLocaleString()} top-ups</small>
+                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.blocked_events || 0).toLocaleString()} waiting / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active</small>
               </div>
               {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
               {run.status === "paused" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
