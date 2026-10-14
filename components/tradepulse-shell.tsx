@@ -1125,11 +1125,11 @@ function Activity({
             const balanceChanged = !isNonFinancialActivity(entry.kind);
             return {
               key: String(entry.id ?? `${entry.kind}-${entry.created_at}`),
-              title: activityLabel(entry.kind, entry.status),
+              title: activityLabel(entry.kind, entry.status, amount),
               sub: activitySummary(entry),
               amount: balanceChanged ? amount : null,
               time: entry.trade_detail ? "View breakdown" : "View details",
-              status: activityTone(entry.kind, entry.status),
+              status: activityTone(entry.kind, entry.status, amount),
               entry,
             };
           })
@@ -1161,8 +1161,8 @@ function Activity({
             </div>
             <span className={`activity-status ${item.status}`}>{item.status}</span>
             <div className="activity-amount">
-              <strong className={item.amount === null ? undefined : item.amount >= 0 ? "up" : "down"}>
-                {item.amount === null ? "—" : <>{item.amount >= 0 ? "+" : ""}{money(item.amount)}</>}
+              <strong className={item.amount === null ? undefined : activityAmountTone(item.amount)}>
+                {item.amount === null ? "—" : activityAmountDisplay(item.amount)}
               </strong>
               <small>{item.time}</small>
             </div>
@@ -1184,10 +1184,15 @@ function activityMarketLabel(symbol?: string) {
 }
 
 function isNonFinancialActivity(kind: string) {
-  return /authorization|strategy_(?:control|setting)|settings?_saved/i.test(kind);
+  return /authorization|strategy_(?:control|setting)|settings?_saved|flashback_allocation/i.test(kind);
+}
+
+function isFlashbackEntryLock(kind: string) {
+  return kind === "flashback_allocation";
 }
 
 function activitySummary(entry: VisualDeskModel["ledger"][number]) {
+  if (isFlashbackEntryLock(entry.kind)) return "Entry locked until the sealed result is revealed";
   if (isNonFinancialActivity(entry.kind)) return "Strategy controls saved · no balance change";
   const position = entry.trade_detail?.position;
   if (position?.symbol) {
@@ -1204,13 +1209,14 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
   const position = detail?.position;
   const isFee = entry.kind === "performance_fee";
   const isNonFinancial = isNonFinancialActivity(entry.kind);
+  const isFlashbackLock = isFlashbackEntryLock(entry.kind);
   return <AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
     <button className="modal-close" type="button" onClick={onClose} aria-label="Close activity details"><X size={16} /></button>
     <span className="eyebrow">ACTIVITY DETAILS</span>
-    <h2>{activityLabel(entry.kind, entry.status)}</h2>
-    <p>{isNonFinancial ? "Your Memecoin strategy controls were saved. This event did not move money or open a position." : isFee ? "This fee was recorded after a profitable settlement." : "This is the recorded result for a completed settlement."}</p>
+    <h2>{activityLabel(entry.kind, entry.status, amount)}</h2>
+    <p>{isFlashbackLock ? "Your Flashback entry is locked until the sealed result is revealed." : isNonFinancial ? "Your Memecoin strategy controls were saved. This event did not move money or open a position." : isFee ? "This fee was recorded after a profitable settlement." : "This is the recorded result for a completed settlement."}</p>
     <div className="fact-block">
-      <span>{isNonFinancial ? "BALANCE CHANGE" : "RESULT"} <b className={isNonFinancial ? undefined : amount >= 0 ? "up" : "down"}>{isNonFinancial ? "No balance change" : <>{amount >= 0 ? "+" : ""}{money(amount)}</>}</b></span>
+      <span>{isFlashbackLock ? "ENTRY LOCKED" : isNonFinancial ? "BALANCE CHANGE" : "RESULT"} <b className={isNonFinancial ? undefined : activityAmountTone(amount)}>{isFlashbackLock ? money(entry.amount_usd) : isNonFinancial ? "No balance change" : activityAmountDisplay(amount)}</b></span>
       <span>STATUS <b>{entry.status.replaceAll("_", " ")}</b></span>
       <span>SETTLED <b>{new Date((detail?.settled_at || entry.created_at) * 1000).toLocaleString()}</b></span>
       {detail && <span>BOT <b>{detail.bot_name}</b></span>}
@@ -4936,18 +4942,28 @@ function signedActivityAmount(kind: string, status: string, amount: number) {
   return /\bloss\b|performance_fee/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
 }
 
-function activityLabel(kind: string, status = "") {
+function activityAmountTone(amount: number) {
+  return amount > 0 ? "up" : amount < 0 ? "down" : undefined;
+}
+
+function activityAmountDisplay(amount: number) {
+  return (amount > 0 ? "+" : "") + money(amount);
+}
+
+function activityLabel(kind: string, status = "", amount?: number) {
   const description = `${kind} ${status}`.toLowerCase();
   if (kind === "performance_fee") return "performance fee charged";
+  if (kind === "flashback_allocation") return "Flashback entry locked";
   if (kind === "flashback_return") return "Flashback return";
-  if (kind === "flashback_loss") return "Flashback loss";
+  if (kind === "flashback_loss") return Number(amount || 0) === 0 ? "Flashback settled" : "Flashback loss";
   if (/trading_(?:profit|loss)/.test(kind) || /\bprofit\b/.test(description)) return "profit";
   if (/\bloss\b/.test(description)) return "loss";
   if (isNonFinancialActivity(kind)) return "Memecoin strategy authorized";
   return kind.replaceAll("_", " ");
 }
 
-function activityTone(kind: string, status: string) {
+function activityTone(kind: string, status: string, amount?: number) {
+  if (kind === "flashback_loss" && Number(amount || 0) === 0) return "complete";
   const description = `${kind} ${status}`.toLowerCase();
   if (/\bloss\b|failed|rejected/.test(description)) return "loss";
   if (/pending|review|queued/.test(description)) return "review";
@@ -8706,18 +8722,18 @@ function LiveWalletScreen({
               return (
               <div className="ledger-row" key={`${entry.created_at}-${index}`}>
                 <div>
-                  <strong>{activityLabel(entry.kind, entry.status)}</strong>
+                  <strong>{activityLabel(entry.kind, entry.status, amount)}</strong>
                   <small>
-                    {isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
+                    {isFlashbackEntryLock(entry.kind) ? "Entry locked until the sealed result is revealed" : isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
                   </small>
                 </div>
                 <span
-                  className={`activity-status ${activityTone(entry.kind, entry.status)}`}
+                  className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
                 >
                   {entry.status}
                 </span>
-                <code className={isNonFinancial ? undefined : amount >= 0 ? "mint" : "down"}>
-                  {isNonFinancial ? "—" : <>{amount >= 0 ? "+" : ""}{money(amount)}</>}
+                <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
+                  {isNonFinancial ? "—" : activityAmountDisplay(amount)}
                 </code>
               </div>
               );
@@ -8769,18 +8785,18 @@ function LiveWalletScreen({
                   key={`${entry.created_at}-${index}`}
                 >
                   <div>
-                    <strong>{activityLabel(entry.kind, entry.status)}</strong>
+                    <strong>{activityLabel(entry.kind, entry.status, amount)}</strong>
                     <small>
-                      {isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
+                      {isFlashbackEntryLock(entry.kind) ? "Entry locked until the sealed result is revealed" : isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
                     </small>
                   </div>
                   <span
-                    className={`activity-status ${activityTone(entry.kind, entry.status)}`}
+                    className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
                   >
                     {entry.status}
                   </span>
-                  <code className={isNonFinancial ? undefined : amount >= 0 ? "mint" : "down"}>
-                    {isNonFinancial ? "—" : <>{amount >= 0 ? "+" : ""}{money(amount)}</>}
+                  <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
+                    {isNonFinancial ? "—" : activityAmountDisplay(amount)}
                   </code>
                 </div>
                 );
