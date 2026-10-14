@@ -4710,7 +4710,7 @@ type LiveTradePulseAdmin = {
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
-    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number };
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number };
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
@@ -4721,6 +4721,8 @@ type LiveTradePulseAdmin = {
       scheduled_events: number;
       completed_withdrawals?: number;
       completed_topups?: number;
+      event_participants?: number;
+      active_event_bots?: number;
       next_scheduled_at?: number | null;
     }>;
   };
@@ -5992,7 +5994,7 @@ function LiveAdminScreen({
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 CSV with a header such as <span className="mono">first_name,username,user_ref</span>. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then gives a selected cohort partial-withdrawal and top-up paths after settlement.
+            Upload a UTF-8 CSV with a header such as <span className="mono">first_name,username,user_ref</span>. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then lets a selected cohort place settled testnet funds into the existing event engine. Their gains and losses change only their synthetic balances before later withdrawal or top-up activity.
           </p>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user CSV</label>
@@ -6013,14 +6015,14 @@ function LiveAdminScreen({
           <div className="admin-row">
             <div>
               <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
-              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {Number(admin.autousers?.totals?.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(admin.autousers?.totals?.completed_topups || 0).toLocaleString()} top-ups</small>
+              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {Number(admin.autousers?.totals?.active_event_bots || 0).toLocaleString()} active event bots / {Number(admin.autousers?.totals?.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(admin.autousers?.totals?.completed_topups || 0).toLocaleString()} top-ups</small>
             </div>
           </div>
           {(admin.autousers?.runs || []).slice(0, 5).map((run) => (
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(run.completed_topups || 0).toLocaleString()} top-ups</small>
+                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active / {Number(run.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(run.completed_topups || 0).toLocaleString()} top-ups</small>
               </div>
               {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
               {run.status === "paused" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
