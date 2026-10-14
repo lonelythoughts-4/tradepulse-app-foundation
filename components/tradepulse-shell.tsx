@@ -4709,6 +4709,19 @@ type LiveTradePulseAdmin = {
     status: string;
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
+  autousers: {
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; credited_usd?: number };
+    runs: Array<{
+      id: string;
+      status: "scheduled" | "paused" | "cancelled" | "completed";
+      min_amount_usd: number;
+      max_amount_usd: number;
+      imported_users: number;
+      completed_events: number;
+      scheduled_events: number;
+      next_scheduled_at?: number | null;
+    }>;
+  };
   sweeps_enabled: boolean;
 };
 
@@ -5462,6 +5475,7 @@ function LiveAdminScreen({
     path: string,
     options?: RequestInit,
     environment?: "mainnet" | "testnet",
+    timeoutMs?: number,
   ) => Promise<any>;
   reload: () => Promise<void>;
   onEnvironment: (environment: "mainnet" | "testnet") => Promise<void>;
@@ -5485,7 +5499,13 @@ function LiveAdminScreen({
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
   const [pendingRecovery, setPendingRecovery] = useState<number | null>(null);
+  const [autouserFile, setAutouserFile] = useState<File | null>(null);
+  const [autouserMinimum, setAutouserMinimum] = useState("");
+  const [autouserMaximum, setAutouserMaximum] = useState("");
+  const [autouserConfirmed, setAutouserConfirmed] = useState(false);
+  const [autouserPending, setAutouserPending] = useState(false);
   const fundingFieldId = useId();
+  const autouserFileId = useId();
   const [withdrawalReview, setWithdrawalReview] = useState<{
     row: LiveTradePulseAdmin["withdrawals"][number];
     action: "approve" | "reject";
@@ -5589,6 +5609,37 @@ function LiveAdminScreen({
       await post(`/v1/admin/recovery/${caseId}`, { status, note }, message);
     } finally {
       setPendingRecovery(null);
+    }
+  };
+  const submitAutouserRun = async () => {
+    if (!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)) return;
+    setAutouserPending(true);
+    try {
+      const form = new FormData();
+      form.append("file", autouserFile);
+      form.append("min_amount", autouserMinimum);
+      form.append("max_amount", autouserMaximum);
+      form.append("confirmed", "true");
+      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 60_000);
+      setAutouserFile(null);
+      setAutouserMinimum("");
+      setAutouserMaximum("");
+      setAutouserConfirmed(false);
+      onNotice(result.message || "Auto-user testnet deposit run scheduled.");
+      await reload();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Auto-user run could not be scheduled.");
+    } finally {
+      setAutouserPending(false);
+    }
+  };
+  const updateAutouserRun = async (runId: string, action: "pause" | "resume" | "cancel") => {
+    try {
+      await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
+      onNotice(`Auto-user run ${action}d.`);
+      await reload();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
     }
   };
   return (
@@ -5934,6 +5985,46 @@ function LiveAdminScreen({
               Reissue demo
             </button>
           </div>
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
+          <h2>Staggered testnet deposits</h2>
+          <p>
+            Upload a UTF-8 CSV with a header such as <span className="mono">first_name,username,user_ref</span>. TradePulse creates internal synthetic accounts and schedules one randomized deposit per account across mixed 7- and 10-day windows.
+          </p>
+          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES</p>
+          <label className="amount-field" htmlFor={autouserFileId}>Auto-user CSV</label>
+          <input id={autouserFileId} type="file" accept=".csv,text/csv" aria-label="Auto-user CSV upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
+          <label className="amount-field">Minimum simulated deposit in USD
+            <input value={autouserMinimum} inputMode="decimal" onChange={(event) => setAutouserMinimum(event.target.value)} placeholder="Minimum / USD" />
+          </label>
+          <label className="amount-field">Maximum simulated deposit in USD
+            <input value={autouserMaximum} inputMode="decimal" onChange={(event) => setAutouserMaximum(event.target.value)} placeholder="Maximum / USD" />
+          </label>
+          <label className="check-confirm">
+            <input type="checkbox" checked={autouserConfirmed} onChange={(event) => setAutouserConfirmed(event.target.checked)} />
+            I understand this schedules a testnet-only load run and does not create real deposits.
+          </label>
+          <button className="primary-action" disabled={!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)} onClick={() => void submitAutouserRun()}>
+            {autouserPending ? "Scheduling run…" : "Schedule deposit run"}
+          </button>
+          <div className="admin-row">
+            <div>
+              <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} deposits scheduled</strong>
+              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {money(Number(admin.autousers?.totals?.credited_usd || 0))} simulated value credited</small>
+            </div>
+          </div>
+          {(admin.autousers?.runs || []).slice(0, 5).map((run) => (
+            <div className="admin-row" key={run.id}>
+              <div>
+                <strong>{run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
+                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {money(run.min_amount_usd)}–{money(run.max_amount_usd)}</small>
+              </div>
+              {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
+              {run.status === "paused" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
+              {(run.status === "scheduled" || run.status === "paused") && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "cancel")}>Cancel</button>}
+            </div>
+          ))}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">SETTINGS EDITOR</span>
@@ -9121,7 +9212,6 @@ function LiveTradePulse() {
     });
   };
   const headers = (targetEnvironment = webEnvironment) => ({
-    "Content-Type": "application/json",
     "X-Telegram-Init-Data": telegramInitData(),
     "X-TradePulse-Environment": targetEnvironment,
   });
@@ -9134,10 +9224,14 @@ function LiveTradePulse() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const requestHeaders = { ...headers(targetEnvironment), ...(options.headers || {}) } as Record<string, string>;
+      if (!(options.body instanceof FormData) && !Object.keys(requestHeaders).some((name) => name.toLowerCase() === "content-type")) {
+        requestHeaders["Content-Type"] = "application/json";
+      }
       const response = await fetch(`/api${path}`, {
         ...options,
         signal: controller.signal,
-        headers: { ...headers(targetEnvironment), ...(options.headers || {}) },
+        headers: requestHeaders,
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
