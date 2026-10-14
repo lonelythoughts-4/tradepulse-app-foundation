@@ -4614,6 +4614,7 @@ type LiveDashboard = {
   tier_config: Array<{ name: string; rate: number }>;
   referral_rates: number[];
   community_url: string;
+  server_time?: number;
   quotes: Record<string, number>;
   quote_age: number;
   quote_fresh: boolean;
@@ -6979,6 +6980,7 @@ function LiveBotsScreen({
   const [flashbackEndReview, setFlashbackEndReview] = useState(false);
   const [flashbackNewSession, setFlashbackNewSession] = useState(false);
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
+  const [flashbackClockOffset, setFlashbackClockOffset] = useState(0);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
@@ -7022,13 +7024,25 @@ function LiveBotsScreen({
   const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
   const flashback = data.flashback || null;
   useEffect(() => {
+    const clientNow = Date.now();
+    const serverSeconds = Number(data.server_time);
+    const serverNow = Number.isFinite(serverSeconds) && serverSeconds > 0
+      ? serverSeconds * 1000
+      : clientNow;
+    setFlashbackClockOffset(serverNow - clientNow);
+    setFlashbackNow(clientNow);
+  }, [data.server_time]);
+  useEffect(() => {
     if (view !== "flashback" || flashback?.state !== "sealed") return;
-    const timer = window.setInterval(() => {
-      setFlashbackNow(Date.now());
-      void reload();
-    }, 15_000);
-    return () => window.clearInterval(timer);
-  }, [flashback?.state, reload, view]);
+    const tick = () => setFlashbackNow(Date.now());
+    tick();
+    const countdown = window.setInterval(tick, 1_000);
+    const refresh = window.setInterval(() => void reload(), 15_000);
+    return () => {
+      window.clearInterval(countdown);
+      window.clearInterval(refresh);
+    };
+  }, [flashback?.expires_at, flashback?.state, reload, view]);
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
     const assets = Array.isArray(response.assets)
@@ -7231,7 +7245,7 @@ function LiveBotsScreen({
   const productLabel =
     product === "memecoin" ? "Memecoin" : "Synthetic Indices";
   const flashbackRemaining = flashback?.state === "sealed" && flashback.expires_at
-    ? Math.max(0, Math.ceil((flashback.expires_at * 1000 - flashbackNow) / 1000))
+    ? Math.max(0, Math.ceil((flashback.expires_at * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))
     : 0;
   const flashbackTimeLabel = `${Math.floor(flashbackRemaining / 60)}:${String(flashbackRemaining % 60).padStart(2, "0")}`;
   const startFlashback = async () => {
@@ -7239,6 +7253,7 @@ function LiveBotsScreen({
     if (started) {
       setFlashbackReview(false);
       setFlashbackNewSession(false);
+      setFlashbackNow(Date.now());
       await reload();
     }
   };
