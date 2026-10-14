@@ -7266,9 +7266,10 @@ function LiveBotsScreen({
                 })}
               </div>
             )}
-              {(memecoinSnapshot.events || []).slice(-4).map((event) => (
-                <p key={event.id}><b>{event.kind.replaceAll("_", " ")}</b> · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>
-              ))}
+              {(memecoinSnapshot.events || []).slice(-4).map((event) => {
+                const reason = typeof event.payload?.reason === "string" ? event.payload.reason : "";
+                return <p key={event.id}><b>{event.kind.replaceAll("_", " ")}</b>{reason ? ` · ${reason}` : ""} · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>;
+              })}
               {(selected.state === "running" || isDemoCreditOnlyBot) && (
                 <button
                   className="small-action"
