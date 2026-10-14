@@ -1122,7 +1122,7 @@ function Activity({
             const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
             return {
               key: String(entry.id ?? `${entry.kind}-${entry.created_at}`),
-              title: entry.kind.replace(/_/g, " "),
+              title: activityLabel(entry.kind),
               sub: entry.asset,
               amount,
               time: "View details",
@@ -1183,7 +1183,7 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
   return <AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
     <button className="modal-close" type="button" onClick={onClose} aria-label="Close activity details"><X size={16} /></button>
     <span className="eyebrow">ACTIVITY DETAILS</span>
-    <h2>{entry.kind.replaceAll("_", " ")}</h2>
+    <h2>{activityLabel(entry.kind)}</h2>
     <p>{isFee ? "This fee was recorded after a profitable settlement." : "This is the recorded result for a completed settlement."}</p>
     <div className="fact-block">
       <span>RESULT <b className={amount >= 0 ? "up" : "down"}>{amount >= 0 ? "+" : ""}{money(amount)}</b></span>
@@ -4877,7 +4877,11 @@ function signedActivityAmount(kind: string, status: string, amount: number) {
   const description = `${kind} ${status}`.toLowerCase();
   // Engine rows are occasionally stored as an absolute realised amount. The
   // event label remains authoritative for the direction shown to the user.
-  return /\bloss\b/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
+  return /\bloss\b|performance_fee/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
+}
+
+function activityLabel(kind: string) {
+  return kind === "performance_fee" ? "performance fee charged" : kind.replaceAll("_", " ");
 }
 
 function activityTone(kind: string, status: string) {
