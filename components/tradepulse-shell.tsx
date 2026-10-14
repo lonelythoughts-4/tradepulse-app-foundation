@@ -1109,7 +1109,7 @@ function Activity({
     key: string;
     title: string;
     sub: string;
-    amount: number;
+    amount: number | null;
     time: string;
     status: string;
     entry?: VisualDeskModel["ledger"][number];
@@ -1120,12 +1120,13 @@ function Activity({
           .slice(0, 3)
           .map((entry) => {
             const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+            const balanceChanged = !isNonFinancialActivity(entry.kind);
             return {
               key: String(entry.id ?? `${entry.kind}-${entry.created_at}`),
-              title: activityLabel(entry.kind),
-              sub: entry.asset,
-              amount,
-              time: "View details",
+              title: activityLabel(entry.kind, entry.status),
+              sub: activitySummary(entry),
+              amount: balanceChanged ? amount : null,
+              time: entry.trade_detail ? "View breakdown" : "View details",
               status: activityTone(entry.kind, entry.status),
               entry,
             };
@@ -1158,8 +1159,8 @@ function Activity({
             </div>
             <span className={`activity-status ${item.status}`}>{item.status}</span>
             <div className="activity-amount">
-              <strong className={item.amount >= 0 ? "up" : "down"}>
-                {item.amount >= 0 ? "+" : ""}{money(item.amount)}
+              <strong className={item.amount === null ? undefined : item.amount >= 0 ? "up" : "down"}>
+                {item.amount === null ? "—" : <>{item.amount >= 0 ? "+" : ""}{money(item.amount)}</>}
               </strong>
               <small>{item.time}</small>
             </div>
@@ -1175,18 +1176,39 @@ function activityExitLabel(reason?: string) {
   return reason ? reason.replaceAll("_", " ") : "Recorded settlement";
 }
 
+function activityMarketLabel(symbol?: string) {
+  if (!symbol) return "";
+  return symbol.length > 20 ? `${symbol.slice(0, 8)}…${symbol.slice(-4)}` : symbol;
+}
+
+function isNonFinancialActivity(kind: string) {
+  return /authorization|strategy_(?:control|setting)|settings?_saved/i.test(kind);
+}
+
+function activitySummary(entry: VisualDeskModel["ledger"][number]) {
+  if (isNonFinancialActivity(entry.kind)) return "Strategy controls saved · no balance change";
+  const position = entry.trade_detail?.position;
+  if (position?.symbol) {
+    const direction = position.direction ? ` · ${position.direction.toUpperCase()}` : "";
+    return `${activityMarketLabel(position.symbol)}${direction} · ${activityExitLabel(position.close_reason)}`;
+  }
+  if (entry.trade_detail?.bot_name) return `${entry.trade_detail.bot_name} · settled`;
+  return entry.asset && entry.asset !== "USD" ? entry.asset : "Recorded account activity";
+}
+
 function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledger"][number]; onClose: () => void }) {
   const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
   const detail = entry.trade_detail;
   const position = detail?.position;
   const isFee = entry.kind === "performance_fee";
+  const isNonFinancial = isNonFinancialActivity(entry.kind);
   return <AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
     <button className="modal-close" type="button" onClick={onClose} aria-label="Close activity details"><X size={16} /></button>
     <span className="eyebrow">ACTIVITY DETAILS</span>
-    <h2>{activityLabel(entry.kind)}</h2>
-    <p>{isFee ? "This fee was recorded after a profitable settlement." : "This is the recorded result for a completed settlement."}</p>
+    <h2>{activityLabel(entry.kind, entry.status)}</h2>
+    <p>{isNonFinancial ? "Your Memecoin strategy controls were saved. This event did not move money or open a position." : isFee ? "This fee was recorded after a profitable settlement." : "This is the recorded result for a completed settlement."}</p>
     <div className="fact-block">
-      <span>RESULT <b className={amount >= 0 ? "up" : "down"}>{amount >= 0 ? "+" : ""}{money(amount)}</b></span>
+      <span>{isNonFinancial ? "BALANCE CHANGE" : "RESULT"} <b className={isNonFinancial ? undefined : amount >= 0 ? "up" : "down"}>{isNonFinancial ? "No balance change" : <>{amount >= 0 ? "+" : ""}{money(amount)}</>}</b></span>
       <span>STATUS <b>{entry.status.replaceAll("_", " ")}</b></span>
       <span>SETTLED <b>{new Date((detail?.settled_at || entry.created_at) * 1000).toLocaleString()}</b></span>
       {detail && <span>BOT <b>{detail.bot_name}</b></span>}
@@ -1197,7 +1219,7 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
       {detail && !isFee && <span>TRADING COSTS <b>{money(detail.exchange_fees + detail.slippage)}</b></span>}
       {detail && isFee && <span>RELATED NET RESULT <b className={detail.net_realized >= 0 ? "up" : "down"}>{detail.net_realized >= 0 ? "+" : ""}{money(detail.net_realized)}</b></span>}
     </div>
-    {!position && <p>This settlement record does not include a market-level execution record.</p>}
+    {!position && !isNonFinancial && <p>This settlement record does not include a market-level execution record.</p>}
     <button className="ghost-action" type="button" onClick={onClose}>Close</button>
   </AccessibleDialog>;
 }
@@ -4880,8 +4902,13 @@ function signedActivityAmount(kind: string, status: string, amount: number) {
   return /\bloss\b|performance_fee/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
 }
 
-function activityLabel(kind: string) {
-  return kind === "performance_fee" ? "performance fee charged" : kind.replaceAll("_", " ");
+function activityLabel(kind: string, status = "") {
+  const description = `${kind} ${status}`.toLowerCase();
+  if (kind === "performance_fee") return "performance fee charged";
+  if (/trading_(?:profit|loss)/.test(kind) || /\bprofit\b/.test(description)) return "profit";
+  if (/\bloss\b/.test(description)) return "loss";
+  if (isNonFinancialActivity(kind)) return "Memecoin strategy authorized";
+  return kind.replaceAll("_", " ");
 }
 
 function activityTone(kind: string, status: string) {
@@ -8449,12 +8476,13 @@ function LiveWalletScreen({
           {filteredLedger.length ? (
             filteredLedger.map((entry, index) => {
               const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+              const isNonFinancial = isNonFinancialActivity(entry.kind);
               return (
               <div className="ledger-row" key={`${entry.created_at}-${index}`}>
                 <div>
-                  <strong>{entry.kind.replace(/_/g, " ")}</strong>
+                  <strong>{activityLabel(entry.kind, entry.status)}</strong>
                   <small>
-                    {entry.asset} / {entry.status}
+                    {isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
                   </small>
                 </div>
                 <span
@@ -8462,9 +8490,8 @@ function LiveWalletScreen({
                 >
                   {entry.status}
                 </span>
-                <code className={amount >= 0 ? "mint" : "down"}>
-                  {amount >= 0 ? "+" : ""}
-                  {money(amount)}
+                <code className={isNonFinancial ? undefined : amount >= 0 ? "mint" : "down"}>
+                  {isNonFinancial ? "—" : <>{amount >= 0 ? "+" : ""}{money(amount)}</>}
                 </code>
               </div>
               );
@@ -8509,15 +8536,16 @@ function LiveWalletScreen({
               .sort((a, b) => b.created_at - a.created_at)
               .map((entry, index) => {
                 const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                const isNonFinancial = isNonFinancialActivity(entry.kind);
                 return (
                 <div
                   className="ledger-row"
                   key={`${entry.created_at}-${index}`}
                 >
                   <div>
-                    <strong>{entry.kind.replace(/_/g, " ")}</strong>
+                    <strong>{activityLabel(entry.kind, entry.status)}</strong>
                     <small>
-                      {entry.asset} / {entry.status}
+                      {isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
                     </small>
                   </div>
                   <span
@@ -8525,9 +8553,8 @@ function LiveWalletScreen({
                   >
                     {entry.status}
                   </span>
-                  <code className={amount >= 0 ? "mint" : "down"}>
-                    {amount >= 0 ? "+" : ""}
-                    {money(amount)}
+                  <code className={isNonFinancial ? undefined : amount >= 0 ? "mint" : "down"}>
+                    {isNonFinancial ? "—" : <>{amount >= 0 ? "+" : ""}{money(amount)}</>}
                   </code>
                 </div>
                 );
