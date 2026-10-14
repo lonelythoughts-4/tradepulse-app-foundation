@@ -805,11 +805,29 @@ type VisualDeskModel = {
   alerts: number;
   quotes: Record<string, number>;
   ledger: Array<{
+    id?: number;
     kind: string;
     asset: string;
     amount_usd: number;
     status: string;
     created_at: number;
+    trade_detail?: {
+      bot_name: string;
+      net_realized: number;
+      exchange_fees: number;
+      slippage: number;
+      fee_usd: number;
+      settled_at: number;
+      position?: {
+        symbol?: string;
+        direction?: string;
+        entry_price?: number;
+        exit_price?: number;
+        realized_pnl?: number;
+        close_reason?: string;
+        closed_at?: number;
+      };
+    };
   }>;
   demo: {
     state?: string;
@@ -1086,33 +1104,39 @@ function Activity({
   ledger?: VisualDeskModel["ledger"];
   onViewAll?: () => void;
 }) {
-  const items = ledger
+  const [selectedEntry, setSelectedEntry] = useState<VisualDeskModel["ledger"][number] | null>(null);
+  type ActivityItem = {
+    key: string;
+    title: string;
+    sub: string;
+    amount: number;
+    time: string;
+    status: string;
+    entry?: VisualDeskModel["ledger"][number];
+  };
+  const items: ActivityItem[] = ledger
     ? ledger.length
       ? ledger
           .slice(0, 3)
           .map((entry) => {
             const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
-            return [
-              entry.kind.replace(/_/g, " "),
-              entry.asset,
-              `${amount >= 0 ? "+" : ""}${money(amount)}`,
-              "recent",
-              activityTone(entry.kind, entry.status),
-            ];
+            return {
+              key: String(entry.id ?? `${entry.kind}-${entry.created_at}`),
+              title: entry.kind.replace(/_/g, " "),
+              sub: entry.asset,
+              amount,
+              time: "View details",
+              status: activityTone(entry.kind, entry.status),
+              entry,
+            };
           })
       : [
-          [
-            "No activity yet",
-            "Verified account events will appear here.",
-            "$0.00",
-            "—",
-            "complete",
-          ],
+          { key: "empty", title: "No activity yet", sub: "Verified account events will appear here.", amount: 0, time: "—", status: "complete" },
         ]
     : [
-        ["Memecoin bot", "Equity rebalance", "+$84.20", "2m", "complete"],
-        ["Synthetic bot", "Risk threshold reached", "-$42.80", "18m", "review"],
-        ["Deposit received", "USDC · Wallet", "+$1,250.00", "1h", "complete"],
+        { key: "memecoin", title: "Memecoin bot", sub: "Equity rebalance", amount: 84.2, time: "2m", status: "complete" },
+        { key: "synthetic", title: "Synthetic bot", sub: "Risk threshold reached", amount: -42.8, time: "18m", status: "review" },
+        { key: "deposit", title: "Deposit received", sub: "USDC · Wallet", amount: 1250, time: "1h", status: "complete" },
       ];
   return (
     <GradientPanel className="activity-card reveal-card">
@@ -1126,24 +1150,56 @@ function Activity({
         </button>
       </div>
       <div className="activity-list">
-        {items.map(([title, sub, amount, time, status]) => (
-          <div className="activity-row" key={title}>
+        {items.map((item) => (
+          <button className="activity-row activity-detail-trigger" type="button" key={item.key} disabled={!item.entry} onClick={() => item.entry && setSelectedEntry(item.entry)}>
             <div className="activity-info">
-              <strong>{title}</strong>
-              <small>{sub}</small>
+              <strong>{item.title}</strong>
+              <small>{item.sub}</small>
             </div>
-            <span className={`activity-status ${status}`}>{status}</span>
+            <span className={`activity-status ${item.status}`}>{item.status}</span>
             <div className="activity-amount">
-              <strong className={amount.startsWith("+") ? "up" : "down"}>
-                {amount}
+              <strong className={item.amount >= 0 ? "up" : "down"}>
+                {item.amount >= 0 ? "+" : ""}{money(item.amount)}
               </strong>
-              <small>{time}</small>
+              <small>{item.time}</small>
             </div>
-          </div>
+          </button>
         ))}
       </div>
+      {selectedEntry && <ActivityDetailDialog entry={selectedEntry} onClose={() => setSelectedEntry(null)} />}
     </GradientPanel>
   );
+}
+
+function activityExitLabel(reason?: string) {
+  return reason ? reason.replaceAll("_", " ") : "Recorded settlement";
+}
+
+function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledger"][number]; onClose: () => void }) {
+  const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+  const detail = entry.trade_detail;
+  const position = detail?.position;
+  const isFee = entry.kind === "performance_fee";
+  return <AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
+    <button className="modal-close" type="button" onClick={onClose} aria-label="Close activity details"><X size={16} /></button>
+    <span className="eyebrow">ACTIVITY DETAILS</span>
+    <h2>{entry.kind.replaceAll("_", " ")}</h2>
+    <p>{isFee ? "This fee was recorded after a profitable settlement." : "This is the recorded result for a completed settlement."}</p>
+    <div className="fact-block">
+      <span>RESULT <b className={amount >= 0 ? "up" : "down"}>{amount >= 0 ? "+" : ""}{money(amount)}</b></span>
+      <span>STATUS <b>{entry.status.replaceAll("_", " ")}</b></span>
+      <span>SETTLED <b>{new Date((detail?.settled_at || entry.created_at) * 1000).toLocaleString()}</b></span>
+      {detail && <span>BOT <b>{detail.bot_name}</b></span>}
+      {position?.symbol && <span>MARKET <b>{position.symbol}{position.direction ? ` · ${position.direction.toUpperCase()}` : ""}</b></span>}
+      {position?.entry_price !== undefined && <span>ENTRY <b>{formatMarketPrice(Number(position.entry_price))}</b></span>}
+      {position?.exit_price !== undefined && <span>EXIT <b>{formatMarketPrice(Number(position.exit_price))}</b></span>}
+      {position?.close_reason && <span>EXIT TYPE <b>{activityExitLabel(position.close_reason)}</b></span>}
+      {detail && !isFee && <span>TRADING COSTS <b>{money(detail.exchange_fees + detail.slippage)}</b></span>}
+      {detail && isFee && <span>RELATED NET RESULT <b className={detail.net_realized >= 0 ? "up" : "down"}>{detail.net_realized >= 0 ? "+" : ""}{money(detail.net_realized)}</b></span>}
+    </div>
+    {!position && <p>This settlement record does not include a market-level execution record.</p>}
+    <button className="ghost-action" type="button" onClick={onClose}>Close</button>
+  </AccessibleDialog>;
 }
 function DemoBanner({
   demo,
@@ -4490,11 +4546,13 @@ type LiveDashboard = {
     updated_at: number;
   }>;
   ledger: Array<{
+    id?: number;
     kind: string;
     asset: string;
     amount_usd: number;
     status: string;
     created_at: number;
+    trade_detail?: VisualDeskModel["ledger"][number]["trade_detail"];
   }>;
   engine: Array<{ net_realized: number; status: string; created_at: number }>;
   alerts: Array<{
@@ -7268,7 +7326,13 @@ function LiveBotsScreen({
             )}
               {(memecoinSnapshot.events || []).slice(-4).map((event) => {
                 const reason = typeof event.payload?.reason === "string" ? event.payload.reason : "";
-                return <p key={event.id}><b>{event.kind.replaceAll("_", " ")}</b>{reason ? ` · ${reason}` : ""} · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>;
+                const available = reason.match(/(\$[\d,.]+) remains available/i)?.[1];
+                const isAllocationHold = event.kind === "strategy_rejected" && /insufficient memecoin allocation/i.test(reason);
+                const label = isAllocationHold ? "allocation hold" : event.kind.replaceAll("_", " ");
+                const detail = isAllocationHold
+                  ? `${available ? `${available} is free, but ` : ""}the next full-sized position needs more. No position was opened.`
+                  : reason;
+                return <p key={event.id}><b>{label}</b>{detail ? ` · ${detail}` : ""} · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>;
               })}
               {(selected.state === "running" || isDemoCreditOnlyBot) && (
                 <button
