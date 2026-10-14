@@ -4710,7 +4710,7 @@ type LiveTradePulseAdmin = {
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
-    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; credited_usd?: number };
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number };
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
@@ -4719,6 +4719,8 @@ type LiveTradePulseAdmin = {
       imported_users: number;
       completed_events: number;
       scheduled_events: number;
+      completed_withdrawals?: number;
+      completed_topups?: number;
       next_scheduled_at?: number | null;
     }>;
   };
@@ -5988,9 +5990,9 @@ function LiveAdminScreen({
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
-          <h2>Staggered testnet deposits</h2>
+          <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 CSV with a header such as <span className="mono">first_name,username,user_ref</span>. TradePulse creates internal synthetic accounts and schedules one randomized deposit per account across mixed 7- and 10-day windows.
+            Upload a UTF-8 CSV with a header such as <span className="mono">first_name,username,user_ref</span>. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then gives a selected cohort partial-withdrawal and top-up paths after settlement.
           </p>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user CSV</label>
@@ -6003,22 +6005,22 @@ function LiveAdminScreen({
           </label>
           <label className="check-confirm">
             <input type="checkbox" checked={autouserConfirmed} onChange={(event) => setAutouserConfirmed(event.target.checked)} />
-            I understand this schedules a testnet-only load run and does not create real deposits.
+            I understand this schedules testnet-only deposit, withdrawal, and top-up activity—not real transfers.
           </label>
           <button className="primary-action" disabled={!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)} onClick={() => void submitAutouserRun()}>
-            {autouserPending ? "Scheduling run…" : "Schedule deposit run"}
+            {autouserPending ? "Scheduling run…" : "Schedule activity run"}
           </button>
           <div className="admin-row">
             <div>
-              <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} deposits scheduled</strong>
-              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {money(Number(admin.autousers?.totals?.credited_usd || 0))} simulated value credited</small>
+              <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
+              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {Number(admin.autousers?.totals?.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(admin.autousers?.totals?.completed_topups || 0).toLocaleString()} top-ups</small>
             </div>
           </div>
           {(admin.autousers?.runs || []).slice(0, 5).map((run) => (
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {money(run.min_amount_usd)}–{money(run.max_amount_usd)}</small>
+                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.completed_withdrawals || 0).toLocaleString()} withdrawals / {Number(run.completed_topups || 0).toLocaleString()} top-ups</small>
               </div>
               {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
               {run.status === "paused" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
