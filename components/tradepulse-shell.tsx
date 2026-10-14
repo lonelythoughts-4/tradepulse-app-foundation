@@ -4751,7 +4751,6 @@ function BrowserBotHandoff() {
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
   const [botUrl, setBotUrl] = useState("");
-  const [botUsername, setBotUsername] = useState("");
   const [expiresIn, setExpiresIn] = useState(300);
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
@@ -4780,11 +4779,10 @@ function BrowserBotHandoff() {
         if (cancelled) return;
         setToken(handoff.token);
         setBotUrl(handoff.bot_url);
-        setBotUsername(typeof handoff.bot_username === "string" ? handoff.bot_username : "");
         const handoffExpiry = Number(handoff.expires_in);
         setExpiresIn(Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300);
         setState("ready");
-        setMessage(`Open ${handoff.bot_username ? `@${handoff.bot_username} in Telegram` : "TradePulse in Telegram"}, confirm this browser, then return here automatically. This secure link expires in five minutes.`);
+        setMessage("Open TradePulse in Telegram, confirm this browser, then return here automatically. This secure link expires in five minutes.");
       } catch (error) {
         if (cancelled) return;
         setState("error");
@@ -4876,7 +4874,6 @@ function BrowserBotHandoff() {
     timer.current = null;
     setToken("");
     setBotUrl("");
-    setBotUsername("");
     setMessage("");
     setState("preparing");
     setAttempt((current) => current + 1);
@@ -4894,7 +4891,7 @@ function BrowserBotHandoff() {
             setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
           }}
         >
-          {botUsername ? `Open @${botUsername} in Telegram` : "Open TradePulse in Telegram"} <ChevronRight />
+          Open TradePulse in Telegram <ChevronRight />
         </a>
       ) : (
         <button className="primary-action" type="button" disabled>
