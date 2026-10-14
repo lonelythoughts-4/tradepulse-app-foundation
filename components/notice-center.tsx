@@ -53,7 +53,18 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: () =>
       return next;
     });
   }, [open, scope, notices]);
-  return { open, setOpen, notices, refreshError,
+  const openNotices = () => {
+    if (scope && notices.length) {
+      setRead((current) => {
+        const next = [...new Set([...current, ...notices.map((item) => item.id)])].slice(-500);
+        try { localStorage.setItem(`tradepulse.notice-read:${scope}`, JSON.stringify(next)); }
+        catch { /* The current session can still show notices without browser storage. */ }
+        return next;
+      });
+    }
+    setOpen(true);
+  };
+  return { open, setOpen, openNotices, notices, refreshError,
     unread: notices.filter((item) => !read.includes(item.id)).length };
 }
 

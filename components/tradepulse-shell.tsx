@@ -134,6 +134,8 @@ function PaymentMark({ asset, compact = false }: { asset: string; compact?: bool
         height: compact ? 16 : 32,
         borderRadius: 0,
         background: "transparent",
+        display: compact ? "inline-grid" : "grid",
+        verticalAlign: "middle",
       }}
     >
       <img
@@ -6995,7 +6997,7 @@ function LiveBotsScreen({
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
   const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
     source: "wallet" | "demo" | "credit";
@@ -7487,7 +7489,7 @@ function LiveBotsScreen({
             <h2>{selected.name}</h2>
             <span className={`status-chip ${paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? "paused" : "running"}`}>
               <i />
-              {isClosing ? "closing protected positions" : isDemoCreditOnlyBot ? "manual trading credit" : awaitingAuthorization ? "authorization required" : paused ? "paused" : "running"}
+              {isClosing ? "closing protected positions" : isDemoCreditOnlyBot ? "manual trading credit" : awaitingAuthorization ? "authorization required" : paused ? "paused" : "active"}
             </span>
           </div>
         </GradientPanel>
@@ -7518,10 +7520,13 @@ function LiveBotsScreen({
               <div className="support-ticket-list">
                 {(memecoinSnapshot.positions || []).slice(0, 5).map((position) => {
                   const identity = memecoinPositionIdentity(position.symbol);
+                  const entryType = position.execution_type === "automatic" || String(position.idempotency_key || "").startsWith("strategy:")
+                    ? "automatic"
+                    : "manual";
                   return <div className="activity-row" key={position.id}>
                     <div className="activity-info">
-                      <strong title={identity.title}>{identity.chainLabel && <PaymentMark asset={identity.chainLabel} compact />} {identity.label} · {position.direction.toUpperCase()} · {position.status}</strong>
-                      <small>Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
+                      <strong title={identity.title}>{identity.chainLabel && <PaymentMark asset={identity.chainLabel} compact />} {identity.label} · {position.direction.toUpperCase()} · {entryType} · {position.status}</strong>
+                      <small>{entryType === "automatic" ? "Strategy entry" : "Manual order"} · Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
                     </div>
                     {position.status === "open" && <button className="small-action" disabled={pendingAction} title={`Close this ${identity.label} position at the next executable market price`} aria-label={`Close ${identity.label} ${position.direction} position`} onClick={() => run(`/v1/memecoin/positions/${position.id}/close`, {})}>Close position <X /></button>}
                   </div>;
@@ -9787,7 +9792,7 @@ function LiveTradePulse() {
       <main className="main-content">
         <Header
           setActive={selectChromeTab}
-          onNotifications={() => noticeCenter.setOpen(true)}
+          onNotifications={noticeCenter.openNotices}
           profileName={profileName}
           environment={data.environment.toUpperCase()}
           isAdmin={data.user.is_admin}
