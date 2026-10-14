@@ -4621,6 +4621,28 @@ type LiveDashboard = {
     health?: { status?: string; assets?: number; latest_tick_at?: number | null };
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
   };
+  flashback?: {
+    id?: string;
+    allocation_usd?: number;
+    state?: "sealed" | "ready_to_reveal" | "revealed";
+    opened_at?: number;
+    expires_at?: number;
+    hard_loss_usd?: number;
+    commitment?: string;
+    close_reason?: string;
+    ready_at?: number;
+    revealed_at?: number;
+    settled_at?: number;
+    result_ready?: boolean;
+    market?: string;
+    direction?: "long" | "short";
+    entry_price?: number;
+    exit_price?: number;
+    realized_pnl?: number;
+    fee_usd?: number;
+    user_net_usd?: number;
+    nonce?: string;
+  } | null;
 };
 
 type LiveTradePulseAdmin = {
@@ -6941,7 +6963,7 @@ function LiveBotsScreen({
   onOpenDemo: () => void;
   initialBotId?: string | null;
 }) {
-  const [view, setView] = useState<"fleet" | "create" | "detail">(
+  const [view, setView] = useState<"fleet" | "create" | "detail" | "flashback">(
     initialBotId ? "detail" : "fleet",
   );
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
@@ -6953,6 +6975,10 @@ function LiveBotsScreen({
   const actionInFlightRef = useRef(false);
   const [reviewError, setReviewError] = useState("");
   const [closeReview, setCloseReview] = useState(false);
+  const [flashbackAmount, setFlashbackAmount] = useState<20 | 50 | 100>(20);
+  const [flashbackReview, setFlashbackReview] = useState(false);
+  const [flashbackEndReview, setFlashbackEndReview] = useState(false);
+  const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
@@ -6994,6 +7020,15 @@ function LiveBotsScreen({
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
+  const flashback = data.flashback || null;
+  useEffect(() => {
+    if (view !== "flashback" || flashback?.state !== "sealed") return;
+    const timer = window.setInterval(() => {
+      setFlashbackNow(Date.now());
+      void reload();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [flashback?.state, reload, view]);
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
     const assets = Array.isArray(response.assets)
@@ -7195,6 +7230,120 @@ function LiveBotsScreen({
   };
   const productLabel =
     product === "memecoin" ? "Memecoin" : "Synthetic Indices";
+  const flashbackRemaining = flashback?.state === "sealed" && flashback.expires_at
+    ? Math.max(0, Math.ceil((flashback.expires_at * 1000 - flashbackNow) / 1000))
+    : 0;
+  const flashbackTimeLabel = `${Math.floor(flashbackRemaining / 60)}:${String(flashbackRemaining % 60).padStart(2, "0")}`;
+  const startFlashback = async () => {
+    const started = await run("/v1/flashback/start", { amount: flashbackAmount });
+    if (started) {
+      setFlashbackReview(false);
+      await reload();
+    }
+  };
+  const revealFlashback = async () => {
+    const revealed = await run("/v1/flashback/reveal", {});
+    if (revealed) await reload();
+  };
+  const endAndRevealFlashback = async () => {
+    const revealed = await run("/v1/flashback/end-reveal", {});
+    if (revealed) {
+      setFlashbackEndReview(false);
+      await reload();
+    }
+  };
+  if (view === "flashback")
+    return (
+      <div className="bot-detail">
+        <button className="back-action" onClick={() => setView("fleet")}>
+          <StateIcon name="arrow-left" /> Fleet overview
+        </button>
+        <GradientPanel className="detail-hero">
+          <div>
+            <h2>Flashback Live</h2>
+            <span className={`status-chip ${flashback?.state === "ready_to_reveal" ? "paused" : "running"}`}>
+              <i />
+              {flashback?.state === "sealed" ? "sealed market result" : flashback?.state === "ready_to_reveal" ? "ready to reveal" : flashback?.state === "revealed" ? "settled" : "liquid markets only"}
+            </span>
+          </div>
+        </GradientPanel>
+        {!flashback && <>
+          <GradientPanel className="compound-panel">
+            <h2>A sealed market outcome</h2>
+            <p>Choose one fixed allocation. After you confirm, Flashback selects BTC, ETH, or SOL and a direction at random using a current liquid-market quote. Those terms remain sealed until reveal.</p>
+            <div className="segment-control" role="radiogroup" aria-label="Flashback allocation" onKeyDown={handleBotChoiceKeyDown}>
+              {([20, 50, 100] as const).map((value) => <button type="button" role="radio" aria-checked={flashbackAmount === value} tabIndex={flashbackAmount === value ? 0 : -1} key={value} className={flashbackAmount === value ? "active" : ""} onClick={() => setFlashbackAmount(value)}>{money(value)}</button>)}
+            </div>
+          </GradientPanel>
+          <div className="detail-stats">
+            <GradientPanel><span>EXPOSURE</span><strong>1×</strong></GradientPanel>
+            <GradientPanel><span>MAX DURATION</span><strong>30m</strong></GradientPanel>
+            <GradientPanel><span>HARD LOSS CAP</span><strong>{money(flashbackAmount * 0.1)}</strong></GradientPanel>
+          </div>
+          <GradientPanel className="compound-panel">
+            <p>A current liquid quote is required before anything is locked. Flashback is settled internally from that quote; it does not place an exchange order in your personal account. The current performance-fee rate applies only to a positive result.</p>
+            <button className="primary-action" disabled={pendingAction || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>
+              Review sealed Flashback <ChevronRight />
+            </button>
+          </GradientPanel>
+        </>}
+        {flashback?.state === "sealed" && <>
+          <div className="detail-stats">
+            <GradientPanel><span>ALLOCATION</span><strong>{money(Number(flashback.allocation_usd || 0))}</strong></GradientPanel>
+            <GradientPanel><span>REVEAL WINDOW</span><strong>{flashbackTimeLabel}</strong></GradientPanel>
+            <GradientPanel><span>MAX LOSS</span><strong>{money(Number(flashback.hard_loss_usd || 0))}</strong></GradientPanel>
+          </div>
+          <GradientPanel className="compound-panel">
+            <h2>Terms are sealed</h2>
+            <p>The market, direction, and entry were committed before being withheld from this desk. The result becomes ready at the 30-minute limit or if the hard-loss boundary is reached.</p>
+            <div className="fact-block"><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span><span>MARKET <b>SEALED</b></span><span>DIRECTION <b>SEALED</b></span></div>
+            <button className="danger-action" disabled={pendingAction} onClick={() => { setReviewError(""); setFlashbackEndReview(true); }}>End &amp; reveal <X /></button>
+          </GradientPanel>
+        </>}
+        {flashback?.state === "ready_to_reveal" && <>
+          <GradientPanel className="compound-panel">
+            <h2>Your result is ready</h2>
+            <p>The session has ended at a current liquid-market quote. Its market, direction, and result stayed sealed until this reveal.</p>
+            <div className="fact-block"><span>ALLOCATION <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
+            <button className="primary-action" disabled={pendingAction} onClick={() => void revealFlashback()}>Reveal result <StateIcon name="check" /></button>
+          </GradientPanel>
+        </>}
+        {flashback?.state === "revealed" && <>
+          <div className="detail-stats">
+            <GradientPanel><span>MARKET</span><strong>{flashback.market || "—"}</strong></GradientPanel>
+            <GradientPanel><span>DIRECTION</span><strong>{String(flashback.direction || "—").toUpperCase()}</strong></GradientPanel>
+            <GradientPanel><span>NET RESULT</span><strong className={Number(flashback.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback.user_net_usd || 0))}</strong></GradientPanel>
+          </div>
+          <GradientPanel className="compound-panel">
+            <h2>Flashback settlement</h2>
+            <div className="fact-block">
+              <span>ENTRY <b>{formatMarketPrice(Number(flashback.entry_price || 0))}</b></span>
+              <span>EXIT <b>{formatMarketPrice(Number(flashback.exit_price || 0))}</b></span>
+              <span>GROSS RESULT <b>{money(Number(flashback.realized_pnl || 0))}</b></span>
+              <span>PERFORMANCE FEE <b>{money(Number(flashback.fee_usd || 0))}</b></span>
+              <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
+            </div>
+            <p>The revealed nonce and commitment preserve the originally sealed terms for this session.</p>
+            <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackReview(true); }}>Start another Flashback <Plus /></button>
+          </GradientPanel>
+        </>}
+        {flashbackReview && <AccessibleDialog label="Review Flashback Live" onClose={() => setFlashbackReview(false)} dismissible={!pendingAction}>
+          <h2>Start a sealed Flashback?</h2>
+          <p>TradePulse will lock {money(flashbackAmount)}, choose one liquid market and direction at random, and record a commitment before hiding those terms. Maximum duration is 30 minutes; the hard loss cap is {money(flashbackAmount * 0.1)}.</p>
+          <div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>EXPOSURE <b>1×</b></span><span>RESULT <b>SEALED</b></span></div>
+          {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
+          <button className="primary-action" disabled={pendingAction || flashbackAmount > data.wallet.available} aria-busy={pendingAction} onClick={() => void startFlashback()}>{pendingAction ? "Starting…" : "Start sealed Flashback"} <StateIcon name="check" /></button>
+          <button className="ghost-action" disabled={pendingAction} onClick={() => setFlashbackReview(false)}>Go back</button>
+        </AccessibleDialog>}
+        {flashbackEndReview && <AccessibleDialog label="End and reveal Flashback" onClose={() => setFlashbackEndReview(false)} dismissible={!pendingAction}>
+          <h2>End &amp; reveal now?</h2>
+          <p>Flashback will capture the current liquid-market quote, settle this session, and reveal the result. This cannot be undone.</p>
+          {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
+          <button className="danger-action" disabled={pendingAction} aria-busy={pendingAction} onClick={() => void endAndRevealFlashback()}>{pendingAction ? "Settling…" : "End & reveal"} <X /></button>
+          <button className="ghost-action" disabled={pendingAction} onClick={() => setFlashbackEndReview(false)}>Keep sealed</button>
+        </AccessibleDialog>}
+      </div>
+    );
   if (view === "create")
     return (
       <div className="bot-flow">
@@ -7675,6 +7824,9 @@ function LiveBotsScreen({
           disabled={displayBots.length >= 2 || pendingAction}
         >
           <Plus /> Start trade
+        </button>
+        <button className="small-action" onClick={() => { setReviewError(""); setView("flashback"); }} disabled={pendingAction}>
+          Flashback Live <ChevronRight />
         </button>
       </div>
       {displayBots.length ? (
