@@ -4714,6 +4714,7 @@ type LiveTradePulseAdmin = {
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
+      import_complete?: number;
       min_amount_usd: number;
       max_amount_usd: number;
       imported_users: number;
@@ -5627,7 +5628,10 @@ function LiveAdminScreen({
       form.append("min_amount", autouserMinimum);
       form.append("max_amount", autouserMaximum);
       form.append("confirmed", "true");
-      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 60_000);
+      // A 50,000-account cohort is committed in bounded server-side batches.
+      // Keep the browser session alive long enough to receive its definitive
+      // result rather than suggesting a failed upload while it is finishing.
+      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 180_000);
       setAutouserFile(null);
       if (autouserFileRef.current) autouserFileRef.current.value = "";
       setAutouserMinimum("");
@@ -5643,8 +5647,8 @@ function LiveAdminScreen({
   };
   const updateAutouserRun = async (runId: string, action: "pause" | "resume" | "cancel") => {
     try {
-      await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
-      onNotice(`Auto-user run ${action}d.`);
+      const result = await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
+      onNotice(result.message || `Auto-user run ${action}d.`);
       await reload();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
@@ -6033,11 +6037,11 @@ function LiveAdminScreen({
           {(admin.autousers?.runs || []).slice(0, 5).map((run) => (
             <div className="admin-row" key={run.id}>
               <div>
-                <strong>{run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
+                <strong>{run.status === "paused" && !run.import_complete ? "importing" : run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
                 <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.blocked_events || 0).toLocaleString()} waiting / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active</small>
               </div>
               {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
-              {run.status === "paused" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
+              {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
               {(run.status === "scheduled" || run.status === "paused") && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "cancel")}>Cancel</button>}
             </div>
           ))}
