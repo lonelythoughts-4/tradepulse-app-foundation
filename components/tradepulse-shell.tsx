@@ -6977,6 +6977,7 @@ function LiveBotsScreen({
   const [flashbackAmount, setFlashbackAmount] = useState<20 | 50 | 100>(20);
   const [flashbackReview, setFlashbackReview] = useState(false);
   const [flashbackEndReview, setFlashbackEndReview] = useState(false);
+  const [flashbackNewSession, setFlashbackNewSession] = useState(false);
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
@@ -7237,6 +7238,7 @@ function LiveBotsScreen({
     const started = await run("/v1/flashback/start", { amount: flashbackAmount });
     if (started) {
       setFlashbackReview(false);
+      setFlashbackNewSession(false);
       await reload();
     }
   };
@@ -7254,7 +7256,7 @@ function LiveBotsScreen({
   if (view === "flashback")
     return (
       <div className="bot-detail">
-        <button className="back-action" onClick={() => setView("fleet")}>
+        <button className="back-action" onClick={() => { setFlashbackNewSession(false); setView("fleet"); }}>
           <StateIcon name="arrow-left" /> Fleet overview
         </button>
         <GradientPanel className="detail-hero">
@@ -7266,7 +7268,7 @@ function LiveBotsScreen({
             </span>
           </div>
         </GradientPanel>
-        {!flashback && <>
+        {(!flashback || flashbackNewSession) && <>
           <GradientPanel className="compound-panel">
             <h2>A sealed market outcome</h2>
             <p>Choose one fixed allocation. After you confirm, Flashback selects BTC, ETH, or SOL and a direction at random using a current liquid-market quote. Those terms remain sealed until reveal.</p>
@@ -7307,7 +7309,7 @@ function LiveBotsScreen({
             <button className="primary-action" disabled={pendingAction} onClick={() => void revealFlashback()}>Reveal result <StateIcon name="check" /></button>
           </GradientPanel>
         </>}
-        {flashback?.state === "revealed" && <>
+        {flashback?.state === "revealed" && !flashbackNewSession && <>
           <div className="detail-stats">
             <GradientPanel><span>MARKET</span><strong>{flashback.market || "—"}</strong></GradientPanel>
             <GradientPanel><span>DIRECTION</span><strong>{String(flashback.direction || "—").toUpperCase()}</strong></GradientPanel>
@@ -7323,7 +7325,7 @@ function LiveBotsScreen({
               <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
             </div>
             <p>The revealed nonce and commitment preserve the originally sealed terms for this session.</p>
-            <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackReview(true); }}>Start another Flashback <Plus /></button>
+            <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button>
           </GradientPanel>
         </>}
         {flashbackReview && <AccessibleDialog label="Review Flashback Live" onClose={() => setFlashbackReview(false)} dismissible={!pendingAction}>
@@ -7493,6 +7495,9 @@ function LiveBotsScreen({
             </span>
           </div>
         </GradientPanel>
+        <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
+          Open Flashback Live <ChevronRight />
+        </button>
         <div className="detail-stats">
           <GradientPanel>
             <span>{isDemoBot ? "DEMO AVAILABLE" : isDemoCreditOnlyBot ? "CREDIT AVAILABLE" : "ALLOCATION"}</span>
@@ -7827,7 +7832,7 @@ function LiveBotsScreen({
         >
           <Plus /> Start trade
         </button>
-        <button className="small-action" onClick={() => { setReviewError(""); setView("flashback"); }} disabled={pendingAction}>
+        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }} disabled={pendingAction}>
           Flashback Live <ChevronRight />
         </button>
       </div>
