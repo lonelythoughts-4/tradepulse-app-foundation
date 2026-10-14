@@ -4919,6 +4919,20 @@ function makeCandles(points: MarketPoint[]): MarketCandle[] {
   return candles;
 }
 
+function chartCandles(points: MarketPoint[], supplied?: MarketCandle[]) {
+  const candles = (supplied || []).filter((candle) =>
+    [candle.open, candle.close, candle.high, candle.low].every((value) => Number.isFinite(Number(value)) && Number(value) > 0),
+  );
+  if (!candles.length) return makeCandles(points);
+  const latest = points.at(-1);
+  const latestTimestamp = Number(latest?.timestamp || 0);
+  const finalTimestamp = Number(candles.at(-1)?.timestamp || 0);
+  if (latest && Number.isFinite(Number(latest.price)) && Number(latest.price) > 0 && latestTimestamp > finalTimestamp) {
+    candles.push({ open: Number(latest.price), close: Number(latest.price), high: Number(latest.price), low: Number(latest.price), timestamp: latestTimestamp });
+  }
+  return candles;
+}
+
 function rsiValues(closes: number[], period = 14) {
   if (closes.length < 2) return [] as number[];
   const values: number[] = [];
@@ -4948,10 +4962,12 @@ function formatChartTime(timestamp: number | undefined, index: number, total: nu
 
 function MarketChart({
   points,
+  ohlcCandles,
   market,
   accent = "#34d399",
 }: {
   points: MarketPoint[];
+  ohlcCandles?: MarketCandle[];
   market: string;
   accent?: string;
 }) {
@@ -5004,8 +5020,10 @@ function MarketChart({
   const onPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
     if (pointers.current.has(event.pointerId)) clearGesture();
   };
-  const visibleCount = Math.max(18, Math.round(points.length / zoom));
-  const maxOffset = Math.max(0, points.length - visibleCount);
+  const sourceCandles = chartCandles(points, ohlcCandles);
+  const baseVisibleCount = Math.min(42, sourceCandles.length);
+  const visibleCount = Math.max(12, Math.min(sourceCandles.length, Math.round(baseVisibleCount / zoom)));
+  const maxOffset = Math.max(0, sourceCandles.length - visibleCount);
   const pan = (direction: number) => setOffset((current) => Math.max(0, Math.min(maxOffset, current + direction * Math.max(1, Math.round(visibleCount / 5)))));
   const resetView = () => { setZoom(1); setOffset(0); };
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -5020,8 +5038,8 @@ function MarketChart({
     else return;
     event.preventDefault();
   };
-  const cropEnd = points.length - Math.min(offset, maxOffset);
-  const candles = makeCandles(points.slice(Math.max(0, cropEnd - visibleCount), cropEnd));
+  const cropEnd = sourceCandles.length - Math.min(offset, maxOffset);
+  const candles = sourceCandles.slice(Math.max(0, cropEnd - visibleCount), cropEnd);
   const hasCandles = candles.length > 0;
   useEffect(() => {
     const chart = chartRef.current;
@@ -6927,7 +6945,7 @@ function LiveBotsScreen({
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
   const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
     source: "wallet" | "demo" | "credit";
@@ -6949,6 +6967,19 @@ function LiveBotsScreen({
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
+  const refreshMemecoinCatalog = useCallback(async () => {
+    const response = await request("/v1/memecoin/catalog");
+    const assets = Array.isArray(response.assets)
+      ? response.assets.filter((asset: { eligible?: boolean; symbol?: string }) => Boolean(asset.eligible) && Boolean(asset.symbol))
+      : [];
+    setMemecoinCatalog(assets);
+    setMemecoinAssetCategories((current) => ({
+      ...current,
+      ...Object.fromEntries(assets
+        .filter((asset: { category?: string }) => ["bluechip", "midcap", "microcap"].includes(String(asset.category)))
+        .map((asset: { symbol: string; category?: string }) => [asset.symbol, String(asset.category)])),
+    }));
+  }, [request]);
   useEffect(() => {
     setCompoundOverrides((current) => {
       let changed = false;
@@ -7003,23 +7034,19 @@ function LiveBotsScreen({
       // from rendering or change the customer's existing allocation.
     }
   }, [selected?.id, selected?.product, selected?.demo_trial, selected?.demo_credit_only, data.memecoin?.authorization?.settings_json, data.memecoin?.demo_authorization?.settings_json]);
+  useEffect(() => {
+    if (!selected || selected.product !== "memecoin") return;
+    void refreshMemecoinCatalog().catch(() => {
+      // A label refresh cannot interrupt the existing market or order view.
+    });
+  }, [selected?.id, selected?.product, refreshMemecoinCatalog]);
   const openBasketPicker = async () => {
     setBasketPickerOpen(true);
     setBasketPickerError("");
     setBasketQuery("");
     setBasketPickerLoading(true);
     try {
-      const response = await request("/v1/memecoin/catalog");
-      const assets = Array.isArray(response.assets)
-        ? response.assets.filter((asset: { eligible?: boolean; symbol?: string }) => Boolean(asset.eligible) && Boolean(asset.symbol))
-        : [];
-      setMemecoinCatalog(assets);
-      setMemecoinAssetCategories((current) => ({
-        ...current,
-        ...Object.fromEntries(assets
-          .filter((asset: { category?: string }) => ["bluechip", "midcap", "microcap"].includes(String(asset.category)))
-          .map((asset: { symbol: string; category?: string }) => [asset.symbol, String(asset.category)])),
-      }));
+      await refreshMemecoinCatalog();
     } catch (error) {
       setBasketPickerError(error instanceof Error ? error.message : "Eligible strategy markets are temporarily unavailable.");
     } finally {
@@ -7313,7 +7340,7 @@ function LiveBotsScreen({
                 <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} title={memecoinInsightLabel(symbol)} aria-label={`${memecoinMarketLabel(symbol)}. ${memecoinInsightLabel(symbol)}`} onClick={() => setMemecoinMarket(symbol)}>{memecoinMarketLabel(symbol)}</button>
               ))}
             </div>
-            <MarketChart points={memecoinSnapshot.points || []} market={`${memecoinMarket}/USDT`} />
+            <MarketChart points={memecoinSnapshot.points || []} ohlcCandles={memecoinSnapshot.candles} market={`${memecoinMarketLabel(memecoinMarket)} / USDT`} />
             {(memecoinSnapshot.positions || []).length > 0 && (
               <div className="support-ticket-list">
                 {(memecoinSnapshot.positions || []).slice(0, 5).map((position) => {
