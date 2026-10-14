@@ -9109,7 +9109,11 @@ function LiveTradePulse() {
       const webApp = openedInsideTelegram() ? await waitForTelegramWebApp() : undefined;
       webApp?.ready?.();
       webApp?.expand?.();
-      const next = await request("/v1/dashboard", {}, targetEnvironment, 12_000);
+      // A Telegram-authenticated first load has to assemble the complete
+      // account projection. Give a healthy, signed desk enough room to finish
+      // during a transient database reconnect instead of mislabelling it as
+      // an authentication failure at twelve seconds.
+      const next = await request("/v1/dashboard", {}, targetEnvironment, 25_000);
       setData(next);
       setWebEnvironment(next.environment);
     } catch (error) {
