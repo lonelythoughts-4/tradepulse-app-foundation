@@ -7377,21 +7377,45 @@ function LiveBotsScreen({
                       <strong title={identity.title}>{identity.chainLabel && <PaymentMark asset={identity.chainLabel} compact />} {identity.label} · {position.direction.toUpperCase()} · {position.status}</strong>
                       <small>Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
                     </div>
-                    {position.status === "open" && <button className="small-action" disabled={pendingAction} onClick={() => run(`/v1/memecoin/positions/${position.id}/close`, {})}>Close <X /></button>}
+                    {position.status === "open" && <button className="small-action" disabled={pendingAction} title={`Close this ${identity.label} position at the next executable market price`} aria-label={`Close ${identity.label} ${position.direction} position`} onClick={() => run(`/v1/memecoin/positions/${position.id}/close`, {})}>Close position <X /></button>}
                   </div>;
                 })}
               </div>
             )}
+              {(memecoinSnapshot.events || []).length > 0 && <div className="support-ticket-list">
               {(memecoinSnapshot.events || []).slice(-4).map((event) => {
                 const reason = typeof event.payload?.reason === "string" ? event.payload.reason : "";
                 const available = reason.match(/(\$[\d,.]+) remains available/i)?.[1];
                 const isAllocationHold = event.kind === "strategy_rejected" && /insufficient memecoin allocation/i.test(reason);
-                const label = isAllocationHold ? "allocation hold" : event.kind.replaceAll("_", " ");
-                const detail = isAllocationHold
-                  ? `${available ? `${available} is free, but ` : ""}the next full-sized position needs more. No position was opened.`
-                  : reason;
-                return <p key={event.id}><b>{label}</b>{detail ? ` · ${detail}` : ""} · {new Date(event.created_at * 1000).toLocaleTimeString()}</p>;
+                const isQuoteDelay = event.kind === "strategy_rejected" && /stale|fresh market price|market feed/i.test(reason);
+                const decision = typeof event.payload?.decision === "string" ? event.payload.decision : "";
+                const eventSymbol = typeof event.payload?.symbol === "string" ? event.payload.symbol : "";
+                const label = isQuoteDelay
+                  ? "Price check paused entry"
+                  : isAllocationHold
+                    ? "Allocation hold"
+                    : event.kind === "strategy_decision" && decision === "opened"
+                      ? "Automatic entry opened"
+                      : event.kind === "strategy_decision" && decision === "hold"
+                        ? "No trade opened"
+                        : event.kind.replaceAll("_", " ");
+                const detail = isQuoteDelay
+                  ? "No position was opened. The bot will retry at its next scheduled decision after it receives a current quote."
+                  : isAllocationHold
+                    ? `${available ? `${available} is free, but ` : ""}the next full-sized position needs more. No position was opened.`
+                    : event.kind === "strategy_decision" && decision === "opened"
+                      ? `${eventSymbol ? `${memecoinMarketLabel(eventSymbol)} entry recorded. ` : ""}Position safeguards are active.`
+                      : event.kind === "strategy_decision" && decision === "hold"
+                        ? "No selected market met the strategy rules in this review."
+                        : reason || "Strategy review recorded.";
+                return <div className="activity-row" key={event.id}>
+                  <div className="activity-info">
+                    <strong>{label}</strong>
+                    <small>{detail} · {new Date(event.created_at * 1000).toLocaleTimeString()}</small>
+                  </div>
+                </div>;
               })}
+              </div>}
               {(selected.state === "running" || isDemoCreditOnlyBot) && (
                 <button
                   className="small-action"
