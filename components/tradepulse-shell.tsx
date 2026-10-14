@@ -4611,7 +4611,7 @@ type LiveDashboard = {
   popup_ttl_seconds: number;
   notices: Array<{ id: string; kind: string; title: string; body: string }>;
   referral: { count: number; accrued_usd: number; bot_username: string };
-  tier_config: Array<{ name: string; monthly: number; rate: number }>;
+  tier_config: Array<{ name: string; rate: number }>;
   referral_rates: number[];
   community_url: string;
   quotes: Record<string, number>;
@@ -6441,8 +6441,8 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
       <GradientPanel className="tier-table">
         <div className="table-row table-head">
           <span>TIER</span>
-          <span>MONTHLY</span>
-          <span>FEE</span>
+          <span>RATE</span>
+          <span>ACCOUNT</span>
         </div>
         {data.tier_config.map((tier) => (
           <div
@@ -6450,8 +6450,8 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
             key={tier.name}
           >
             <b>{tier.name}</b>
-            <span>{money(tier.monthly)}</span>
-            <strong>{tier.rate}%</strong>
+            <span>{tier.rate}% above HWM</span>
+            <strong>{tier.name === data.user.tier ? "CURRENT" : "—"}</strong>
           </div>
         ))}
       </GradientPanel>
@@ -10744,19 +10744,17 @@ function LiveTradePulse() {
               </GradientPanel>
               <GradientPanel className="announcements">
                 <span className="eyebrow">TIER & FEES</span>
-                <h2>High-water-mark fee plans</h2>
+                <h2>Assigned high-water-mark fee rates</h2>
                 {data.tier_config.map((tier) => (
                   <div className="activity-row" key={tier.name}>
                     <strong>{tier.name}</strong>
-                    <small>
-                      {money(tier.monthly)}/month · {tier.rate}% above the
-                      high-water mark
-                    </small>
+                    <small>{tier.rate}% above the high-water mark</small>
                   </div>
                 ))}
                 <p>
-                  Fees apply only to new profit above the applicable high-water
-                  mark—never deposits, losses, or a flat balance.
+                  Your account uses its assigned rate. Fees apply only to new
+                  profit above the applicable high-water mark—never deposits,
+                  losses, or a flat balance.
                 </p>
               </GradientPanel>
             </div>
