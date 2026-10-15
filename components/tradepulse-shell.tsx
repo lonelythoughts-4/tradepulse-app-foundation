@@ -6002,11 +6002,11 @@ function LiveAdminScreen({
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 CSV with a header such as <span className="mono">first_name,username,user_ref</span>. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then lets a selected cohort place settled testnet funds into the existing event engine. Their gains and losses change only their synthetic balances before later withdrawal or top-up activity.
+            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, or <span className="mono">.txt</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then lets a selected cohort place settled testnet funds into the existing event engine. Their gains and losses change only their synthetic balances before later withdrawal or top-up activity.
           </p>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES</p>
-          <label className="amount-field" htmlFor={autouserFileId}>Auto-user CSV</label>
-          <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,text/csv" aria-label="Auto-user CSV upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
+          <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
+          <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" aria-label="Auto-user names file upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
           <label className="amount-field">Minimum simulated deposit in USD
             <input value={autouserMinimum} inputMode="decimal" onChange={(event) => setAutouserMinimum(event.target.value)} placeholder="Minimum / USD" />
           </label>
