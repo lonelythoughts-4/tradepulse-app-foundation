@@ -6022,10 +6022,10 @@ function LiveAdminScreen({
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
           <h2>Dedicated public activity feed</h2>
           <p>
-            Separate from the treasury audit channel. Only confirmed mainnet customer activity can publish here: deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals. Testnet, failed or pending events, internal data, and synthetic auto-users are excluded.
+            Separate from the treasury audit channel. Confirmed mainnet customer activity can publish here: deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals. The isolated auto-user load cohort can also publish its deposit, top-up, withdrawal, demo, and demo-credit cards—but each is visibly labelled simulated testnet activity. Failed or pending events and internal data are excluded.
           </p>
           <p className="mono">
-            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET ONLY
+            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET + LABELLED SIMULATION
           </p>
           <small>{admin.community_cards?.renderer?.reason || "Renderer status unavailable."}</small>
           <label className="amount-field">Dedicated Telegram group
@@ -6091,9 +6091,9 @@ function LiveAdminScreen({
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then lets a selected cohort place settled testnet funds into the existing event engine. Their gains and losses change only their synthetic balances before later withdrawal or top-up activity.
+            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then lets a selected cohort place settled testnet funds into the existing event engine. Their gains and losses change only their synthetic balances before later withdrawal or top-up activity. Eligible paths claim an isolated virtual demo and receive simulated non-withdrawable credit on their later top-up.
           </p>
-          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES</p>
+          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / COMMUNITY CARDS ARE LABELLED SIMULATED TESTNET</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
           <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,.tsv,.txt,.json,text/csv,text/tab-separated-values,text/plain,application/json" aria-label="Auto-user names file upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
           <label className="amount-field">Minimum simulated deposit in USD
