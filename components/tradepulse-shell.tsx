@@ -4729,6 +4729,21 @@ type LiveTradePulseAdmin = {
     }>;
     forecast: Array<{ date: string; deposits: number; withdrawals: number; topups: number; total: number }>;
   };
+  community_cards: {
+    config: { group: string; enabled: boolean };
+    renderer: { ready: boolean; reason: string; version?: string };
+    counts: Record<string, number>;
+    events: Array<{
+      id: string;
+      kind: string;
+      status: "queued" | "rendering" | "sending" | "sent" | "retry" | "needs_review";
+      attempts: number;
+      render_error?: string | null;
+      telegram_message_id?: number | null;
+      created_at: number;
+      sent_at?: number | null;
+    }>;
+  };
   sweeps_enabled: boolean;
 };
 
@@ -5511,6 +5526,7 @@ function LiveAdminScreen({
   const [autouserMaximum, setAutouserMaximum] = useState("");
   const [autouserConfirmed, setAutouserConfirmed] = useState(false);
   const [autouserPending, setAutouserPending] = useState(false);
+  const [communityGroup, setCommunityGroup] = useState("");
   const fundingFieldId = useId();
   const autouserFileId = useId();
   const autouserFileRef = useRef<HTMLInputElement>(null);
@@ -5526,6 +5542,9 @@ function LiveAdminScreen({
     setWithdrawalReview(null);
     setWithdrawalError("");
   }, [environment]);
+  useEffect(() => {
+    setCommunityGroup(admin.community_cards?.config?.group || "");
+  }, [admin.community_cards?.config?.group]);
   const reviewWithdrawal = (row: LiveTradePulseAdmin["withdrawals"][number], action: "approve" | "reject") => {
     setWithdrawalError("");
     setWithdrawalReview({ row: { ...row }, action, environment });
@@ -5586,6 +5605,7 @@ function LiveAdminScreen({
       });
   }, [environment]);
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
+  const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
   const post = async (path: string, body: object, message: string) => {
     try {
@@ -5997,6 +6017,75 @@ function LiveAdminScreen({
               Reissue demo
             </button>
           </div>
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">COMMUNITY EVENT CARDS</span>
+          <h2>Dedicated public activity feed</h2>
+          <p>
+            Separate from the treasury audit channel. Only confirmed mainnet customer activity can publish here: deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals. Testnet, failed or pending events, internal data, and synthetic auto-users are excluded.
+          </p>
+          <p className="mono">
+            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET ONLY
+          </p>
+          <small>{admin.community_cards?.renderer?.reason || "Renderer status unavailable."}</small>
+          <label className="amount-field">Dedicated Telegram group
+            <input
+              value={communityGroup}
+              aria-label="Dedicated Telegram group ID or username for community cards"
+              onChange={(event) => setCommunityGroup(event.target.value.trim())}
+              placeholder="@communitygroup or -100…"
+            />
+          </label>
+          <div className="admin-actions">
+            <button
+              className="small-action"
+              disabled={!validCommunityGroup}
+              onClick={() => void post("/v1/admin/community-cards", { group: communityGroup }, "Dedicated community group saved. Publication is off until checks pass.").then((saved) => {
+                if (saved) setCommunityGroup(communityGroup);
+              })}
+            >
+              Save destination
+            </button>
+            <button
+              className="small-action"
+              disabled={!admin.community_cards?.config?.group}
+              onClick={() => void post("/v1/admin/community-cards/verify", {}, "Telegram posting permission confirmed.")}
+            >
+              Check permission
+            </button>
+            <button
+              className={admin.community_cards?.config?.enabled ? "danger-action" : "primary-action"}
+              disabled={!admin.community_cards?.config?.enabled && (!admin.community_cards?.config?.group || !admin.community_cards?.renderer?.ready)}
+              onClick={() => void post("/v1/admin/community-cards/enabled", { enabled: !admin.community_cards?.config?.enabled }, admin.community_cards?.config?.enabled ? "Community cards disabled." : "Community cards enabled.")}
+            >
+              {admin.community_cards?.config?.enabled ? "Disable publication" : "Enable publication"}
+            </button>
+            <button
+              className="small-action"
+              disabled={!admin.community_cards?.config?.enabled || !admin.community_cards?.renderer?.ready}
+              onClick={() => void post("/v1/admin/community-cards/test", {}, "Test card queued for the dedicated group.")}
+            >
+              Send test card
+            </button>
+          </div>
+          <div className="admin-row">
+            <div>
+              <strong>{Number(admin.community_cards?.counts?.queued || 0) + Number(admin.community_cards?.counts?.retry || 0)} waiting / {Number(admin.community_cards?.counts?.sent || 0)} sent</strong>
+              <small className="mono">{Number(admin.community_cards?.counts?.needs_review || 0)} NEED MANUAL REVIEW / DELIVERY IS SERIALIZED</small>
+            </div>
+          </div>
+          {(admin.community_cards?.events || []).filter((event) => event.status === "needs_review").slice(0, 5).map((event) => (
+            <div className="admin-row" key={event.id}>
+              <div>
+                <strong>{event.kind.replace(/_/g, " ")} / {event.id.slice(0, 8)}</strong>
+                <small className="mono">ATTEMPTS {event.attempts} / {event.render_error || "delivery outcome needs review"}</small>
+              </div>
+              <button className="small-action" onClick={() => void post(`/v1/admin/community-cards/${event.id}/retry`, {}, "Card queued for an explicit retry.")}>Retry</button>
+            </div>
+          ))}
+          <small>
+            A retry after an unknown Telegram outcome is a deliberate admin decision, because it could create a duplicate public post. Telegram group membership must be managed through the group invite or community flow.
+          </small>
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
