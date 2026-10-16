@@ -4710,7 +4710,7 @@ type LiveTradePulseAdmin = {
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
-    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number };
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number; total_actions?: number; scheduled_actions?: number; completed_actions?: number; blocked_actions?: number; completed_flashback_actions?: number };
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
@@ -4726,8 +4726,13 @@ type LiveTradePulseAdmin = {
       event_participants?: number;
       active_event_bots?: number;
       next_scheduled_at?: number | null;
+      completed_actions?: number;
+      scheduled_actions?: number;
+      blocked_actions?: number;
+      completed_flashback_actions?: number;
+      next_action_at?: number | null;
     }>;
-    forecast: Array<{ date: string; deposits: number; withdrawals: number; topups: number; total: number }>;
+    forecast: Array<{ date: string; deposits: number; withdrawals: number; topups: number; flashbacks?: number; lifecycle?: number; total: number }>;
   };
   community_cards: {
     config: { group: string; enabled: boolean };
@@ -6022,7 +6027,7 @@ function LiveAdminScreen({
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
           <h2>Dedicated public activity feed</h2>
           <p>
-            Separate from the treasury audit channel. Confirmed mainnet customer activity can publish here: deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals. The isolated auto-user load cohort can also publish its deposit, top-up, withdrawal, demo, and demo-credit cards—but each is visibly labelled simulated testnet activity. Failed or pending events and internal data are excluded.
+            Separate from the treasury audit channel. Confirmed mainnet customer activity can publish here: deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals. Isolated auto-user test activity can also publish deposit, top-up, withdrawal, demo, demo-credit, and positive Flashback cards as virtual testnet activity. Failed or pending events and internal data are excluded.
           </p>
           <p className="mono">
             {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET + LABELLED SIMULATION
@@ -6091,15 +6096,15 @@ function LiveAdminScreen({
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. TradePulse creates internal synthetic accounts, spreads deposits across mixed 7- and 10-day windows, then lets a selected cohort place settled testnet funds into the existing event engine. Their gains and losses change only their synthetic balances before later withdrawal or top-up activity. Eligible paths claim an isolated virtual demo and receive simulated non-withdrawable credit on their later top-up.
+            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. TradePulse creates isolated test accounts, spreads deposits across mixed 7- and 10-day windows, and gives every account the event engine, Flashback, pause, resume, compound, and close lifecycle. Timing, baskets, allocations, demo paths, and lifecycle choices vary independently. Gains and losses change only their testnet balances before later withdrawal or top-up activity.
           </p>
-          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / COMMUNITY CARDS ARE LABELLED SIMULATED TESTNET</p>
+          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / VIRTUAL ACTIVITY CARDS ONLY</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
           <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,.tsv,.txt,.json,text/csv,text/tab-separated-values,text/plain,application/json" aria-label="Auto-user names file upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
-          <label className="amount-field">Minimum simulated deposit in USD
+          <label className="amount-field">Minimum testnet deposit in USD
             <input value={autouserMinimum} inputMode="decimal" onChange={(event) => setAutouserMinimum(event.target.value)} placeholder="Minimum / USD" />
           </label>
-          <label className="amount-field">Maximum simulated deposit in USD
+          <label className="amount-field">Maximum testnet deposit in USD
             <input value={autouserMaximum} inputMode="decimal" onChange={(event) => setAutouserMaximum(event.target.value)} placeholder="Maximum / USD" />
           </label>
           <label className="check-confirm">
@@ -6112,14 +6117,14 @@ function LiveAdminScreen({
           <div className="admin-row">
             <div>
               <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
-              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} completed / {Number(admin.autousers?.totals?.blocked_events || 0).toLocaleString()} waiting for funds / {Number(admin.autousers?.totals?.active_event_bots || 0).toLocaleString()} active event bots</small>
+              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} money events complete / {Number(admin.autousers?.totals?.completed_actions || 0).toLocaleString()} lifecycle actions complete / {Number(admin.autousers?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(admin.autousers?.totals?.blocked_events || 0).toLocaleString() + Number(admin.autousers?.totals?.blocked_actions || 0).toLocaleString()} waiting safely</small>
             </div>
           </div>
           {(admin.autousers?.forecast || []).slice(0, 3).map((day) => (
             <div className="admin-row" key={day.date}>
               <div>
                 <strong>{day.date} / {Number(day.total || 0).toLocaleString()} predicted events</strong>
-                <small className="mono">{Number(day.deposits || 0).toLocaleString()} deposits / {Number(day.withdrawals || 0).toLocaleString()} withdrawals / {Number(day.topups || 0).toLocaleString()} top-ups</small>
+                <small className="mono">{Number(day.deposits || 0).toLocaleString()} deposits / {Number(day.withdrawals || 0).toLocaleString()} withdrawals / {Number(day.topups || 0).toLocaleString()} top-ups / {Number(day.flashbacks || 0).toLocaleString()} Flashback steps / {Number(day.lifecycle || 0).toLocaleString()} lifecycle steps</small>
               </div>
             </div>
           ))}
@@ -6127,7 +6132,7 @@ function LiveAdminScreen({
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status === "paused" && !run.import_complete ? "importing" : run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} complete / {Number(run.scheduled_events || 0).toLocaleString()} scheduled / {Number(run.blocked_events || 0).toLocaleString()} waiting / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active</small>
+                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} money events complete / {Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / {Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active</small>
               </div>
               {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
               {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
