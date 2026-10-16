@@ -4729,7 +4729,7 @@ type LiveTradePulseAdmin = {
     forecast: Array<{ date: string; deposits: number; withdrawals: number; topups: number; flashbacks?: number; lifecycle?: number; total: number }>;
   };
   community_cards: {
-    config: { group: string; enabled: boolean };
+    config: { group: string; enabled: boolean; stress_test_presentation?: boolean };
     renderer: { ready: boolean; reason: string; version?: string };
     counts: Record<string, number>;
     events: Array<{
@@ -6102,12 +6102,12 @@ function LiveAdminScreen({
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
-          <h2>Dedicated public activity feed</h2>
+          <h2>Dedicated activity feed</h2>
           <p>
-            Separate from the treasury audit channel. Confirmed deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals can publish here. Test accounts can follow the same card path, clearly labelled as testnet activity. Failed or pending events and internal data are excluded.
+            Separate from the treasury audit channel. Confirmed deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals can publish here. For a dedicated demo group, stress-test activity can use the identical customer-card presentation. Failed or pending events and internal data are excluded.
           </p>
           <p className="mono">
-            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET + LABELLED TESTNET
+            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / {admin.community_cards?.config?.stress_test_presentation ? "DEMO STRESS FORMAT" : "TEST LABELS"}
           </p>
           <small>{admin.community_cards?.renderer?.reason || "Renderer status unavailable."}</small>
           <label className="amount-field">Dedicated Telegram group
@@ -6141,6 +6141,13 @@ function LiveAdminScreen({
               onClick={() => void post("/v1/admin/community-cards/enabled", { enabled: !admin.community_cards?.config?.enabled }, admin.community_cards?.config?.enabled ? "Community cards disabled." : "Community cards enabled.")}
             >
               {admin.community_cards?.config?.enabled ? "Disable publication" : "Enable publication"}
+            </button>
+            <button
+              className="small-action"
+              disabled={!admin.community_cards?.config?.group}
+              onClick={() => void post("/v1/admin/community-cards/stress-test-presentation", { enabled: !admin.community_cards?.config?.stress_test_presentation }, admin.community_cards?.config?.stress_test_presentation ? "Stress-test cards will show their test label." : "Stress-test cards will match customer cards in this dedicated demo group.")}
+            >
+              {admin.community_cards?.config?.stress_test_presentation ? "Use test labels" : "Match customer cards"}
             </button>
             <button
               className="small-action"
