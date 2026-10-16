@@ -1309,16 +1309,8 @@ function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
         decoding="async"
         loading="eager"
       />
-      <svg viewBox="0 0 120 38" aria-label="Flatlined pulse">
-        <path
-          d="M2 20h28l8-9 9 18 8-9h63"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-      </svg>
       <p>No bots are running yet.</p>
-      <button onClick={onLaunch}>
+      <button className="empty-bots-action" onClick={onLaunch}>
         Launch your first bot <ChevronRight size={14} />
       </button>
     </GradientPanel>
