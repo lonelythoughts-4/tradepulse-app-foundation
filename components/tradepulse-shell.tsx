@@ -6194,7 +6194,7 @@ function LiveAdminScreen({
           <div className="admin-row">
             <div>
               <strong>Activity stays varied</strong>
-              <small>New accounts use independent 7- and 10-day deposit windows, then follow the same event, Flashback, pause, resume, compound, and close lifecycle choices.</small>
+              <small>Every run has a precomputed daily plan: 5–15 deposits per day, tapering to 2–3 near the end, with varied daytime slots. Follow-on top-ups, withdrawals, Flashbacks, and lifecycle actions continue after funding.</small>
             </div>
           </div>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / TESTNET ACTIVITY CARDS ONLY</p>
