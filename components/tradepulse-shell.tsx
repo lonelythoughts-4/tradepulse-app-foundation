@@ -4751,6 +4751,16 @@ type LiveTradePulseAdmin = {
       sent_at?: number | null;
     }>;
   };
+  broadcasts: Array<{
+    id: string;
+    scope: "all" | "user" | "channel" | "group";
+    target?: string;
+    total_recipients: number;
+    sent_count: number;
+    failed_count: number;
+    status: "queued" | "delivering" | "completed";
+    created_at: number;
+  }>;
   sweeps_enabled: boolean;
 };
 
@@ -5517,6 +5527,9 @@ function LiveAdminScreen({
   const [settingValue, setSettingValue] = useState("");
   const [broadcast, setBroadcast] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [broadcastScope, setBroadcastScope] = useState<"all" | "user" | "channel" | "group">("all");
+  const [broadcastTarget, setBroadcastTarget] = useState("");
+  const [broadcastPending, setBroadcastPending] = useState(false);
   const [adminMember, setAdminMember] = useState("");
   const [vaultChain, setVaultChain] = useState("");
   const [vaultAsset, setVaultAsset] = useState("USDT");
@@ -5615,6 +5628,12 @@ function LiveAdminScreen({
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
+  const broadcastNeedsTarget = broadcastScope !== "all";
+  const validBroadcastTarget = broadcastScope === "user"
+    ? (/^\d+$/.test(broadcastTarget) || /^@[A-Za-z0-9_]{5,32}$/.test(broadcastTarget))
+    : (/^@[A-Za-z0-9_]{5,32}$/.test(broadcastTarget) || /^-?\d{5,20}$/.test(broadcastTarget));
+  const broadcastConfirmed = confirm.trim().toUpperCase() === "SEND ALL";
+  const canSendBroadcast = Boolean(broadcast.trim()) && !broadcastPending && (!broadcastNeedsTarget || validBroadcastTarget) && (broadcastScope !== "all" || broadcastConfirmed);
   const post = async (path: string, body: object, message: string) => {
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
@@ -5701,6 +5720,34 @@ function LiveAdminScreen({
       await reload();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
+    }
+  };
+  const sendBroadcast = async () => {
+    if (!canSendBroadcast) return;
+    setBroadcastPending(true);
+    try {
+      const result = await request("/v1/admin/broadcast", {
+        method: "POST",
+        body: JSON.stringify({
+          scope: broadcastScope,
+          target: broadcastScope === "all" ? "" : broadcastTarget,
+          message: broadcast,
+          confirmation: confirm,
+        }),
+      }, environment, 30_000);
+      setBroadcast("");
+      setConfirm("");
+      setBroadcastTarget("");
+      onNotice(result.message || "Broadcast queued for delivery.");
+      try {
+        await reload();
+      } catch {
+        onNotice("Broadcast queued. The delivery status will appear after you reload the control room.");
+      }
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Broadcast could not be queued.");
+    } finally {
+      setBroadcastPending(false);
     }
   };
   return (
@@ -6065,10 +6112,10 @@ function LiveAdminScreen({
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
           <h2>Dedicated public activity feed</h2>
           <p>
-            Separate from the treasury audit channel. Confirmed mainnet customer activity can publish here: deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals. Isolated auto-user test activity can also publish deposit, top-up, withdrawal, demo, demo-credit, and positive Flashback cards as virtual testnet activity. Failed or pending events and internal data are excluded.
+            Separate from the treasury audit channel. Confirmed deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals can publish here. Test accounts can follow the same card path, clearly labelled as testnet activity. Failed or pending events and internal data are excluded.
           </p>
           <p className="mono">
-            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET + LABELLED SIMULATION
+            {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / MAINNET + LABELLED TESTNET
           </p>
           <small>{admin.community_cards?.renderer?.reason || "Renderer status unavailable."}</small>
           <label className="amount-field">Dedicated Telegram group
@@ -6111,6 +6158,9 @@ function LiveAdminScreen({
               Send test card
             </button>
           </div>
+          {!admin.community_cards?.config?.enabled && (
+            <small className="mono">SET DESTINATION / CHECK TELEGRAM POSTING ACCESS / ENABLE PUBLICATION</small>
+          )}
           <div className="admin-row">
             <div>
               <strong>{Number(admin.community_cards?.counts?.queued || 0) + Number(admin.community_cards?.counts?.retry || 0)} waiting / {Number(admin.community_cards?.counts?.sent || 0)} sent</strong>
@@ -6131,12 +6181,24 @@ function LiveAdminScreen({
           </small>
         </GradientPanel>
         <GradientPanel className="admin-table">
-          <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
+          <span className="eyebrow">AUTO-USER LOAD ACTIVITY</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. Existing names and repeated entries are skipped across every upload, so no synthetic identity is created twice. TradePulse creates isolated test accounts, spreads deposits across mixed 7- and 10-day windows, and gives every account the event engine, Flashback, pause, resume, compound, and close lifecycle. Timing, baskets, allocations, demo paths, and lifecycle choices vary independently. Gains and losses change only their testnet balances before later withdrawal or top-up activity.
+            Import a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> name list. Plain text accepts one name per line; CSV/TSV accepts <span className="mono">first_name, username, user_ref</span>; JSON accepts names or name records.
           </p>
-          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / VIRTUAL ACTIVITY CARDS ONLY</p>
+          <div className="admin-row">
+            <div>
+              <strong>Duplicates stay protected</strong>
+              <small>Repeated names in this file or an earlier upload are skipped. Existing test accounts and their scheduled activity remain untouched.</small>
+            </div>
+          </div>
+          <div className="admin-row">
+            <div>
+              <strong>Activity stays varied</strong>
+              <small>New accounts use independent 7- and 10-day deposit windows, then follow the same event, Flashback, pause, resume, compound, and close lifecycle choices.</small>
+            </div>
+          </div>
+          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / TESTNET ACTIVITY CARDS ONLY</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
           <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,.tsv,.txt,.json,text/csv,text/tab-separated-values,text/plain,application/json" aria-label="Auto-user names file upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
           <label className="amount-field">Minimum testnet deposit in USD
@@ -6223,36 +6285,67 @@ function LiveAdminScreen({
         <GradientPanel className="admin-table">
           <span className="eyebrow">BROADCAST COMPOSER</span>
           <h2>Send a desk notice</h2>
+          <label className="amount-field">Audience
+            <select
+              value={broadcastScope}
+              aria-label="Broadcast audience"
+              onChange={(event) => {
+                setBroadcastScope(event.target.value as "all" | "user" | "channel" | "group");
+                setBroadcastTarget("");
+              }}
+            >
+              <option value="all">All bot users</option>
+              <option value="user">One bot user</option>
+              <option value="channel">Telegram channel</option>
+              <option value="group">Telegram group</option>
+            </select>
+          </label>
+          {broadcastNeedsTarget && (
+            <label className="amount-field">
+              {broadcastScope === "user" ? "Telegram user ID or @username" : `${broadcastScope === "channel" ? "Channel" : "Group"} @username or chat ID`}
+              <input
+                value={broadcastTarget}
+                aria-label="Broadcast destination"
+                onChange={(event) => setBroadcastTarget(event.target.value.trim())}
+                placeholder={broadcastScope === "user" ? "Telegram user ID or @username" : "@destination or -100…"}
+              />
+            </label>
+          )}
           <textarea
             value={broadcast}
             aria-label="Operational broadcast message"
             onChange={(e) => setBroadcast(e.target.value)}
             placeholder="Operational message"
+            maxLength={3900}
           />
-          <input
-            value={confirm}
-            aria-label="Broadcast confirmation: type SEND ALL"
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder="Type SEND ALL to send all users"
-          />
+          {broadcastScope === "all" ? (
+            <label className="amount-field">Confirm all-user delivery
+              <input
+                value={confirm}
+                aria-label="Broadcast confirmation: type SEND ALL"
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Type SEND ALL to queue all users"
+              />
+            </label>
+          ) : (
+            <small className="mono">ONE DESTINATION / DELIVERY IS QUEUED AND RECORDED</small>
+          )}
           <button
             className="primary-action"
-            disabled={!broadcast.trim() || confirm !== "SEND ALL"}
-            onClick={() =>
-              post(
-                "/v1/admin/broadcast",
-                {
-                  scope: "all",
-                  target: "",
-                  message: broadcast,
-                  confirmation: confirm,
-                },
-                "Broadcast sent and logged.",
-              )
-            }
+            disabled={!canSendBroadcast}
+            aria-busy={broadcastPending}
+            onClick={() => void sendBroadcast()}
           >
-            Send broadcast <Send />
+            {broadcastPending ? "Queuing broadcast…" : "Queue broadcast"} <Send />
           </button>
+          {(admin.broadcasts || []).slice(0, 3).map((row) => (
+            <div className="admin-row" key={row.id}>
+              <div>
+                <strong>{row.scope === "all" ? "All bot users" : row.target || row.scope} / {row.status}</strong>
+                <small className="mono">{Number(row.sent_count).toLocaleString()}/{Number(row.total_recipients).toLocaleString()} DELIVERED / {Number(row.failed_count).toLocaleString()} FAILED</small>
+              </div>
+            </div>
+          ))}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">ADMIN MEMBERS</span>
