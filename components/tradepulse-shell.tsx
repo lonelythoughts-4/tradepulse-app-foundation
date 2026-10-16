@@ -5526,6 +5526,7 @@ function LiveAdminScreen({
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
   const [pendingRecovery, setPendingRecovery] = useState<number | null>(null);
+  const [pendingAccountAction, setPendingAccountAction] = useState<"fund" | "onboarding" | "pilot" | null>(null);
   const [autouserFile, setAutouserFile] = useState<File | null>(null);
   const [autouserMinimum, setAutouserMinimum] = useState("");
   const [autouserMaximum, setAutouserMaximum] = useState("");
@@ -5615,12 +5616,33 @@ function LiveAdminScreen({
   const post = async (path: string, body: object, message: string) => {
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
+      try {
+        await reload();
+      } catch {
+        // The server action already succeeded. Do not turn that into a false
+        // failure merely because a later dashboard refresh is interrupted.
+        onNotice(`${message} The control room could not refresh; reload before taking another action.`);
+        return true;
+      }
       onNotice(message);
-      await reload();
       return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Admin action failed.");
       return false;
+    }
+  };
+  const runAccountAction = async (
+    action: "fund" | "onboarding" | "pilot",
+    path: string,
+    body: object,
+    message: string,
+  ) => {
+    if (pendingAccountAction) return;
+    setPendingAccountAction(action);
+    try {
+      await post(path, body, message);
+    } finally {
+      setPendingAccountAction(null);
     }
   };
   const saveSyntheticConfig = async (settings: Record<string, string>) => {
@@ -5849,21 +5871,21 @@ function LiveAdminScreen({
                       disabled={pendingRecovery !== null}
                       onClick={() => updateRecovery(row.id, "verified", "Marked verified after manual evidence review.", "Recovery marked verified. No funds were moved.")}
                     >
-                      Mark verified
+                      {pendingRecovery === row.id ? "Updating…" : "Mark verified"}
                     </button>
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
                       onClick={() => updateRecovery(row.id, "treasury_review", "Escalated for custody review.", "Recovery sent to Treasury Review.")}
                     >
-                      Treasury review
+                      {pendingRecovery === row.id ? "Updating…" : "Treasury review"}
                     </button>
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
                       onClick={() => updateRecovery(row.id, "rejected", "Rejected after manual evidence review.", "Recovery rejected.")}
                     >
-                      Reject
+                      {pendingRecovery === row.id ? "Updating…" : "Reject"}
                     </button>
                   </>
                 ) : row.status === "verified" ? (
@@ -5873,14 +5895,14 @@ function LiveAdminScreen({
                       disabled={pendingRecovery !== null}
                       onClick={() => updateRecovery(row.id, "treasury_review", "Escalated for custody review after evidence verification.", "Recovery sent to Treasury Review.")}
                     >
-                      Treasury review
+                      {pendingRecovery === row.id ? "Updating…" : "Treasury review"}
                     </button>
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
                       onClick={() => updateRecovery(row.id, "rejected", "Rejected after verification review.", "Recovery rejected.")}
                     >
-                      Reject
+                      {pendingRecovery === row.id ? "Updating…" : "Reject"}
                     </button>
                   </>
                 ) : row.status === "treasury_review" ? (
@@ -5889,7 +5911,7 @@ function LiveAdminScreen({
                     disabled={pendingRecovery !== null}
                     onClick={() => updateRecovery(row.id, "rejected", "Rejected during treasury review.", "Recovery rejected.")}
                   >
-                    Reject
+                    {pendingRecovery === row.id ? "Updating…" : "Reject"}
                   </button>
                 ) : (
                   <span className="status-chip review">{row.status.replace("_", " ")}</span>
@@ -5981,47 +6003,61 @@ function LiveAdminScreen({
             onChange={(e) => setReason(e.target.value)}
             placeholder="Funding reason"
           />
+          <p className="security-feedback" role="status">
+            {!/^[0-9]+$/.test(target)
+              ? "Enter a numeric Telegram user ID to enable onboarding reset."
+              : !validFunding
+                ? "Funding also needs a positive USD amount and a clear reason."
+                : "Funding will be recorded in the selected admin workspace."}
+          </p>
           <div className="admin-actions">
             <button
               className="small-action"
-              disabled={!validFunding}
+              disabled={!validFunding || pendingAccountAction !== null}
+              aria-busy={pendingAccountAction === "fund"}
               onClick={() =>
-                post(
+                void runAccountAction(
+                  "fund",
                   "/v1/admin/fund",
                   { user_id: Number(target), amount: Number(amount), reason },
                   "User funded.",
                 )
               }
             >
-              Fund user
+              {pendingAccountAction === "fund" ? "Funding…" : "Fund user"}
             </button>
             <button
               className="danger-action"
-              disabled={!/^\d+$/.test(target)}
+              disabled={!/^\d+$/.test(target) || pendingAccountAction !== null}
+              aria-busy={pendingAccountAction === "onboarding"}
               onClick={() =>
-                post(
+                void runAccountAction(
+                  "onboarding",
                   "/v1/admin/onboarding/reset",
                   { user_id: Number(target) },
                   "Onboarding reset.",
                 )
               }
             >
-              Reset onboarding
+              {pendingAccountAction === "onboarding" ? "Resetting…" : "Reset onboarding"}
             </button>
             <button
               className="small-action"
-              disabled={!/^\d+$/.test(target)}
+              disabled={environment !== "testnet" || pendingAccountAction !== null}
+              aria-busy={pendingAccountAction === "pilot"}
               onClick={() =>
-                post(
+                void runAccountAction(
+                  "pilot",
                   "/v1/admin/demo/reissue",
-                  { user_id: Number(target) },
-                  "Test demo reissued.",
+                  {},
+                  "Your isolated testnet pilot was reset.",
                 )
               }
             >
-              Reissue demo
+              {pendingAccountAction === "pilot" ? "Resetting…" : "Reset my testnet pilot"}
             </button>
           </div>
+          {environment !== "testnet" && <small className="mono">TESTNET PILOT RESET IS AVAILABLE ONLY IN THE TESTNET ADMIN WORKSPACE.</small>}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
