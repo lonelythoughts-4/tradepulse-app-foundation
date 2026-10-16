@@ -7257,6 +7257,7 @@ function LiveBotsScreen({
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
   const flashback = data.flashback || null;
+  const flashbackAvailable = String(data.environment || "").toLowerCase() === "mainnet";
   const flashbackRules = data.flashback_rules;
   const flashbackReturnTable = (amount: number) => (
     flashbackRules?.payout_tables?.[String(amount)] || []
@@ -7487,6 +7488,71 @@ function LiveBotsScreen({
     ? Math.max(0, Math.ceil((flashback.expires_at * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))
     : 0;
   const flashbackTimeLabel = `${Math.floor(flashbackRemaining / 60)}:${String(flashbackRemaining % 60).padStart(2, "0")}`;
+  const flashbackFleetState = flashback?.state || "available";
+  const flashbackFleetStatus = flashbackFleetState === "sealed"
+    ? "sealed"
+    : flashbackFleetState === "ready_to_reveal"
+      ? "ready to reveal"
+      : flashbackFleetState === "revealed"
+        ? "settled"
+        : "available";
+  const flashbackFleetTone = flashbackFleetState === "ready_to_reveal" || flashbackFleetState === "revealed"
+    ? "running"
+    : "paused";
+  const flashbackFleetAction = flashbackFleetState === "ready_to_reveal"
+    ? "Reveal result"
+    : flashbackFleetState === "revealed"
+      ? "Review Flashback"
+      : flashbackFleetState === "sealed"
+        ? "View session"
+        : "Open Flashback";
+  const flashbackFleetCard = flashbackAvailable ? (
+    <GradientPanel className="fleet-bot-card reveal-card" key="flashback">
+      <div className="fleet-bot-head">
+        <div>
+          <div className="bot-title">
+            <strong>Flashback</strong>
+            <span className={`status-chip ${flashbackFleetTone}`}>
+              <i />
+              {flashbackFleetStatus}
+            </span>
+          </div>
+          <span className="eyebrow">SEALED RETURN</span>
+          <strong className="fleet-amount">
+            {flashback ? money(Number(flashback.allocation_usd || 0)) : "Choose an entry"}
+          </strong>
+        </div>
+      </div>
+      <div className="fleet-metrics">
+        {!flashback && <>
+          <div><span>FIXED ENTRIES</span><strong>$20 / $50 / $100</strong></div>
+          <div><span>MAX RETURN</span><strong>{Number(flashbackRules?.max_return_multiplier || 1.5).toFixed(2)}×</strong></div>
+          <div><span>STATUS</span><strong>AVAILABLE</strong></div>
+        </>}
+        {flashbackFleetState === "sealed" && <>
+          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
+          <div><span>REVEAL WINDOW</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></div>
+          <div><span>STATUS</span><strong>SEALED</strong></div>
+        </>}
+        {flashbackFleetState === "ready_to_reveal" && <>
+          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
+          <div><span>RESULT</span><strong>READY</strong></div>
+          <div><span>STATUS</span><strong>REVEAL NOW</strong></div>
+        </>}
+        {flashbackFleetState === "revealed" && <>
+          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
+          <div><span>RETURNED</span><strong>{money(Number(flashback?.return_usd || 0))}</strong></div>
+          <div><span>STATUS</span><strong>SETTLED</strong></div>
+        </>}
+      </div>
+      <div className="fleet-bot-actions">
+        <span className="compound-chip">SEALED RETURN · SEPARATE FROM BOTS</span>
+        <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
+          {flashbackFleetAction} <ChevronRight />
+        </button>
+      </div>
+    </GradientPanel>
+  ) : null;
   const startFlashback = async () => {
     const started = await run("/v1/flashback/start", { amount: flashbackAmount });
     if (started) {
@@ -8166,9 +8232,13 @@ function LiveBotsScreen({
             </GradientPanel>
             );
           })}
+          {flashbackFleetCard}
         </div>
       ) : (
-        <EmptyBots onLaunch={() => setView("create")} />
+        <>
+          {flashbackFleetCard && <div className="fleet-bot-grid">{flashbackFleetCard}</div>}
+          <EmptyBots onLaunch={() => setView("create")} />
+        </>
       )}
       {displayBots.some((bot) => bot.state === "paused") && (
         <GradientPanel className="bot-card">
