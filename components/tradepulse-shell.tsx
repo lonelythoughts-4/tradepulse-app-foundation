@@ -6217,9 +6217,10 @@ function LiveAdminScreen({
             <div>
               <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
               <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} money events complete / {Number(admin.autousers?.totals?.completed_actions || 0).toLocaleString()} lifecycle actions complete / {Number(admin.autousers?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(admin.autousers?.totals?.blocked_events || 0).toLocaleString() + Number(admin.autousers?.totals?.blocked_actions || 0).toLocaleString()} waiting safely</small>
+              {(admin.autousers?.forecast || []).length > 0 && <small className="mono">FULL PLAN: {admin.autousers?.forecast?.[0]?.date} → {admin.autousers?.forecast?.[(admin.autousers?.forecast?.length || 1) - 1]?.date} / {(admin.autousers?.forecast || []).length} ACTIVE DAYS</small>}
             </div>
           </div>
-          {(admin.autousers?.forecast || []).slice(0, 3).map((day) => (
+          {(admin.autousers?.forecast || []).slice(0, 14).map((day) => (
             <div className="admin-row" key={day.date}>
               <div>
                 <strong>{day.date} / {Number(day.total || 0).toLocaleString()} predicted events</strong>
