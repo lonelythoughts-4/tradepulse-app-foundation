@@ -4569,7 +4569,7 @@ type LiveDashboard = {
     status: string;
   }>;
   recovery_cases: Array<{
-    id: number;
+    id: string;
     network: string;
     asset: string;
     status: string;
@@ -4686,7 +4686,7 @@ type LiveTradePulseAdmin = {
     status: string;
   }>;
   recovery_cases: Array<{
-    id: number;
+    id: string;
     status: string;
     asset: string;
     network: string;
@@ -4725,6 +4725,8 @@ type LiveTradePulseAdmin = {
       completed_topups?: number;
       event_participants?: number;
       active_event_bots?: number;
+      imported_accounts?: number;
+      pending_imports?: number;
       next_scheduled_at?: number | null;
       completed_actions?: number;
       scheduled_actions?: number;
@@ -5525,7 +5527,7 @@ function LiveAdminScreen({
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
-  const [pendingRecovery, setPendingRecovery] = useState<number | null>(null);
+  const [pendingRecovery, setPendingRecovery] = useState<string | null>(null);
   const [pendingAccountAction, setPendingAccountAction] = useState<"fund" | "onboarding" | "pilot" | null>(null);
   const [autouserFile, setAutouserFile] = useState<File | null>(null);
   const [autouserMinimum, setAutouserMinimum] = useState("");
@@ -5657,7 +5659,7 @@ function LiveAdminScreen({
       onNotice(error instanceof Error ? error.message : "Could not save synthetic configuration.");
     }
   };
-  const updateRecovery = async (caseId: number, status: string, note: string, message: string) => {
+  const updateRecovery = async (caseId: string, status: string, note: string, message: string) => {
     if (pendingRecovery !== null) return;
     setPendingRecovery(caseId);
     try {
@@ -5675,10 +5677,10 @@ function LiveAdminScreen({
       form.append("min_amount", autouserMinimum);
       form.append("max_amount", autouserMaximum);
       form.append("confirmed", "true");
-      // A 50,000-account cohort is committed in bounded server-side batches.
-      // Keep the browser session alive long enough to receive its definitive
-      // result rather than suggesting a failed upload while it is finishing.
-      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 180_000);
+      // The API accepts only the durable import queue here. Account setup and
+      // activity expansion happen independently on the server, so a large
+      // upload never leaves this browser control stuck on a long request.
+      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 30_000);
       setAutouserFile(null);
       if (autouserFileRef.current) autouserFileRef.current.value = "";
       setAutouserMinimum("");
@@ -6132,7 +6134,7 @@ function LiveAdminScreen({
           <span className="eyebrow">AUTO-USER LOAD SIMULATION</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. TradePulse creates isolated test accounts, spreads deposits across mixed 7- and 10-day windows, and gives every account the event engine, Flashback, pause, resume, compound, and close lifecycle. Timing, baskets, allocations, demo paths, and lifecycle choices vary independently. Gains and losses change only their testnet balances before later withdrawal or top-up activity.
+            Upload a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> names file. CSV/TSV can use <span className="mono">first_name,username,user_ref</span> headers; a plain text file can simply contain one name per line; JSON can be an array of names or name records. Existing names and repeated entries are skipped across every upload, so no synthetic identity is created twice. TradePulse creates isolated test accounts, spreads deposits across mixed 7- and 10-day windows, and gives every account the event engine, Flashback, pause, resume, compound, and close lifecycle. Timing, baskets, allocations, demo paths, and lifecycle choices vary independently. Gains and losses change only their testnet balances before later withdrawal or top-up activity.
           </p>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / VIRTUAL ACTIVITY CARDS ONLY</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
@@ -6148,7 +6150,7 @@ function LiveAdminScreen({
             I understand this schedules testnet-only deposit, withdrawal, and top-up activity—not real transfers.
           </label>
           <button className="primary-action" disabled={!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)} onClick={() => void submitAutouserRun()}>
-            {autouserPending ? "Scheduling run…" : "Schedule activity run"}
+            {autouserPending ? "Queuing activity run…" : "Queue activity run"}
           </button>
           <div className="admin-row">
             <div>
@@ -6168,7 +6170,7 @@ function LiveAdminScreen({
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status === "paused" && !run.import_complete ? "importing" : run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{Number(run.completed_events || 0).toLocaleString()} money events complete / {Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / {Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / {Number(run.active_event_bots || 0).toLocaleString()}/{Number(run.event_participants || 0).toLocaleString()} event bots active</small>
+                <small className="mono">{run.status === "paused" && !run.import_complete ? `${Number(run.imported_accounts || 0).toLocaleString()}/${Number(run.imported_users || 0).toLocaleString()} accounts prepared / ${Number(run.pending_imports || 0).toLocaleString()} remaining` : `${Number(run.completed_events || 0).toLocaleString()} money events complete / ${Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / ${Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / ${Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / ${Number(run.active_event_bots || 0).toLocaleString()}/${Number(run.event_participants || 0).toLocaleString()} event bots active`}</small>
               </div>
               {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
               {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
