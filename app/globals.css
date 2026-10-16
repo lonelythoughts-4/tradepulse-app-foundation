@@ -138,6 +138,10 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
     transform: translate(-50%, -50%);
   }
 }
+
+/* Keep the launch chevron at its icon size; the empty-state illustration
+   selector must not size descendant action icons. */
+.empty-bots-action svg{width:14px!important;height:14px!important;flex:0 0 14px}
 .eyebrow { line-height: 1.35; }
 .main-content { max-width: 1440px; }
 .content-wrap { min-width: 0; }
