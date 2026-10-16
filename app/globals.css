@@ -142,6 +142,12 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
 /* Keep the launch chevron at its icon size; the empty-state illustration
    selector must not size descendant action icons. */
 .empty-bots-action svg{width:14px!important;height:14px!important;flex:0 0 14px}
+
+/* Wallets use a factual ledger note, not a promotional reassurance panel. */
+.wallet-ledger-note{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:start;gap:12px;padding:16px 18px;background:var(--card);border-color:var(--border)}
+.wallet-ledger-note>svg{margin-top:1px;color:var(--primary)}
+.wallet-ledger-note strong{display:block;color:var(--foreground);font:600 12px var(--font-space-grotesk),sans-serif}
+.wallet-ledger-note p{margin:4px 0 0;color:var(--tp-supporting-text);font-size:11px;line-height:1.45}
 .eyebrow { line-height: 1.35; }
 .main-content { max-width: 1440px; }
 .content-wrap { min-width: 0; }

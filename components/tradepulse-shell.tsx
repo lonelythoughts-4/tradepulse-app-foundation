@@ -1377,6 +1377,18 @@ function StepRail({ current }: { current: number }) {
     </div>
   );
 }
+function WalletLedgerNote() {
+  return (
+    <GradientPanel className="wallet-ledger-note">
+      <History size={17} />
+      <div>
+        <strong>Wallet activity ledger</strong>
+        <p>Processed deposits, allocations, and withdrawals appear in Activity.</p>
+      </div>
+    </GradientPanel>
+  );
+}
+
 function WalletOverview({ setView }: { setView: (view: string) => void }) {
   return (
     <div className="wallet-grid">
@@ -1439,16 +1451,7 @@ function WalletOverview({ setView }: { setView: (view: string) => void }) {
           </button>
         ))}
       </div>
-      <GradientPanel className="wallet-promo">
-        <ShieldCheck />
-        <div>
-          <span className="eyebrow">CUSTODY CONTROL</span>
-          <h2>Your funds stay yours.</h2>
-          <p>
-            Every movement is recorded, verified, and visible in your ledger.
-          </p>
-        </div>
-      </GradientPanel>
+      <WalletLedgerNote />
     </div>
   );
 }
@@ -9281,16 +9284,7 @@ function LiveWalletScreen({
           <ChevronRight />
         </button>
       </div>
-      <GradientPanel className="wallet-promo">
-        <ShieldCheck />
-        <div>
-          <span className="eyebrow">CUSTODY CONTROL</span>
-          <h2>Your funds stay yours.</h2>
-          <p>
-            Every movement is recorded, verified, and visible in your ledger.
-          </p>
-        </div>
-      </GradientPanel>
+      <WalletLedgerNote />
     </div>
   );
 }
