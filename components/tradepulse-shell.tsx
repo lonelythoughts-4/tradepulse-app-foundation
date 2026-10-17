@@ -7630,7 +7630,7 @@ function LiveBotsScreen({
       // The parent owns the desk snapshot. Apply an authoritative response
       // there rather than reaching across component scope; only responses
       // without a usable projection require the slower full refresh.
-      if (response.bot || response.wallet || response.position) {
+      if (response.bot || response.wallet || response.position || response.session) {
         onActionResult(path, payload, response);
       } else {
         await reload();
@@ -7742,12 +7742,15 @@ function LiveBotsScreen({
       setFlashbackReview(false);
       setFlashbackNewSession(false);
       setFlashbackNow(Date.now());
-      await reload();
+      void reload().catch(() => undefined);
     }
   };
   const revealFlashback = async () => {
     const revealed = await run("/v1/flashback/reveal", {});
-    if (revealed) await reload();
+    // `run` applies the returned settled session before this promise resolves,
+    // so the sealed state is never left on screen while a background refresh
+    // catches up with the ledger and related projections.
+    if (revealed) void reload().catch(() => undefined);
   };
   if (view === "flashback")
     return (
@@ -9997,6 +10000,17 @@ function LiveTradePulse() {
       setData((current) =>
         current ? { ...current, demo: response.trial as LiveDashboard["demo"] } : current,
       );
+    }
+    if (path.startsWith("/v1/flashback/") && response.session && typeof response.session === "object") {
+      const session = response.session as NonNullable<LiveDashboard["flashback"]>;
+      const wallet = response.wallet && typeof response.wallet === "object"
+        ? response.wallet as Partial<LiveDashboard["wallet"]>
+        : null;
+      setData((current) => current ? {
+        ...current,
+        flashback: { ...current.flashback, ...session },
+        wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
+      } : current);
     }
   };
   const act = async (path: string, payload: Record<string, unknown>, onError?: (message: string) => void): Promise<boolean> => {
