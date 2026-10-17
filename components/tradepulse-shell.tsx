@@ -4786,20 +4786,9 @@ function telegramLaunchData() {
 function telegramInitData() {
   const bridgeData = telegramWebApp()?.initData || "";
   const launchData = telegramLaunchData();
-  if (bridgeData || launchData) {
-    const value = bridgeData || launchData;
-    try {
-      window.sessionStorage.setItem("tradepulse.telegram.initData", value);
-    } catch {
-      /* storage is optional */
-    }
-    return value;
-  }
-  try {
-    return window.sessionStorage.getItem("tradepulse.telegram.initData") || "";
-  } catch {
-    return "";
-  }
+  // Never cache Telegram proof in a reused tab. Browser handoff has its own
+  // HttpOnly server session; a signed Mini App always supplies fresh proof.
+  return bridgeData || launchData;
 }
 // Telegram can expose a WebApp object in an in-app browser without mounting a
 // signed Mini App. Only signed init data means the desk has a usable Telegram
@@ -9391,6 +9380,7 @@ function deskTabFromHash(): DeskTab | null {
 function LiveTradePulse() {
   const reduceMotion = useReducedMotion();
   const [data, setData] = useState<LiveDashboard | null>(null);
+  const authenticatedUserRef = useRef<number | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
@@ -9710,8 +9700,19 @@ function LiveTradePulse() {
       // during a transient database reconnect instead of mislabelling it as
       // an authentication failure at twelve seconds.
       const next = await request("/v1/dashboard", {}, targetEnvironment, 25_000);
+      const previousUserId = authenticatedUserRef.current;
+      if (previousUserId !== null && previousUserId !== next.user.id) {
+        // Never let an earlier account's in-memory projections flash while a
+        // new Telegram identity becomes active in the same browser tab.
+        setAdmin(null);
+        setSynthetic(null);
+        setSyntheticSignals([]);
+        setPendingActions({});
+        setWebEnvironment("mainnet");
+      }
+      authenticatedUserRef.current = next.user.id;
       setData(next);
-      setWebEnvironment(next.environment);
+      setWebEnvironment(next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet");
     } catch (error) {
       setNotice(
         error instanceof DOMException && error.name === "AbortError"
