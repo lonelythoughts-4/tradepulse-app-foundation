@@ -805,7 +805,6 @@ type VisualDeskModel = {
   };
   tier: string;
   alerts: number;
-  quotes: Record<string, number>;
   ledger: Array<{
     id?: number;
     kind: string;
@@ -1064,36 +1063,6 @@ function StatChips({
         <div className="stat-chip" key={label}>
           <span>{label}</span>
           <strong>{value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-function PriceStrip({ quotes }: { quotes?: Record<string, number> }) {
-  const fallbackPrices = [
-    ["BTC/USD", "$67,842.10", "+2.41%", true],
-    ["ETH/USD", "$3,842.66", "+1.08%", true],
-    ["SOL/USD", "$182.44", "-0.74%", false],
-    ["PEPE/USD", "$0.0000124", "+8.92%", true],
-  ] as const;
-  const prices =
-    quotes && Object.keys(quotes).length
-      ? Object.entries(quotes)
-          .slice(0, 4)
-          .map(
-            ([asset, value]) =>
-              [asset, money(Number(value)), "LIVE", true] as const,
-          )
-      : fallbackPrices;
-  return (
-    <div className="price-strip reveal-card">
-      {prices.map(([name, price, change, up]) => (
-        <div className="ticker" key={name}>
-          <span>{name}</span>
-          <strong>{price}</strong>
-          <small className={up ? "up" : "down"}>
-            {up ? "↗" : "↘"} {change}
-          </small>
         </div>
       ))}
     </div>
@@ -2787,7 +2756,6 @@ function Dashboard({
           ))}
         </div>
       </section>
-      <PriceStrip quotes={model?.quotes} />
       <Activity ledger={model?.ledger} onViewAll={onViewActivity} />
       <DemoBanner
         demo={model?.demo}
@@ -5752,7 +5720,7 @@ function LiveAdminScreen({
         <div>
           <span className="eyebrow">ADMIN / CONTROL ROOM</span>
           <h2>Operations desk</h2>
-          <small className="mono">SEPARATE ADMIN WORKSPACE</small>
+          <small className="mono">ADMIN WORKSPACE / CHANGES ARE ENVIRONMENT-SCOPED</small>
         </div>
         <div className="env-toggle">
           {(["mainnet", "testnet"] as const).map((item) => (
@@ -6107,9 +6075,7 @@ function LiveAdminScreen({
         <GradientPanel className="admin-table">
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
           <h2>Dedicated activity feed</h2>
-          <p>
-            Separate from the treasury audit channel. Confirmed deposits, top-ups, completed withdrawals, eligible demo activity, and positive Flashback reveals can publish here. For a dedicated demo group, stress-test activity can use the identical customer-card presentation. Failed or pending events and internal data are excluded.
-          </p>
+          <p>Posts confirmed activity to a dedicated group only. Treasury audit delivery remains separate; failed, pending, and internal events never publish.</p>
           <p className="mono">
             {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / {admin.community_cards?.config?.stress_test_presentation ? "DEMO STRESS FORMAT" : "TEST LABELS"}
           </p>
@@ -6179,9 +6145,7 @@ function LiveAdminScreen({
               <button className="small-action" onClick={() => void post(`/v1/admin/community-cards/${event.id}/retry`, {}, "Card queued for an explicit retry.")}>Retry</button>
             </div>
           ))}
-          <small>
-            A retry after an unknown Telegram outcome is a deliberate admin decision, because it could create a duplicate public post. Telegram group membership must be managed through the group invite or community flow.
-          </small>
+          <small>Retry only after checking Telegram: an unknown send outcome can create a duplicate post. Group membership is managed through Telegram’s invite or community flow.</small>
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">AUTO-USER LOAD ACTIVITY</span>
@@ -6570,6 +6534,7 @@ function LiveDeskScreen({
   const [threshold, setThreshold] = useState("");
   const [alertError, setAlertError] = useState("");
   const [analystBriefing, setAnalystBriefing] = useState("");
+  const [analystQuestion, setAnalystQuestion] = useState("");
   const [analystError, setAnalystError] = useState("");
   const [analystLoading, setAnalystLoading] = useState(false);
   const alertErrorId = useId();
@@ -6607,7 +6572,10 @@ function LiveDeskScreen({
     setAnalystLoading(true);
     setAnalystError("");
     try {
-      const response = await request("/v1/live-desk/analyst", { method: "POST", body: "{}" });
+      const response = await request("/v1/live-desk/analyst", {
+        method: "POST",
+        body: JSON.stringify({ question: analystQuestion.trim() || undefined }),
+      });
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
       if (!text) throw new Error("The analyst did not return a usable briefing.");
       setAnalystBriefing(text);
@@ -6661,9 +6629,25 @@ function LiveDeskScreen({
             <div><strong>NVIDIA analyst</strong><small>{analystReady ? "Strategy context" : "Connection pending"}</small></div>
           </div>
           <div className="analyst-copy">
-            {analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Generate a short explanation of your saved strategy controls. It never places orders or gives buy, sell, price-target, or return claims."}</p>}
+            {analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask about your saved controls, listed markets, strategy state, or reference-data freshness. It does not forecast prices, returns, or payouts."}</p>}
             {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
-            <button className="small-action analyst-action" disabled={!selection || !analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Preparing briefing…" : analystBriefing ? "Refresh briefing" : "Generate briefing"}<StateIcon name="refresh" /></button>
+            <label className="analyst-question">
+              <span>Ask the analyst</span>
+              <input
+                value={analystQuestion}
+                maxLength={280}
+                disabled={!selection || !analystReady || analystLoading}
+                onChange={(event) => {
+                  setAnalystQuestion(event.target.value);
+                  if (analystError) setAnalystError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void generateAnalystBriefing();
+                }}
+                placeholder="What does my saved cadence control?"
+              />
+            </label>
+            <button className="small-action analyst-action" disabled={!selection || !analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Checking context…" : analystQuestion.trim() ? "Ask analyst" : analystBriefing ? "Refresh overview" : "Generate overview"}<StateIcon name="refresh" /></button>
           </div>
         </div>
       </GradientPanel>
@@ -10272,7 +10256,6 @@ function LiveTradePulse() {
     wallet: data.wallet,
     tier: data.user.tier,
     alerts: data.alerts.length,
-    quotes: data.quotes,
     ledger: data.ledger,
     demo: data.demo,
   };
