@@ -367,13 +367,13 @@ function BootScreen({ onComplete }: { onComplete: () => void }) {
 
 type AvatarId = "orbit" | "signal" | "prism" | "current" | "vector" | "tide";
 
-const avatarOptions: Array<{ id: AvatarId; name: string; detail: string }> = [
-  { id: "orbit", name: "Orbit", detail: "steady and observant" },
-  { id: "signal", name: "Signal", detail: "fast and focused" },
-  { id: "prism", name: "Prism", detail: "clear and adaptive" },
-  { id: "current", name: "Current", detail: "calm and responsive" },
-  { id: "vector", name: "Vector", detail: "precise and direct" },
-  { id: "tide", name: "Tide", detail: "patient and measured" },
+const avatarOptions: Array<{ id: AvatarId; name: string; detail: string; utility: string; artifact: string }> = [
+  { id: "orbit", name: "Orbit", detail: "capital keeps its horizon", utility: "Wallet quick route", artifact: "Orbital receipt seal" },
+  { id: "signal", name: "Signal", detail: "read the pulse, hold the line", utility: "Live Desk quick route", artifact: "Signal-call stamp" },
+  { id: "prism", name: "Prism", detail: "separate motion from noise", utility: "Activity quick route", artifact: "Prismatic field note" },
+  { id: "current", name: "Current", detail: "move when the signal settles", utility: "Alerts quick route", artifact: "Current-flow mark" },
+  { id: "vector", name: "Vector", detail: "make the next move legible", utility: "Bots quick route", artifact: "Vector dispatch tag" },
+  { id: "tide", name: "Tide", detail: "keep a measured rhythm", utility: "Account quick route", artifact: "Tide-line token" },
 ];
 
 function PulseAvatar({
@@ -387,6 +387,7 @@ function PulseAvatar({
 }) {
   return (
     <span className={`pulse-avatar avatar-${id} ${className}`} aria-hidden="true">
+      <img src={`/identity-assets/${id}-figure.svg`} alt="" />
       <i />
       <b>{initials?.slice(0, 1) || "T"}</b>
     </span>
@@ -399,28 +400,36 @@ function AvatarPicker({
   onConfirm,
   onClose,
   required = false,
+  locked = false,
+  current,
+  fee = 10,
+  available = 0,
 }: {
   selected: AvatarId;
   onSelect: (id: AvatarId) => void;
   onConfirm: (id: AvatarId) => void;
   onClose: () => void;
   required?: boolean;
+  locked?: boolean;
+  current?: AvatarId;
+  fee?: number;
+  available?: number;
 }) {
   return (
     <AccessibleDialog
-      label="Choose your TradePulse avatar"
+      label="Choose your TradePulse desk identity"
       onClose={onClose}
       dismissible={!required}
     >
       <div className="avatar-picker-dialog">
         {!required && (
-          <button className="modal-close" type="button" onClick={onClose} aria-label="Close avatar picker">
+            <button className="modal-close" type="button" onClick={onClose} aria-label="Close identity picker">
             <X size={16} />
           </button>
         )}
         <span className="eyebrow">YOUR DESK IDENTITY</span>
-        <h2>Choose your signal</h2>
-        <p>Pick a compact avatar for your account. You can change it any time.</p>
+        <h2>{locked ? "Change your identity" : "Choose your signal"}</h2>
+        <p>{locked ? `Your next identity change costs $${fee.toFixed(2)} from your available mainnet wallet.` : "Your first identity is free. It becomes your desk signal once confirmed."}</p>
         <div className="avatar-picker-grid" role="list">
           {avatarOptions.map((option) => (
             <button
@@ -431,13 +440,15 @@ function AvatarPicker({
               onClick={() => onSelect(option.id)}
             >
               <PulseAvatar id={option.id} />
-              <span><strong>{option.name}</strong><small>{option.detail}</small></span>
+              <span><strong>{option.name}</strong><small>{option.detail}</small><em>{option.utility}</em></span>
               {selected === option.id && <StateIcon name="check" />}
             </button>
           ))}
         </div>
-        <button className="primary-action" type="button" onClick={() => onConfirm(selected)}>
-          Use {avatarOptions.find((option) => option.id === selected)?.name || "avatar"}
+        <div className="identity-seal" aria-live="polite"><span>SEALED COSMETIC REVEAL</span><strong>{locked ? `Next artifact: ${avatarOptions.find((option) => option.id === selected)?.artifact}` : "Your identity artifact reveals after confirmation"}</strong></div>
+        {locked && <p className="identity-fee-note">{selected === current ? "This is your current identity. No charge applies." : `Available now $${available.toFixed(2)} · after change $${(Math.max(0, available - fee)).toFixed(2)}`}</p>}
+        <button className="primary-action" type="button" disabled={locked && selected !== current && available < fee} onClick={() => onConfirm(selected)}>
+          {locked ? (selected === current ? `Keep ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}` : `Pay $${fee.toFixed(2)} & use ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`) : `Seal ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`}
           <ChevronRight />
         </button>
       </div>
@@ -4490,6 +4501,7 @@ type LiveDashboard = {
     tier: string;
     fee_credit_usd: number;
     avatar_id?: AvatarId | null;
+    identity?: { locked_at?: number | null; reveal?: string | null; change_count?: number; change_fee_usd?: number };
     is_admin: boolean;
     onboarding_complete: boolean;
   };
@@ -6869,6 +6881,7 @@ function LiveAccountScreen({
   onNotice,
   avatarId = "orbit",
   onAvatarClick,
+  onIdentityUtility,
   openNotificationsRequest = 0,
 }: {
   data: LiveDashboard;
@@ -6877,6 +6890,7 @@ function LiveAccountScreen({
   onNotice: (message: string) => void;
   avatarId?: AvatarId;
   onAvatarClick?: () => void;
+  onIdentityUtility?: () => void;
   openNotificationsRequest?: number;
 }) {
   const [modal, setModal] = useState<
@@ -6983,7 +6997,7 @@ function LiveAccountScreen({
         </div>
       </div>
       <GradientPanel className="profile-card">
-        <button className="profile-avatar-button" type="button" onClick={onAvatarClick} aria-label="Change account avatar">
+        <button className="profile-avatar-button" type="button" onClick={onAvatarClick} aria-label="Review desk identity">
           <PulseAvatar id={avatarId} initials={initials} />
         </button>
         <div>
@@ -6999,6 +7013,14 @@ function LiveAccountScreen({
         </span>
       </GradientPanel>
       <div className="account-actions">
+        <button className="account-action" onClick={onIdentityUtility || onAvatarClick}>
+          <span><PulseAvatar id={avatarId} initials={initials} /></span>
+          <div>
+            <strong>Desk identity · {avatarOptions.find((option) => option.id === avatarId)?.name}</strong>
+            <small>{avatarOptions.find((option) => option.id === avatarId)?.utility} · identity treatment only</small>
+          </div>
+          <ChevronRight />
+        </button>
         <button className="account-action" onClick={() => setModal("code")}>
           <span>
             <ShieldCheck />
@@ -9366,12 +9388,14 @@ function LiveTradePulse() {
     try {
       const response = await request("/v1/account/avatar", {
         method: "POST",
-        body: JSON.stringify({ avatar_id: next }),
+        body: JSON.stringify({ avatar_id: next, idempotency_key: `identity:${data?.user.id || "guest"}:${next}:${crypto.randomUUID()}`, expected_identity: data?.user.avatar_id || "", expected_fee_usd: data?.user.identity?.change_fee_usd || 0 }),
       });
       if (response.avatar_id !== next) throw new Error("The saved avatar did not match your selection.");
-      setData((current) => current ? { ...current, user: { ...current.user, avatar_id: next } } : current);
+      setData((current) => current ? { ...current, user: { ...current.user, avatar_id: next, identity: { ...(current.user.identity || {}), reveal: response.reveal || `${next}-seal` } }, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet } : current);
+      return true;
     } catch {
-      setNotice("Your avatar is saved on this device and will sync when the desk reconnects.");
+      setNotice("Your identity could not be sealed. Check your available wallet balance and try again.");
+      return false;
     }
   }
   useEffect(() => {
@@ -9387,23 +9411,40 @@ function LiveTradePulse() {
     const valid = avatarOptions.some((option) => option.id === preferred);
     if (valid) {
       setAvatarId(preferred as AvatarId);
-      if (!accountAvatar && stored === preferred) void persistAvatar(preferred as AvatarId);
+      if (!accountAvatar) {
+        setAvatarPickerRequired(true);
+        setAvatarPickerOpen(true);
+      }
     }
     else {
       setAvatarPickerRequired(true);
       setAvatarPickerOpen(true);
     }
   }, [data?.user.id, data?.user.avatar_id]);
-  const chooseAvatar = (next: AvatarId) => {
+  const chooseAvatar = async (next: AvatarId) => {
+    const prior = avatarId;
     setAvatarId(next);
     try {
       if (avatarStorageKey) window.localStorage.setItem(avatarStorageKey, next);
     } catch {
       /* in-memory selection still applies */
     }
-    setAvatarPickerRequired(false);
-    setAvatarPickerOpen(false);
-    void persistAvatar(next);
+    try {
+      if (!await persistAvatar(next)) {
+        setAvatarId(prior);
+        try {
+          if (avatarStorageKey) window.localStorage.setItem(avatarStorageKey, prior);
+        } catch {
+          /* storage is optional */
+        }
+        return;
+      }
+      setAvatarPickerRequired(false);
+      setAvatarPickerOpen(false);
+      setNotice(prior === next ? "Identity unchanged." : `Identity sealed: ${avatarOptions.find((option) => option.id === next)?.name || next}.`);
+    } catch {
+      setAvatarId(prior);
+    }
   };
   const [amount, setAmount] = useState("20");
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
@@ -10289,6 +10330,26 @@ function LiveTradePulse() {
       setTab(value as typeof tab);
     }
   };
+  const openIdentityUtility = () => {
+    const utility = avatarOptions.find((option) => option.id === avatarId)?.id;
+    if (utility === "orbit") {
+      setWalletEntry("overview");
+      setTab("Wallet");
+    } else if (utility === "signal") {
+      setTab("Desk");
+    } else if (utility === "prism") {
+      setWalletEntry("activity");
+      setTab("Wallet");
+    } else if (utility === "current") {
+      setTab("Account");
+      setOpenNotificationsRequest((value) => value + 1);
+    } else if (utility === "vector") {
+      setBotEntryId(null);
+      setTab("Bots");
+    } else {
+      setTab("Account");
+    }
+  };
   const switchAdminEnvironment = async (
     nextEnvironment: "mainnet" | "testnet",
   ) => {
@@ -10377,6 +10438,10 @@ function LiveTradePulse() {
             onConfirm={chooseAvatar}
             onClose={() => setAvatarPickerOpen(false)}
             required={avatarPickerRequired}
+            locked={Boolean(data.user.avatar_id)}
+            current={data.user.avatar_id as AvatarId | undefined}
+            fee={Number(data.user.identity?.change_fee_usd || 10)}
+            available={Number(data.wallet.available || 0)}
           />
         )}
         <div className="content-wrap">
@@ -10580,6 +10645,7 @@ function LiveTradePulse() {
               onNotice={setNotice}
               avatarId={avatarId}
               onAvatarClick={() => setAvatarPickerOpen(true)}
+              onIdentityUtility={openIdentityUtility}
               openNotificationsRequest={openNotificationsRequest}
             />
           )}

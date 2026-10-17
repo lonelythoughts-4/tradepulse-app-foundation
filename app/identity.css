@@ -1,0 +1,26 @@
+/* Hallmark component: identity protocol · TradePulse operations-console grammar.
+   Portrait assets are local CC0 records; the object layer is authored CSS, not a generic avatar orb. */
+.pulse-avatar{isolation:isolate;overflow:hidden;background:linear-gradient(145deg,var(--muted-surface),var(--background))}
+.pulse-avatar>img{position:absolute;inset:5%;width:90%;height:90%;object-fit:contain;object-position:center;opacity:.94;filter:sepia(.18) saturate(.74) hue-rotate(168deg) contrast(1.08);z-index:0}
+.pulse-avatar>i{z-index:1;box-shadow:0 0 0 1px color-mix(in srgb,var(--primary) 38%,transparent),0 4px 14px var(--background)}
+.pulse-avatar>b{z-index:2;text-shadow:0 1px 6px var(--background)}
+.avatar-orbit>i{width:14px;height:14px;border-radius:999px;background:radial-gradient(circle at 36% 31%,var(--foreground) 0 11%,var(--primary) 13% 32%,var(--muted-surface) 35% 100%);transform:translate(8px,-8px)}
+.avatar-signal>i{width:20px;height:9px;border-radius:8px;transform:translate(8px,-8px) rotate(-12deg);background:repeating-linear-gradient(90deg,var(--foreground) 0 3px,transparent 3px 5px),var(--muted-surface)}
+.avatar-prism>i{width:16px;height:16px;clip-path:polygon(50% 0,100% 100%,0 100%);transform:translate(8px,-8px);background:linear-gradient(135deg,var(--foreground),var(--primary) 47%,var(--muted-foreground))}
+.avatar-current>i{width:21px;height:10px;border-radius:999px 0 999px 0;transform:translate(8px,-8px) rotate(-24deg);background:linear-gradient(135deg,var(--foreground),var(--primary))}
+.avatar-vector>i{width:22px;height:10px;clip-path:polygon(0 28%,72% 28%,72% 0,100% 50%,72% 100%,72% 72%,0 72%);transform:translate(8px,-8px);background:var(--foreground)}
+.avatar-tide>i{width:19px;height:13px;border-radius:999px;transform:translate(8px,-8px);background:repeating-radial-gradient(ellipse at 50% 110%,transparent 0 3px,var(--primary) 3.5px 5px),var(--muted-surface)}
+.avatar-picker-dialog{max-width:min(560px,calc(100vw - 28px));padding:clamp(20px,4vw,32px);background:linear-gradient(145deg,var(--muted-surface) 0%,var(--surface) 52%,var(--background) 100%);border:1px solid color-mix(in srgb,var(--primary) 45%,var(--border));box-shadow:0 24px 80px var(--background)}
+.avatar-picker-dialog>p{max-width:56ch;line-height:1.55}
+.avatar-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}
+.avatar-choice{min-width:0;min-height:96px;padding:11px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px;text-align:left;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--foreground);transition:transform .16s ease,border-color .16s ease,background .16s ease}
+.avatar-choice:hover{border-color:color-mix(in srgb,var(--primary) 66%,var(--border));background:var(--muted-surface)}
+.avatar-choice:active{transform:translateY(1px)}
+.avatar-choice:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+.avatar-choice.selected{border-color:var(--primary);background:linear-gradient(115deg,var(--muted-surface),var(--surface))}
+.avatar-choice .pulse-avatar{width:48px;height:48px;border-radius:8px}
+.avatar-choice span:not(.pulse-avatar){display:grid;gap:3px;min-width:0}.avatar-choice strong{font:650 14px var(--font-space-grotesk),sans-serif}.avatar-choice small{overflow-wrap:anywhere;color:var(--tp-supporting-text);font-size:10px;line-height:1.25}.avatar-choice em{color:var(--muted-foreground);font:600 10px var(--font-jetbrains-mono),monospace;font-style:normal;letter-spacing:.06em;text-transform:uppercase}
+.identity-seal{display:grid;gap:5px;padding:11px 12px;border-inline-start:2px solid var(--primary);background:var(--surface)}.identity-seal span{color:var(--muted-foreground);font:600 10px var(--font-jetbrains-mono),monospace;letter-spacing:.1em}.identity-seal strong{font:600 14px var(--font-space-grotesk),sans-serif}.identity-fee-note{font:500 10px var(--font-jetbrains-mono),monospace!important;color:var(--tp-supporting-text)}
+@media (prefers-reduced-motion:reduce){.avatar-choice{transition:none}}
+@media (max-width:24rem){.avatar-picker-grid{grid-template-columns:minmax(0,1fr)}.avatar-choice{min-height:76px}.avatar-picker-dialog .primary-action{white-space:nowrap;font-size:14px}}
+@media (pointer:coarse){.avatar-choice{min-height:100px}}
