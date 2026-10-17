@@ -6258,6 +6258,9 @@ function LiveAdminScreen({
             <option value="demo_active_days">Demo duration</option>
             <option value="demo_conversion_percent">Demo trading-credit rate</option>
             <option value="community_url">Community link</option>
+            <option value="onboarding_channel_enabled">Onboarding channel gate</option>
+            <option value="onboarding_channel_id">Onboarding channel ID</option>
+            <option value="onboarding_channel_url">Onboarding channel link</option>
             <option value="popup_ttl_seconds">Popup cleanup seconds</option>
           </select>
           <input
