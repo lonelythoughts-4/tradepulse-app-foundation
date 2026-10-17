@@ -9727,6 +9727,14 @@ function LiveTradePulse() {
   useEffect(() => {
     void load();
   }, []);
+  // Testnet is an isolated control-room workspace, never a customer desk
+  // context. Leaving Admin (or losing admin access after a new Telegram
+  // session) immediately returns the browser to the mainnet projection.
+  useEffect(() => {
+    if (!data || (tab === "Admin" && data.user.is_admin) || (webEnvironment === "mainnet" && data.environment === "mainnet")) return;
+    setWebEnvironment("mainnet");
+    void load("mainnet");
+  }, [tab, data?.user.is_admin, webEnvironment]);
   useEffect(() => {
     const demo = data?.demo;
     const state = demo?.pool_state || demo?.state;
@@ -10385,7 +10393,7 @@ function LiveTradePulse() {
           setActive={selectChromeTab}
           onNotifications={noticeCenter.openNotices}
           profileName={profileName}
-          environment={data.environment.toUpperCase()}
+          environment={(tab === "Admin" && data.user.is_admin ? webEnvironment : "mainnet").toUpperCase()}
           isAdmin={data.user.is_admin}
           pageTitle={chromeActive}
           notificationCount={unreadNoticeCount}
