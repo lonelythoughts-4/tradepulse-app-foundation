@@ -6623,7 +6623,6 @@ function LiveDeskScreen({
         <div className="desk-brand-lockup">
           <span className="desk-brand-mark"><PulseMark size={38} /></span>
           <div>
-            <span className="desk-kicker">TRADEPULSE INTELLIGENCE</span>
             <h2>Your market context</h2>
           </div>
         </div>
@@ -6636,8 +6635,7 @@ function LiveDeskScreen({
       <GradientPanel className="selection-intelligence">
         <div className="selection-intelligence-head">
           <div>
-            <span className="eyebrow">YOUR MEMECOIN SELECTION</span>
-            <h2>Strategy context, not a signal.</h2>
+            <h2>Your saved strategy</h2>
           </div>
           <span className="selection-state">{selection ? "SAVED STRATEGY" : "NO SAVED STRATEGY"}</span>
         </div>
@@ -6669,46 +6667,8 @@ function LiveDeskScreen({
           </div>
         </div>
       </GradientPanel>
-      <GradientPanel className="price-board">
-        <div className="section-heading"><div><span className="eyebrow">MARKET REFERENCE</span><h2>Quote board</h2></div><span className="mono">USD</span></div>
-        {Object.entries(data.quotes).map(([name, price]) => (
-          <div className="asset-row" key={name}>
-            <span className="asset-ident">{name[0]}</span>
-            <div>
-              <strong>{name}/USD</strong>
-              <small>{selection?.assets.includes(name) ? "In your saved basket" : "Market reference"}</small>
-            </div>
-            <strong className="asset-price">{money(price)}</strong>
-            <Spark />
-          </div>
-        ))}
-      </GradientPanel>
-      <div className="desk-columns">
-        <GradientPanel className="pulse-feed">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">DATA INTEGRITY</span>
-              <h2>Know what you are seeing</h2>
-            </div>
-            <span className="mono">{data.quote_age}s</span>
-          </div>
-          <div className="audit-row">
-            <span className="status-dot" />
-            <div>
-              <strong>
-                {data.quote_fresh
-                  ? "Price feed connected"
-                  : "Using the latest cached quote"}
-              </strong>
-              <small>
-                Quotes are informational and do not create a trade signal.
-              </small>
-            </div>
-          </div>
-        </GradientPanel>
-        <GradientPanel className="alert-card">
-          <span className="eyebrow">ALERT COMPOSER</span>
-          <h2>Get the signal first.</h2>
+      <GradientPanel className="alert-card desk-alert-card">
+          <h2>Create a price alert</h2>
           <div className="alert-fields">
             <select
               value={asset}
@@ -6747,7 +6707,7 @@ function LiveDeskScreen({
             </p>
           )}
           <div className="parsed-preview">
-            <span>PARSED PREVIEW</span>
+            <span>Alert condition</span>
             <code>
               {asset} {operator} {threshold || "…"}
             </code>
@@ -6759,13 +6719,11 @@ function LiveDeskScreen({
           >
             Create alert <Bell />
           </button>
-        </GradientPanel>
-      </div>
+      </GradientPanel>
       <GradientPanel className="active-alerts">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">ACTIVE ALERTS</span>
-            <h2>Desk signals</h2>
+            <h2>Active price alerts</h2>
           </div>
         </div>
         {data.alerts.length ? (
