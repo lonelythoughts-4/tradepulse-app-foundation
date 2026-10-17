@@ -4493,6 +4493,29 @@ function AdminRoom() {
   );
 }
 
+function ActivationJourney({ data, request, onComplete, onNotice }: { data: LiveDashboard; request: (path: string, options?: RequestInit) => Promise<any>; onComplete: () => Promise<void>; onNotice: (message: string) => void }) {
+  const [step, setStep] = useState(Math.min(4, Math.max(0, data.user.onboarding?.step || 0)));
+  const [checking, setChecking] = useState(false);
+  const [state, setState] = useState<string>(data.user.onboarding?.channel.verified ? "verified" : "");
+  const channel = data.user.onboarding?.channel;
+  const pages = [
+    ["Your desk, your controls", "TradePulse keeps wallet movements, bot controls, and operating choices visible before you act."],
+    ["Know where each control leads", "Your wallet records deposits and withdrawals. Bots use only the allocation you approve, and you can pause, resume, compound, or close from the desk."],
+    ["Safeguards stay in the flow", "Confirm the network, address, and amount before a transfer. Digital assets and automated strategies can lose value; TradePulse does not promise returns or provide financial advice."],
+    ["Practice is optional", "Virtual demo credit is non-withdrawable, does not change your mainnet wallet, and is never a promise of a return."],
+  ];
+  const advance = async (next: number) => { setStep(next); try { await request("/v1/onboarding/step", { method: "POST", body: JSON.stringify({ step: Math.min(next, 4) }) }); } catch { /* the local step remains usable; completion stays server-owned */ } };
+  if (step < 4) {
+    const page = pages[step];
+    return <main className="activation-shell"><section className="activation-stage" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation {step + 1} of 5</p><h1 id="activation-title">{page[0]}</h1><p>{page[1]}</p><div className="activation-actions"><button className="primary-action" onClick={() => advance(step + 1)}>Continue</button>{step > 0 && <button className="text-action" onClick={() => setStep(step - 1)}>Back</button>}</div></section></main>;
+  }
+  const gateReady = Boolean(channel?.enabled && channel.configured);
+  const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable"); } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : "Telegram membership could not be checked."); } finally { setChecking(false); } };
+  const accept = async () => { try { await request("/v1/onboarding/accept", { method: "POST", body: "{}" }); await onComplete(); } catch (error) { onNotice(error instanceof Error ? error.message : "Could not save your terms acceptance."); } };
+  const verified = Boolean(channel?.verified || state === "verified");
+  return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation 5 of 5</p><h1 id="activation-title">Confirm your access</h1><p>Review the terms and risk notice before opening your desk. {gateReady ? "Join the dedicated onboarding channel, then ask TradePulse to recheck your Telegram membership." : "Channel verification is not active, so this step will not block your access."}</p>{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">Join onboarding channel</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? "Checking Telegram…" : "I joined · recheck"}</button>{state === "not_joined" || state === "restricted" ? <small>Telegram has not confirmed an active membership yet. Join the channel, then recheck.</small> : null}{state === "unavailable" ? <small>Telegram verification is temporarily unavailable. Try again shortly or contact support.</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>Terms &amp; risk notice</strong><br />You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.</p><button className="primary-action" onClick={accept}>Accept terms and open desk</button></div>}</section></main>;
+}
+
 type LiveDashboard = {
   user: {
     id: number;
@@ -4504,6 +4527,7 @@ type LiveDashboard = {
     identity?: { locked_at?: number | null; reveal?: string | null; change_count?: number; change_fee_usd?: number };
     is_admin: boolean;
     onboarding_complete: boolean;
+    onboarding?: { step: number; terms_accepted_at?: number | null; channel: { enabled: boolean; configured: boolean; url: string; verified: boolean; verified_at?: number | null } };
   };
   environment: string;
   wallet: {
@@ -10226,45 +10250,7 @@ function LiveTradePulse() {
       </main>
     );
   if (!data.user.onboarding_complete)
-    return (
-      <div className="onboarding-screen">
-        <img
-          src="/illustrations/onboarding-welcome.png"
-          alt="TradePulse welcome"
-          className="onboarding-hero"
-        />
-        <div className="onboarding-copy">
-          <span className="eyebrow">WELCOME TO TRADEPULSE</span>
-          <h1>Before you start</h1>
-          <p>
-            By continuing, you accept the same Terms and risk disclosures
-            required in Telegram. Deposits require on-chain confirmation;
-            trading and demo results are not guaranteed; virtual demo funds are
-            not withdrawable.
-          </p>
-          <button
-            className="primary-action"
-            onClick={async () => {
-              try {
-                await request("/v1/onboarding/accept", {
-                  method: "POST",
-                  body: "{}",
-                });
-                await load();
-              } catch (error) {
-                setNotice(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not save your acceptance.",
-                );
-              }
-            }}
-          >
-            Accept terms and continue
-          </button>
-        </div>
-      </div>
-    );
+    return <ActivationJourney data={data} request={request} onComplete={load} onNotice={setNotice} />;
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
   const chartPoints = (synthetic?.ticks || [])
     .slice(-80)
