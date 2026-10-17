@@ -6575,7 +6575,7 @@ function LiveDeskScreen({
       const response = await request("/v1/live-desk/analyst", {
         method: "POST",
         body: JSON.stringify({ question: analystQuestion.trim() || undefined }),
-      });
+      }, undefined, 70_000);
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
       if (!text) throw new Error("The analyst did not return a usable briefing.");
       setAnalystBriefing(text);
@@ -6629,7 +6629,7 @@ function LiveDeskScreen({
             <div><strong>NVIDIA analyst</strong><small>{analystReady ? "Strategy context" : "Connection pending"}</small></div>
           </div>
           <div className="analyst-copy">
-            {analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask about your saved controls, listed markets, strategy state, or reference-data freshness. It does not forecast prices, returns, or payouts."}</p>}
+            {analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask about your saved controls, listed markets, current reference data, or a market scenario."}</p>}
             {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
             <label className="analyst-question">
               <span>Ask the analyst</span>
@@ -6644,7 +6644,7 @@ function LiveDeskScreen({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") void generateAnalystBriefing();
                 }}
-                placeholder="What does my saved cadence control?"
+                placeholder="Which listed market best matches my saved strategy?"
               />
             </label>
             <button className="small-action analyst-action" disabled={!selection || !analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Checking context…" : analystQuestion.trim() ? "Ask analyst" : analystBriefing ? "Refresh overview" : "Generate overview"}<StateIcon name="refresh" /></button>
