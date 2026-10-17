@@ -338,3 +338,23 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
     transition-timing-function: ease-out;
   }
 }
+
+/* Hallmark · component: operations desk refinement · genre: technical · tone: restrained market intelligence · anchor hue: indigo
+ * pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast: pass (40–41) */
+html,body{overflow-x:clip}
+.desk-screen,.admin-screen,.wallet-grid,.bots-screen{max-width:1080px}
+.desk-screen{gap:20px}
+.desk-identity{padding:4px 0 8px;border-bottom:1px solid var(--border)}
+.desk-brand-lockup{gap:12px}.desk-brand-mark{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--border);border-radius:12px;background:var(--muted);color:var(--primary)}
+.desk-brand-lockup h2{margin:2px 0 0;letter-spacing:-.035em}.desk-feed-state{gap:10px;padding:7px 9px;border:1px solid var(--border);border-radius:999px;background:var(--card)}
+.selection-intelligence{padding:22px}.selection-intelligence-head{padding-bottom:18px}.selection-state{align-self:center;padding:5px 8px;border:1px solid var(--border);border-radius:999px;background:var(--muted);color:var(--foreground);font:600 9px var(--font-jetbrains-mono),monospace;letter-spacing:.08em}
+.selection-assets{padding:16px 0}.selection-assets span{border-radius:999px;background:var(--muted);color:var(--foreground)}
+.selection-facts{margin:0 -2px;border-color:var(--border)}.selection-facts>div{padding:14px 12px}.selection-observation{margin-top:14px;font-size:12px;line-height:1.55}
+.analyst-boundary{grid-template-columns:minmax(154px,.52fr) minmax(0,1.48fr);gap:20px;margin-top:20px;padding:18px 0 0;border-top-color:var(--border)}
+.analyst-identity{display:flex;align-items:center;gap:10px;min-width:0}.analyst-mark{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border:1px solid var(--border);border-radius:10px;background:var(--muted);color:var(--primary)}
+.analyst-identity strong,.analyst-identity small{display:block}.analyst-identity strong{color:var(--foreground);font:600 12px var(--font-space-grotesk),sans-serif}.analyst-identity small{margin-top:2px;color:var(--tp-supporting-text);font:10px var(--font-inter),sans-serif}
+.analyst-copy{min-width:0}.analyst-boundary .analyst-copy>p{max-width:65ch;font-size:11px;line-height:1.6}.analyst-boundary .analyst-briefing{color:var(--foreground);font-size:12px}.analyst-action{min-height:36px;margin-top:12px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--muted);color:var(--primary);font-weight:600}.analyst-action:hover:not(:disabled){border-color:var(--primary);background:var(--card)}.analyst-action:active:not(:disabled){transform:translateY(1px)}.analyst-action:focus-visible{outline:2px solid var(--primary);outline-offset:3px}.analyst-action:disabled{background:var(--card);color:var(--tp-supporting-text);opacity:.7}
+.admin-screen{gap:20px}.admin-hero{padding:22px 24px}.admin-hero p{max-width:64ch;line-height:1.55}.admin-grid{gap:18px}.admin-table{padding:20px}.admin-table>p{max-width:68ch;color:var(--tp-supporting-text);line-height:1.55}.admin-table .eyebrow{display:block;margin-bottom:6px}.admin-table h2{margin:0;letter-spacing:-.025em}.admin-row{gap:14px;min-height:44px;padding:12px 0}.admin-row+ .admin-row{border-top:1px solid var(--border)}.button-row{justify-content:flex-start;margin-top:14px}.button-row .primary-action,.button-row .ghost-action{min-height:40px;margin:0;padding:9px 12px;white-space:nowrap}
+.wallet-promo{padding:22px;background:var(--card);border-color:var(--border)}.wallet-promo>svg{padding:8px;width:38px;height:38px;border:1px solid var(--border);border-radius:10px;background:var(--muted)}.wallet-promo h2{margin:0 0 6px;letter-spacing:-.025em}.wallet-promo p{max-width:62ch;line-height:1.6}
+.empty-bots{min-height:250px;padding:28px 18px;border:1px solid var(--border);border-radius:12px;background:var(--card)}.empty-bots svg{width:154px}.empty-bots p{margin:16px 0 12px}.empty-bots-action{min-height:38px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--muted)}.empty-bots-action:hover{border-color:var(--primary);background:var(--card)}
+@media(max-width:700px){.desk-identity{padding-bottom:14px}.desk-feed-state{padding:0;border:0;border-radius:0;background:transparent}.selection-intelligence,.admin-table{padding:18px}.selection-facts>div{padding:12px 8px}.analyst-boundary{grid-template-columns:1fr;gap:12px}.admin-hero{padding:18px}.admin-grid{gap:14px}.wallet-promo{padding:18px}.empty-bots{min-height:230px}}
