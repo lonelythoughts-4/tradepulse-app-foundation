@@ -6531,6 +6531,39 @@ function LiveDeskScreen({
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
 }) {
+  const selection = useMemo(() => {
+    const records = [
+      data.memecoin?.authorization,
+      data.memecoin?.demo_authorization,
+    ];
+    for (const record of records) {
+      try {
+        const settings = JSON.parse(record?.settings_json || "{}") as {
+          assets?: unknown;
+          cadence_seconds?: unknown;
+          leverage?: unknown;
+          auto_enabled?: unknown;
+          include_trench?: unknown;
+        };
+        const assets = Array.isArray(settings.assets)
+          ? settings.assets.filter((asset): asset is string => typeof asset === "string" && asset.trim().length > 0)
+          : [];
+        if (assets.length) {
+          return {
+            assets,
+            cadence: Number(settings.cadence_seconds) || 300,
+            leverage: Number(settings.leverage) || 1,
+            automatic: Boolean(settings.auto_enabled),
+            trench: Boolean(settings.include_trench),
+          };
+        }
+      } catch {
+        // A malformed legacy record is not a market signal. The empty state
+        // below keeps the desk useful without inventing a saved selection.
+      }
+    }
+    return null;
+  }, [data.memecoin?.authorization?.settings_json, data.memecoin?.demo_authorization?.settings_json]);
   const [asset, setAsset] = useState("BTC");
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
@@ -6561,31 +6594,54 @@ function LiveDeskScreen({
   };
   return (
     <div className="desk-screen">
-      <div className="screen-title">
-        <div>
-          <span className="eyebrow">LIVE DESK / MARKET DATA</span>
-          <h2>Price board</h2>
+      <div className="desk-identity">
+        <div className="desk-brand-lockup">
+          <span className="desk-brand-mark"><PulseMark size={38} /></span>
+          <div>
+            <span className="desk-kicker">TRADEPULSE INTELLIGENCE</span>
+            <h2>Your market context</h2>
+          </div>
         </div>
-        <span className="live-indicator">
-          <i />
-          {data.quote_fresh ? "LIVE" : "CACHED"}
-        </span>
-        {!data.quote_fresh && (
-          <button
-            className="small-action desk-retry"
-            onClick={() => void reload()}
-          >
-            <StateIcon name="refresh" /> Retry feed
-          </button>
-        )}
+        <div className="desk-feed-state">
+          <span className="live-indicator"><i />{data.quote_fresh ? "LIVE DATA" : "CACHED DATA"}</span>
+          <span className="mono">{data.quote_age}s</span>
+          {!data.quote_fresh && <button className="small-action desk-retry" onClick={() => void reload()}><StateIcon name="refresh" /> Retry feed</button>}
+        </div>
       </div>
+      <GradientPanel className="selection-intelligence">
+        <div className="selection-intelligence-head">
+          <div>
+            <span className="eyebrow">YOUR MEMECOIN SELECTION</span>
+            <h2>Strategy context, not a signal.</h2>
+          </div>
+          <span className="selection-state">{selection ? "SAVED STRATEGY" : "NO SAVED STRATEGY"}</span>
+        </div>
+        {selection ? (
+          <>
+            <div className="selection-assets" aria-label="Selected memecoin markets">
+              {selection.assets.map((item) => <span key={item}>{item}</span>)}
+            </div>
+            <div className="selection-facts">
+              <div><span>MARKETS</span><strong>{selection.assets.length}</strong></div>
+              <div><span>CADENCE</span><strong>{selection.cadence / 60} min</strong></div>
+              <div><span>LEVERAGE CAP</span><strong>{selection.leverage}×</strong></div>
+              <div><span>ENTRY MODE</span><strong>{selection.automatic ? "Auto" : "Manual"}</strong></div>
+            </div>
+            <p className="selection-observation">This briefing follows your saved basket{selection.trench ? " with Trench Mode enabled" : ""}. Market data remains informational; every order still passes its live eligibility and risk checks.</p>
+          </>
+        ) : (
+          <div className="selection-empty"><PulseMark size={25} /><p>Choose a Memecoin strategy basket to see its market context here. Live Desk does not infer a selection from wallet activity.</p></div>
+        )}
+        <div className="analyst-boundary"><span>ANALYST STREAM</span><p>Rule-based selection context is active. An AI analyst can be connected to this same account briefing later; no generated market opinion is shown until then.</p></div>
+      </GradientPanel>
       <GradientPanel className="price-board">
+        <div className="section-heading"><div><span className="eyebrow">MARKET REFERENCE</span><h2>Quote board</h2></div><span className="mono">USD</span></div>
         {Object.entries(data.quotes).map(([name, price]) => (
           <div className="asset-row" key={name}>
             <span className="asset-ident">{name[0]}</span>
             <div>
               <strong>{name}/USD</strong>
-              <small>Market reference</small>
+              <small>{selection?.assets.includes(name) ? "In your saved basket" : "Market reference"}</small>
             </div>
             <strong className="asset-price">{money(price)}</strong>
             <Spark />
@@ -6596,8 +6652,8 @@ function LiveDeskScreen({
         <GradientPanel className="pulse-feed">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">MARKET PULSE</span>
-              <h2>What is moving</h2>
+              <span className="eyebrow">DATA INTEGRITY</span>
+              <h2>Know what you are seeing</h2>
             </div>
             <span className="mono">{data.quote_age}s</span>
           </div>
