@@ -6568,6 +6568,9 @@ function LiveDeskScreen({
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
   const [alertError, setAlertError] = useState("");
+  const [analystBriefing, setAnalystBriefing] = useState("");
+  const [analystError, setAnalystError] = useState("");
+  const [analystLoading, setAnalystLoading] = useState(false);
   const alertErrorId = useId();
   const createAlert = async () => {
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
@@ -6590,6 +6593,21 @@ function LiveDeskScreen({
       onNotice(
         error instanceof Error ? error.message : "Could not create the alert.",
       );
+    }
+  };
+  const generateAnalystBriefing = async () => {
+    if (!selection || analystLoading) return;
+    setAnalystLoading(true);
+    setAnalystError("");
+    try {
+      const response = await request("/v1/live-desk/analyst", { method: "POST", body: "{}" });
+      const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
+      if (!text) throw new Error("The analyst did not return a usable briefing.");
+      setAnalystBriefing(text);
+    } catch (error) {
+      setAnalystError(error instanceof Error ? error.message : "The analyst is temporarily unavailable.");
+    } finally {
+      setAnalystLoading(false);
     }
   };
   return (
@@ -6632,7 +6650,14 @@ function LiveDeskScreen({
         ) : (
           <div className="selection-empty"><PulseMark size={25} /><p>Choose a Memecoin strategy basket to see its market context here. Live Desk does not infer a selection from wallet activity.</p></div>
         )}
-        <div className="analyst-boundary"><span>ANALYST STREAM</span><p>Rule-based selection context is active. An AI analyst can be connected to this same account briefing later; no generated market opinion is shown until then.</p></div>
+        <div className="analyst-boundary">
+          <span>NVIDIA ANALYST</span>
+          <div>
+            {analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>Generate a short explanation of your saved strategy controls. It never places orders or gives buy, sell, price-target, or return claims.</p>}
+            {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
+            <button className="small-action analyst-action" disabled={!selection || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Preparing briefing…" : analystBriefing ? "Refresh briefing" : "Generate briefing"}<StateIcon name="refresh" /></button>
+          </div>
+        </div>
       </GradientPanel>
       <GradientPanel className="price-board">
         <div className="section-heading"><div><span className="eyebrow">MARKET REFERENCE</span><h2>Quote board</h2></div><span className="mono">USD</span></div>
