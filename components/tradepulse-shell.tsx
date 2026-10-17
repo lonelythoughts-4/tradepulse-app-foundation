@@ -9370,23 +9370,22 @@ function LiveWalletScreen({
   );
 }
 
+const deskTabs = ["Dashboard", "Bots", "Wallet", "Desk", "Account", "Earn", "Help", "Synthetic", "Admin"] as const;
+type DeskTab = (typeof deskTabs)[number];
+
+function deskTabFromHash(): DeskTab | null {
+  if (typeof window === "undefined") return null;
+  const value = decodeURIComponent(window.location.hash.replace(/^#/, "")).trim().toLowerCase();
+  return deskTabs.find((tab) => tab.toLowerCase() === value) || null;
+}
+
 function LiveTradePulse() {
   const reduceMotion = useReducedMotion();
   const [data, setData] = useState<LiveDashboard | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
-  const [tab, setTab] = useState<
-    | "Dashboard"
-    | "Bots"
-    | "Wallet"
-    | "Desk"
-    | "Account"
-    | "Earn"
-    | "Help"
-    | "Synthetic"
-    | "Admin"
-  >("Dashboard");
+  const [tab, setTab] = useState<DeskTab>("Dashboard");
   const [walletEntry, setWalletEntry] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
@@ -9394,6 +9393,19 @@ function LiveTradePulse() {
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const applyHash = () => {
+      const next = deskTabFromHash();
+      if (next) setTab(next);
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+  useEffect(() => {
+    const expected = `#${tab.toLowerCase()}`;
+    if (window.location.hash !== expected) window.history.replaceState(null, "", expected);
+  }, [tab]);
   const avatarStorageKey = data ? `tradepulse.avatar:${data.user.id}` : "";
   async function persistAvatar(next: AvatarId) {
     try {
@@ -9615,6 +9627,8 @@ function LiveTradePulse() {
     const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       const requestHeaders = { ...headers(targetEnvironment), ...(options.headers || {}) } as Record<string, string>;
+      const requestId = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      requestHeaders["X-TradePulse-Request-Id"] = requestId;
       if (!(options.body instanceof FormData) && !Object.keys(requestHeaders).some((name) => name.toLowerCase() === "content-type")) {
         requestHeaders["Content-Type"] = "application/json";
       }
@@ -9635,7 +9649,11 @@ function LiveTradePulse() {
           setNotice("Your secure desk session ended. Reconnect with Telegram to continue.");
           setData(null);
         }
-        throw new Error(body.error || "Request failed.");
+        const reference = typeof body.request_id === "string"
+          ? body.request_id
+          : response.headers.get("x-tradepulse-request-id");
+        const message = body.error || "TradePulse could not complete this request.";
+        throw new Error(reference ? `${message} Reference: ${reference}` : message);
       }
       return body;
     } finally {

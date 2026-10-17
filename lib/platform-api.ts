@@ -9,8 +9,14 @@ import { NextResponse, type NextRequest } from 'next/server'
  * session cookie arrive intact.
  */
 export async function proxyPlatformRequest(request: NextRequest, upstreamPath: string): Promise<NextResponse> {
+  const requestId = request.headers.get('x-tradepulse-request-id') || crypto.randomUUID()
   const origin = process.env.TRADEPULSE_API_ORIGIN?.trim().replace(/\/+$/, '')
-  if (!origin) return NextResponse.json({ error: 'TradePulse service is not configured.' }, { status: 503 })
+  if (!origin) {
+    return NextResponse.json(
+      { error: 'TradePulse service is not configured.', request_id: requestId },
+      { status: 503, headers: { 'x-tradepulse-request-id': requestId } },
+    )
+  }
 
   const originUrl = new URL(`${origin}/`)
   const basePath = originUrl.pathname.replace(/\/+$/, '')
@@ -22,6 +28,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
     const value = request.headers.get(name)
     if (value) headers.set(name, value)
   }
+  headers.set('x-tradepulse-request-id', requestId)
 
   const hasBody = !['GET', 'HEAD'].includes(request.method)
   try {
@@ -34,22 +41,30 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
     })
     const contentType = upstream.headers.get('content-type') || ''
     if (!contentType.includes('application/json')) {
+      const status = upstream.status >= 400 ? upstream.status : 502
       return NextResponse.json(
-        { error: 'TradePulse service returned an invalid response. Please retry.' },
-        { status: 502 },
+        {
+          error: 'TradePulse could not complete this request. The service returned an unexpected response.',
+          request_id: requestId,
+        },
+        { status, headers: { 'x-tradepulse-request-id': requestId } },
       )
     }
     const response = new NextResponse(await upstream.arrayBuffer(), { status: upstream.status })
-    for (const name of ['content-type', 'cache-control']) {
+    for (const name of ['content-type', 'cache-control', 'x-tradepulse-request-id']) {
       const value = upstream.headers.get(name)
       if (value) response.headers.set(name, value)
     }
+    response.headers.set('x-tradepulse-request-id', upstream.headers.get('x-tradepulse-request-id') || requestId)
     // The upstream API issues the browser session. Re-emit it from this first-
     // party Vercel route so the browser reliably stores it for this web domain.
     const sessionCookie = upstream.headers.get('set-cookie')
     if (sessionCookie) response.headers.set('set-cookie', sessionCookie)
     return response
   } catch {
-    return NextResponse.json({ error: 'TradePulse service is temporarily unavailable. Please retry.' }, { status: 503 })
+    return NextResponse.json(
+      { error: 'TradePulse service is temporarily unavailable. Please retry.', request_id: requestId },
+      { status: 503, headers: { 'x-tradepulse-request-id': requestId } },
+    )
   }
 }
