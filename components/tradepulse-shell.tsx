@@ -735,10 +735,9 @@ function Header({
       </div>
       <div className="top-actions">
         <div className="live-indicator">
-          <i />
-          {environment}
+          {environment === "mainnet" ? "Mainnet" : "Testnet"}
         </div>
-        {isAdmin && (
+        {isAdmin && pageTitle !== "Admin" && (
           <button
             className="icon-button admin-shortcut"
             aria-label="Open control room"
@@ -5548,6 +5547,7 @@ function LiveAdminScreen({
   const [autouserConfirmed, setAutouserConfirmed] = useState(false);
   const [autouserPending, setAutouserPending] = useState(false);
   const [communityGroup, setCommunityGroup] = useState("");
+  const [adminHelpOpen, setAdminHelpOpen] = useState(false);
   const fundingFieldId = useId();
   const autouserFileId = useId();
   const autouserFileRef = useRef<HTMLInputElement>(null);
@@ -5752,13 +5752,22 @@ function LiveAdminScreen({
   };
   return (
     <div className="admin-screen">
+      {adminHelpOpen && <AccessibleDialog label="Admin control room guide" onClose={() => setAdminHelpOpen(false)}>
+        <h2>Control room guide</h2>
+        <p>Use this workspace to review and act on the selected environment. Mainnet changes affect live operations; testnet changes affect isolated testing only.</p>
+        <div className="admin-help-list">
+          <div><strong>Movement queues</strong><span>Review confirmed deposits, withdrawal approvals, recovery cases, and their audit trail before acting.</span></div>
+          <div><strong>Account operations</strong><span>Fund, reset onboarding, or reissue demo access only for the named Telegram account.</span></div>
+          <div><strong>Runtime controls</strong><span>Settings update shared product rules. Save one value at a time and recheck the result before making another change.</span></div>
+          <div><strong>Channel gates</strong><span>Set the onboarding channel ID and invite link, then enable the gate only after the bot can post and verify membership there.</span></div>
+        </div>
+        <button className="primary-action" onClick={() => setAdminHelpOpen(false)}>Close guide</button>
+      </AccessibleDialog>}
       <div className="admin-head">
         <div>
-          <span className="eyebrow">ADMIN / CONTROL ROOM</span>
           <h2>Operations desk</h2>
-          <small className="mono">ADMIN WORKSPACE / CHANGES ARE ENVIRONMENT-SCOPED</small>
         </div>
-        <div className="env-toggle">
+        <div className="admin-head-actions"><button className="text-action admin-help-trigger" onClick={() => setAdminHelpOpen(true)}>Admin help</button><div className="env-toggle">
           {(["mainnet", "testnet"] as const).map((item) => (
             <button
               className={environment === item ? "active" : ""}
@@ -5769,16 +5778,12 @@ function LiveAdminScreen({
               {item}
             </button>
           ))}
-        </div>
+        </div></div>
       </div>
       <GradientPanel className="admin-hero">
         <div>
-          <span className="eyebrow">SYSTEM STATUS</span>
           <h2>{environment.toUpperCase()} operations</h2>
-          <p className="mono">
-            SWEEPS / {admin.sweeps_enabled ? "ENABLED" : "DISABLED"} / ADMIN
-            ONLY
-          </p>
+          <p>{admin.sweeps_enabled ? "Treasury sweeps are enabled." : "Treasury sweeps are disabled."}</p>
         </div>
         <button
           className="small-action"
