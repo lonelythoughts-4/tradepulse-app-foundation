@@ -4524,6 +4524,7 @@ type LiveDashboard = {
     fee_credit_usd: number;
     avatar_id?: AvatarId | null;
     identity?: { locked_at?: number | null; reveal?: string | null; change_count?: number; change_fee_usd?: number };
+    security_code_set?: boolean;
     is_admin: boolean;
     onboarding_complete: boolean;
     onboarding?: { step: number; terms_accepted_at?: number | null; channel: { enabled: boolean; configured: boolean; url: string; verified: boolean; verified_at?: number | null } };
@@ -7060,33 +7061,37 @@ function LiveAccountScreen({
   const [address, setAddress] = useState("");
   const [support, setSupport] = useState("");
   const [notificationState, setNotificationState] = useState(data.notifications);
+  const [securityCodeSet, setSecurityCodeSet] = useState(Boolean(data.user.security_code_set));
   const enabledNotificationCount = ["fills", "fees", "deposits", "hwm_breaks"].filter((key) => Boolean(notificationState[key])).length;
-  const [notificationPending, setNotificationPending] = useState<string | null>(null);
-  const notificationRequestPending = useRef(false);
+  const [notificationPending, setNotificationPending] = useState<Record<string, boolean>>({});
+  const notificationRequestPending = useRef(new Set<string>());
   const [accountPending, setAccountPending] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ message: string; error: boolean } | null>(null);
-  const modalPending = accountPending || Boolean(notificationPending);
+  const modalPending = accountPending;
   useEffect(() => setModalFeedback(null), [modal]);
   useEffect(() => {
     setNotificationState(data.notifications);
   }, [data.notifications]);
   useEffect(() => {
+    setSecurityCodeSet(Boolean(data.user.security_code_set));
+  }, [data.user.security_code_set]);
+  useEffect(() => {
     if (openNotificationsRequest > 0) setModal("notifications");
   }, [openNotificationsRequest]);
   const updateNotification = async (key: string, label: string, enabled: boolean) => {
-    if (notificationRequestPending.current) return;
-    notificationRequestPending.current = true;
+    if (notificationRequestPending.current.has(key)) return;
+    notificationRequestPending.current.add(key);
     setModalFeedback(null);
     const next = !enabled;
     setNotificationState((current) => ({ ...current, [key]: next }));
-    setNotificationPending(key);
+    setNotificationPending((current) => ({ ...current, [key]: true }));
     try {
       const result = await request("/v1/account/notifications", {
         method: "POST",
-        body: JSON.stringify({ name: key }),
+        body: JSON.stringify({ name: key, enabled: next }),
       });
       if (result.notifications && typeof result.notifications === "object") {
-        setNotificationState(result.notifications as Record<string, boolean>);
+        setNotificationState((current) => ({ ...current, [key]: Boolean(result.notifications[key]) }));
       }
       const message = `${label} notification ${next ? "enabled" : "disabled"}.`;
       setModalFeedback({ message, error: false });
@@ -7097,8 +7102,12 @@ function LiveAccountScreen({
       setModalFeedback({ message, error: true });
       onNotice(message);
     } finally {
-      notificationRequestPending.current = false;
-      setNotificationPending(null);
+      notificationRequestPending.current.delete(key);
+      setNotificationPending((current) => {
+        const remaining = { ...current };
+        delete remaining[key];
+        return remaining;
+      });
     }
   };
   const saveMemecoinConfig = async (settings: Record<string, string>) => {
@@ -7123,7 +7132,7 @@ function LiveAccountScreen({
     message: string,
     closeModal = true,
   ): Promise<boolean> => {
-    if (modalPending) return false;
+    if (accountPending) return false;
     setAccountPending(true);
     setModalFeedback(null);
     try {
@@ -7148,11 +7157,10 @@ function LiveAccountScreen({
     <div className="account-screen">
       <div className="screen-title">
         <div>
-          <span className="eyebrow">ACCOUNT / SECURITY</span>
           <h2>Account settings</h2>
         </div>
         <div className="security-chip">
-          <StateIcon name="lock" /> PROTECTED
+          <StateIcon name="lock" /> {securityCodeSet ? "CODE SET" : "SET CODE"}
         </div>
       </div>
       <GradientPanel className="profile-card">
@@ -7161,15 +7169,12 @@ function LiveAccountScreen({
         </button>
         <div>
           <strong>{data.user.first_name || "Telegram user"}</strong>
-          <small>
-            {data.user.username ? `@${data.user.username}` : "No username"} /{" "}
-            {data.user.tier}
-          </small>
+          <small>{data.user.username ? `@${data.user.username} · ${data.user.tier}` : data.user.tier}</small>
         </div>
-        <span className="status-chip running">
-          <i />
-          protected
-        </span>
+        <button className="profile-code-status" type="button" onClick={() => setModal("code")}>
+          {securityCodeSet ? "Security code set" : "Set security code"}
+          <ChevronRight />
+        </button>
       </GradientPanel>
       <div className="account-actions">
         <button className="account-action" onClick={onIdentityUtility || onAvatarClick}>
@@ -7186,7 +7191,7 @@ function LiveAccountScreen({
           </span>
           <div>
             <strong>Withdrawal security code</strong>
-            <small>Set or change your approval code</small>
+            <small>{securityCodeSet ? "Change code" : "Set code before withdrawing"}</small>
           </div>
           <ChevronRight />
         </button>
@@ -7235,7 +7240,7 @@ function LiveAccountScreen({
           </span>
           <div>
             <strong>Help & support</strong>
-            <small>Open a tracked support request</small>
+            <small>Get account help</small>
           </div>
           <ChevronRight />
         </button>
@@ -7248,7 +7253,7 @@ function LiveAccountScreen({
           </span>
           <div>
             <strong>Reset desk preferences</strong>
-            <small>Never changes balances or financial history</small>
+            <small>Personal settings only</small>
           </div>
           <ChevronRight />
         </button>
@@ -7316,13 +7321,14 @@ function LiveAccountScreen({
                   className="primary-action"
                   disabled={code.length !== 6 || accountPending}
                   aria-busy={accountPending}
-                  onClick={() =>
-                    post(
+                  onClick={async () => {
+                    const saved = await post(
                       "/v1/account/security-code",
                       { code },
                       "Withdrawal security code saved.",
-                    )
-                  }
+                    );
+                    if (saved) setSecurityCodeSet(true);
+                  }}
                 >
                   {accountPending ? "Saving…" : "Save security code"} <ShieldCheck />
                 </button>
@@ -7344,20 +7350,18 @@ function LiveAccountScreen({
                   <label className="toggle-row" key={key}>
                     <span>
                       {label}
-                      <small>Delivery through Telegram</small>
+                      <small>{notificationPending[key] ? "Updating…" : "Telegram delivery"}</small>
                     </span>
                     <input
                       type="checkbox"
                       checked={enabled}
-                      aria-disabled={Boolean(notificationPending)}
-                      onClick={(event) => {
-                        if (notificationRequestPending.current) event.preventDefault();
-                      }}
+                      disabled={Boolean(notificationPending[key])}
+                      aria-busy={Boolean(notificationPending[key])}
                       onChange={() => void updateNotification(key, label, enabled)}
                     />
                     <StateSwapIcon
                       name={enabled ? "bell" : "bell-off"}
-                      swapKey={`${key}-${enabled ? "on" : "off"}`}
+                      swapKey={`${key}-${notificationPending[key] ? "saving" : enabled ? "on" : "off"}`}
                       className="notification-toggle-icon"
                     />
                   </label>
