@@ -5285,13 +5285,15 @@ function LiveHelpScreen({
   const [activeTicket, setActiveTicket] = useState<{ id: string; topic?: string; status: string } | null>(null);
   const [ticketMessages, setTicketMessages] = useState<Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }>>([]);
   const [ticketReply, setTicketReply] = useState("");
-  const [ticketPending, setTicketPending] = useState(false);
+  const [ticketOpeningId, setTicketOpeningId] = useState<string | null>(null);
+  const [ticketCreatePending, setTicketCreatePending] = useState(false);
+  const [ticketReplyPending, setTicketReplyPending] = useState(false);
   const loadTickets = async () => {
     const response = await request("/v1/support/tickets");
     setTickets(Array.isArray(response.tickets) ? response.tickets : []);
   };
   const openTicket = async (ticket: { id: string; topic?: string; status: string }, managePending = true, resetReply = true, quiet = false) => {
-    if (managePending) setTicketPending(true);
+    if (managePending) setTicketOpeningId(ticket.id);
     try {
       const response = await request(`/v1/support/tickets/${ticket.id}`);
       setActiveTicket(response.ticket || ticket);
@@ -5300,7 +5302,7 @@ function LiveHelpScreen({
     } catch (error) {
       if (!quiet) onNotice(error instanceof Error ? error.message : "Could not load this support request.");
     } finally {
-      if (managePending) setTicketPending(false);
+      if (managePending) setTicketOpeningId(null);
     }
   };
   useEffect(() => {
@@ -5490,7 +5492,7 @@ function LiveHelpScreen({
         {tickets.length > 0 && (
           <div className="support-ticket-list">
             {tickets.slice(0, 5).map((ticket) => (
-              <button className="activity-row support-ticket-row" type="button" key={ticket.id} onClick={() => void openTicket(ticket)} disabled={ticketPending}>
+              <button className="activity-row support-ticket-row" type="button" key={ticket.id} onClick={() => void openTicket(ticket)} disabled={ticketOpeningId === ticket.id} aria-busy={ticketOpeningId === ticket.id}>
                 <div className="activity-info">
                   <strong>TP-{ticket.id} · {ticket.topic || "General"}</strong>
                   <small>{ticket.status.replace("_", " ")} · {ticket.message_count || 1} message{(ticket.message_count || 1) === 1 ? "" : "s"}</small>
@@ -5511,9 +5513,9 @@ function LiveHelpScreen({
         />
         <button
           className="primary-action"
-          disabled={supportMessage.trim().length < 10 || ticketPending}
+          disabled={supportMessage.trim().length < 10 || ticketCreatePending}
           onClick={async () => {
-            setTicketPending(true);
+            setTicketCreatePending(true);
             try {
               const result = await request("/v1/support/tickets", {
                 method: "POST",
@@ -5535,11 +5537,11 @@ function LiveHelpScreen({
                   : "Could not open a support ticket.",
               );
             } finally {
-              setTicketPending(false);
+              setTicketCreatePending(false);
             }
           }}
         >
-          {ticketPending ? "Opening…" : "Open support ticket"} <Send />
+          {ticketCreatePending ? "Opening…" : "Open support ticket"} <Send />
         </button>
       </GradientPanel>
       {activeTicket && (
@@ -5565,16 +5567,16 @@ function LiveHelpScreen({
             <>
               <label className="amount-field" htmlFor={`${fieldId}-reply`}>Reply to support</label>
               <textarea id={`${fieldId}-reply`} value={ticketReply} onChange={(event) => setTicketReply(event.target.value)} placeholder="Add details without sharing a security code or private key." rows={4} />
-              <button className="primary-action" disabled={ticketReply.trim().length < 2 || ticketPending} onClick={async () => {
-                setTicketPending(true);
+              <button className="primary-action" disabled={ticketReply.trim().length < 2 || ticketReplyPending} onClick={async () => {
+                setTicketReplyPending(true);
                 try {
                   await request(`/v1/support/tickets/${activeTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: ticketReply.trim() }) });
                   await Promise.all([openTicket(activeTicket, false), loadTickets()]);
                   onNotice("Reply sent to support.");
                 } catch (error) {
                   onNotice(error instanceof Error ? error.message : "Could not send the support reply.");
-                } finally { setTicketPending(false); }
-              }}>{ticketPending ? "Sending…" : "Send reply"} <Send /></button>
+                } finally { setTicketReplyPending(false); }
+              }}>{ticketReplyPending ? "Sending…" : "Send reply"} <Send /></button>
             </>
           )}
         </GradientPanel>
