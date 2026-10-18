@@ -6582,7 +6582,10 @@ function LiveDeskScreen({
   const analystUnavailableReason = !analystReady
     ? "The Desk Analyst is being connected. Try again shortly."
     : "";
-  const selectionAssetLabel = (asset: string) => data.memecoin?.market_labels?.[asset] || "Unresolved asset";
+  const selectionAssetLabel = (asset: string) => {
+    const labels = data.memecoin?.market_labels;
+    return labels?.[asset] || labels?.[asset.toLowerCase()] || labels?.[asset.toUpperCase()] || "Unresolved asset";
+  };
   const createAlert = async () => {
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
       setAlertError("Enter a positive price threshold before creating an alert.");
