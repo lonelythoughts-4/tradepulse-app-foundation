@@ -6570,16 +6570,15 @@ function LiveDeskScreen({
   const [threshold, setThreshold] = useState("");
   const [alertError, setAlertError] = useState("");
   const [analystBriefing, setAnalystBriefing] = useState("");
+  const [analystMessages, setAnalystMessages] = useState<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
   const [analystQuestion, setAnalystQuestion] = useState("");
   const [analystError, setAnalystError] = useState("");
   const [analystLoading, setAnalystLoading] = useState(false);
   const alertErrorId = useId();
   const analystReady = Boolean(data.analyst?.configured);
   const analystUnavailableReason = !analystReady
-    ? "The NVIDIA analyst is being connected. Try again shortly."
-    : !selection
-      ? "Save a Memecoin strategy selection to generate a briefing."
-      : "";
+    ? "The Desk Analyst is being connected. Try again shortly."
+    : "";
   const createAlert = async () => {
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
       setAlertError("Enter a positive price threshold before creating an alert.");
@@ -6604,19 +6603,45 @@ function LiveDeskScreen({
     }
   };
   const generateAnalystBriefing = async () => {
-    if (!selection || analystLoading) return;
+    if (analystLoading) return;
+    const question = analystQuestion.trim();
+    if (/\b(escalate|admin support|support ticket)\b/i.test(question)) {
+      await escalateAnalystIssue(question);
+      return;
+    }
     setAnalystLoading(true);
     setAnalystError("");
     try {
       const response = await request("/v1/live-desk/analyst", {
         method: "POST",
-        body: JSON.stringify({ question: analystQuestion.trim() || undefined }),
+        body: JSON.stringify({ question: question || undefined }),
       }, undefined, 70_000);
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
       if (!text) throw new Error("The analyst did not return a usable briefing.");
       setAnalystBriefing(text);
+      setAnalystMessages((messages) => [...messages, ...(question ? [{ role: "user" as const, text: question }] : []), { role: "assistant", text }].slice(-8));
+      setAnalystQuestion("");
     } catch (error) {
       setAnalystError(error instanceof Error ? error.message : "The analyst is temporarily unavailable.");
+    } finally {
+      setAnalystLoading(false);
+    }
+  };
+  const escalateAnalystIssue = async (issue = analystQuestion.trim()) => {
+    if (analystLoading || issue.length < 10) {
+      setAnalystError("Describe the issue in at least 10 characters so an admin can investigate.");
+      return;
+    }
+    setAnalystLoading(true);
+    setAnalystError("");
+    try {
+      const response = await request("/v1/live-desk/analyst/escalate", { method: "POST", body: JSON.stringify({ issue }) });
+      const ticketId = Number(response?.ticket_id);
+      const text = Number.isFinite(ticketId) ? `Support ticket TP-${ticketId} is now in the admin queue.` : "Your issue was sent to the admin support queue.";
+      setAnalystMessages((messages) => [...messages, { role: "user", text: issue }, { role: "system", text }].slice(-8));
+      setAnalystQuestion("");
+    } catch (error) {
+      setAnalystError(error instanceof Error ? error.message : "The support escalation could not be created.");
     } finally {
       setAnalystLoading(false);
     }
@@ -6662,17 +6687,17 @@ function LiveDeskScreen({
         <div className="analyst-boundary" aria-live="polite">
           <div className="analyst-identity">
             <span className="analyst-mark"><PulseMark size={18} /></span>
-            <div><strong>NVIDIA analyst</strong><small>{analystReady ? "Strategy context" : "Connection pending"}</small></div>
+            <div><strong>Desk Analyst</strong><small>{analystReady ? "Your account context" : "Connection pending"}</small></div>
           </div>
           <div className="analyst-copy">
-            {analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask about your saved controls, listed markets, current reference data, or a market scenario."}</p>}
+            {analystMessages.length ? <div className="analyst-thread">{analystMessages.map((message, index) => <p key={`${message.role}-${index}`} className={`analyst-message analyst-message-${message.role}`}>{message.text}</p>)}</div> : analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask about your activity, wins and losses, saved controls, listed markets, current reference data, or an issue that needs admin support."}</p>}
             {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
             <label className="analyst-question">
               <span>Ask the analyst</span>
               <input
                 value={analystQuestion}
                 maxLength={280}
-                disabled={!selection || !analystReady || analystLoading}
+                disabled={!analystReady || analystLoading}
                 onChange={(event) => {
                   setAnalystQuestion(event.target.value);
                   if (analystError) setAnalystError("");
@@ -6680,10 +6705,10 @@ function LiveDeskScreen({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") void generateAnalystBriefing();
                 }}
-                placeholder="Which listed market best matches my saved strategy?"
+                placeholder="Ask about your activity, strategy, or type ‘escalate’ for admin support"
               />
             </label>
-            <button className="small-action analyst-action" disabled={!selection || !analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Checking context…" : analystQuestion.trim() ? "Ask analyst" : analystBriefing ? "Refresh overview" : "Generate overview"}<StateIcon name="refresh" /></button>
+            <div className="analyst-actions"><button className="small-action analyst-action" disabled={!analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Checking context…" : analystQuestion.trim() ? "Send message" : analystBriefing ? "Refresh overview" : "Start conversation"}<StateIcon name="refresh" /></button><button className="small-action analyst-escalate" disabled={analystLoading || analystQuestion.trim().length < 10} onClick={() => void escalateAnalystIssue()}>Escalate to admin</button></div>
           </div>
         </div>
       </GradientPanel>
