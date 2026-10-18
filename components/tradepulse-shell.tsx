@@ -9874,6 +9874,7 @@ function LiveTradePulse() {
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
   const [syntheticAmount, setSyntheticAmount] = useState("20");
+  const [syntheticAutoAllocation, setSyntheticAutoAllocation] = useState("");
   const [syntheticReview, setSyntheticReview] = useState<{
     kind: "long" | "short" | "auto" | "approve";
     path: string;
@@ -9901,6 +9902,11 @@ function LiveTradePulse() {
   }, [tab]);
   const [autoAcknowledged, setAutoAcknowledged] = useState(false);
   const [syntheticFundingSource, setSyntheticFundingSource] = useState<"wallet" | "demo" | "credit">("wallet");
+  useEffect(() => {
+    if (synthetic && !syntheticAutoAllocation) {
+      setSyntheticAutoAllocation(String(Number(synthetic.execution?.auto_allocation_usd || 0)));
+    }
+  }, [synthetic, syntheticAutoAllocation]);
   useEffect(() => {
     setSyntheticReview(null);
     setSyntheticReviewError("");
@@ -9939,9 +9945,10 @@ function LiveTradePulse() {
     }>;
     live_disclosure_accepted?: boolean;
     execution_mode?: "MANUAL" | "AUTO";
+    execution?: { auto_allocation_usd?: number; manual_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number };
     auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>;
     settings?: Record<string, string>;
-    allocation?: { allocated_usd: number; reserved_usd: number; available_usd: number; state: string };
+    allocation?: { allocated_usd: number; reserved_usd: number; available_usd: number; state: string; auto_allocation_usd?: number; manual_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number };
     demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
   } | null>(null);
   const [syntheticSignals, setSyntheticSignals] = useState<Array<{
@@ -10413,7 +10420,7 @@ function LiveTradePulse() {
     if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) {
       setSynthetic((current) =>
         current
-          ? { ...current, execution_mode: response.execution_mode as "MANUAL" | "AUTO" }
+          ? { ...current, execution_mode: response.execution_mode as "MANUAL" | "AUTO", execution: { ...current.execution, ...response } }
           : current,
       );
     }
@@ -10508,6 +10515,7 @@ function LiveTradePulse() {
   const openSyntheticReview = (kind: "long" | "short" | "auto" | "approve", signal?: { id: string; market: string; direction: string; expires_at: number }) => {
     if (!synthetic || !data || syntheticReviewSubmitting.current || webEnvironment !== "mainnet") return;
     const margin = Number(syntheticAmount);
+    const autoAllocation = Number(syntheticAutoAllocation);
     const market = signal?.market || syntheticMarket;
     const direction = signal?.direction || kind;
     const mode = kind === "auto" ? "AUTO" : synthetic.execution_mode || "MANUAL";
@@ -10527,7 +10535,7 @@ function LiveTradePulse() {
     const requestFundingSource = usingPool ? "demo" : usingCredit ? "credit" : "mainnet";
     const path = kind === "auto" ? "/v1/synthetic/settings/execution-mode"
       : signal ? `/v1/synthetic/signals/${signal.id}/approve` : "/v1/synthetic/orders";
-    const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: margin }
+    const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: margin, auto_allocation_usd: autoAllocation }
       : signal ? { amount: margin, funding_source: requestFundingSource, idempotency_key: `signal:${requestFundingSource}:${data.user.id}:${signal.id}` }
       : { market, direction, amount: margin, mode: mode.toLowerCase(), funding_source: requestFundingSource, idempotency_key: `web:${requestFundingSource}:${market}:${direction}:${Date.now()}` };
     setAutoAcknowledged(false);
@@ -11085,7 +11093,7 @@ function LiveTradePulse() {
                         }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Updating…" : "Top up Synthetic"}</button>}
                         <div className="fact-block">
                           <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
-                          {syntheticFundingSource === "wallet" && <span>Available in Synthetic <b>{money(Number(synthetic.allocation?.available_usd || 0))}</b></span>}
+                          {syntheticFundingSource === "wallet" && <span>Manual capacity <b>{money(Number(synthetic.allocation?.manual_available_usd || synthetic.allocation?.available_usd || 0))}</b></span>}
                           <span>Estimated tier fee <b>{money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}</b></span>
                           <span>Estimated spread <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                         </div>
@@ -11093,8 +11101,12 @@ function LiveTradePulse() {
                           <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("execution:manual") ? "Saving…" : "Manual review"}</button>
                           <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={executionModePending || syntheticReviewSubmitting.current} onClick={() => openSyntheticReview("auto")}>{isActionPending("execution:auto") ? "Saving…" : "Automatic"}</button>
                         </div>
+                        <label className="amount-field">Auto capacity from this allocation
+                          <input value={syntheticAutoAllocation} onChange={(event) => setSyntheticAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" placeholder="0.00" />
+                        </label>
+                        {syntheticFundingSource === "wallet" && <p>Auto {money(Number(synthetic.execution?.auto_available_usd || 0))} available · Manual {money(Number(synthetic.execution?.manual_available_usd || synthetic.allocation?.available_usd || 0))} available</p>}
                         <p>{synthetic.execution_mode === "AUTO"
-                          ? "Automatic uses the confirmed margin when an eligible signal passes."
+                          ? "Automatic uses the confirmed per-order margin within its assigned capacity."
                           : "Manual review is required before each order."}</p>
                         {synthetic.execution_mode === "AUTO" && syntheticFundingSource !== "wallet" && <p role="status">Auto remains wallet-funded. The selected virtual source applies only to manually reviewed orders.</p>}
                         {synthetic.execution_mode === "AUTO" && <div className="activity-row" role="status" aria-live="polite">
@@ -11144,6 +11156,7 @@ function LiveTradePulse() {
                   <div className="fact-block">
                     <span>EXECUTION <b>{syntheticReview.kind === "auto" ? "AUTO" : "MANUAL ORDER"}</b></span>
                     <span>{syntheticReview.kind === "auto" ? "MARGIN PER AUTO ORDER" : "MARGIN / 1:1"} <b>{Number.isFinite(syntheticReview.amount) ? money(syntheticReview.amount) : "Enter a valid amount"}</b></span>
+                    {syntheticReview.kind === "auto" && <span>AUTO CAPACITY <b>{money(Number((syntheticReview.payload as { auto_allocation_usd?: number }).auto_allocation_usd || 0))}</b></span>}
                     {Number.isFinite(syntheticReview.amount) && <>
                       <span>ESTIMATED SPREAD <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                       <span>ESTIMATED TIER FEE <b>{money(syntheticReview.fee)}</b></span>
@@ -11153,14 +11166,15 @@ function LiveTradePulse() {
                   {syntheticReview.expiresAt && <p role="status">{syntheticReview.expiresAt * 1000 <= signalNow ? "Signal expired. Go back for a fresh signal." : `Signal expires in ${Math.ceil((syntheticReview.expiresAt * 1000 - signalNow) / 1000)}s.`}</p>}
                   {syntheticReview.kind === "auto" && (
                     <label className="toggle-row">
-                      <span>I understand Auto applies across synthetic markets, using this margin per order, without asking me to approve each one. Manual orders remain separate.</span>
+                      <span>I understand Auto uses only the stated Auto capacity and margin per order. Manual orders use the remaining Synthetic capacity.</span>
                       <input type="checkbox" checked={autoAcknowledged} disabled={syntheticReviewPending} onChange={(event) => setAutoAcknowledged(event.target.checked)} />
                       <i aria-hidden="true" />
                     </label>
                   )}
                   {(!Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0) && <p role="alert">Go back and enter a positive, valid USD margin.</p>}
+                  {syntheticReview.kind === "auto" && (!Number.isFinite(Number((syntheticReview.payload as { auto_allocation_usd?: number }).auto_allocation_usd)) || Number((syntheticReview.payload as { auto_allocation_usd?: number }).auto_allocation_usd) < syntheticReview.amount) && <p role="alert">Auto capacity must cover at least one Auto order.</p>}
                   {syntheticReviewError && <p role="alert">{syntheticReviewError}</p>}
-                  <button className="primary-action" disabled={syntheticReviewPending || Boolean(syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= signalNow) || !Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 || (syntheticReview.kind === "auto" && !autoAcknowledged)} onClick={() => void confirmSyntheticReview()}>
+                  <button className="primary-action" disabled={syntheticReviewPending || Boolean(syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= signalNow) || !Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 || (syntheticReview.kind === "auto" && (!autoAcknowledged || !Number.isFinite(Number((syntheticReview.payload as { auto_allocation_usd?: number }).auto_allocation_usd)) || Number((syntheticReview.payload as { auto_allocation_usd?: number }).auto_allocation_usd) < syntheticReview.amount))} onClick={() => void confirmSyntheticReview()}>
                     {syntheticReviewPending ? "Submitting…" : syntheticReview.kind === "auto" ? "Confirm Auto execution" : syntheticReview.kind === "approve" ? "Confirm signal approval" : `Confirm ${syntheticReview.direction}`}
                   </button>
                   {syntheticReviewPending && <p role="status">The request is submitting. You may return to the controls; this does not cancel it. Its result will appear on the desk.</p>}
