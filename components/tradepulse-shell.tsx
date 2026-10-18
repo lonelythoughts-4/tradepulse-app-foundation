@@ -5584,11 +5584,7 @@ function LiveAdminScreen({
       }, withdrawalReview.environment);
       onNotice(withdrawalReview.action === "approve" ? "Withdrawal approved and logged." : "Withdrawal rejected.");
       setWithdrawalReview(null);
-      try {
-        await reload();
-      } catch {
-        onNotice("Withdrawal action saved, but the queue could not refresh. Reload the control room before taking another action.");
-      }
+      void reload().catch(() => undefined);
     } catch (error) {
       setWithdrawalError(error instanceof Error ? error.message : "Withdrawal action failed. Review the current status before trying again.");
     } finally {
@@ -5632,14 +5628,9 @@ function LiveAdminScreen({
   const post = async (path: string, body: object, message: string) => {
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
-      try {
-        await reload();
-      } catch {
-        // The server action already succeeded. Do not turn that into a false
-        // failure merely because a later dashboard refresh is interrupted.
-        onNotice(`${message} The control room could not refresh; reload before taking another action.`);
-        return true;
-      }
+      // Reconcile the control room after the confirmed mutation without
+      // holding the initiating control behind a second request.
+      void reload().catch(() => undefined);
       onNotice(message);
       return true;
     } catch (error) {
@@ -5701,7 +5692,7 @@ function LiveAdminScreen({
       setAutouserMaximum("");
       setAutouserConfirmed(false);
       onNotice(result.message || "Auto-user testnet deposit run scheduled.");
-      await reload();
+      void reload().catch(() => undefined);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be scheduled.");
     } finally {
@@ -5712,7 +5703,7 @@ function LiveAdminScreen({
     try {
       const result = await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
       onNotice(result.message || `Auto-user run ${action}d.`);
-      await reload();
+      void reload().catch(() => undefined);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
     }
@@ -5734,11 +5725,7 @@ function LiveAdminScreen({
       setConfirm("");
       setBroadcastTarget("");
       onNotice(result.message || "Broadcast queued for delivery.");
-      try {
-        await reload();
-      } catch {
-        onNotice("Broadcast queued. The delivery status will appear after you reload the control room.");
-      }
+      void reload().catch(() => undefined);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Broadcast could not be queued.");
     } finally {
@@ -6572,6 +6559,7 @@ function LiveDeskScreen({
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
   const [alertError, setAlertError] = useState("");
+  const [alertPending, setAlertPending] = useState<string | null>(null);
   const [analystBriefing, setAnalystBriefing] = useState("");
   const [analystMessages, setAnalystMessages] = useState<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
   const [analystQuestion, setAnalystQuestion] = useState("");
@@ -6587,10 +6575,12 @@ function LiveDeskScreen({
     return labels?.[asset] || labels?.[asset.toLowerCase()] || labels?.[asset.toUpperCase()] || "Unresolved asset";
   };
   const createAlert = async () => {
+    if (alertPending) return;
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
       setAlertError("Enter a positive price threshold before creating an alert.");
       return;
     }
+    setAlertPending("create");
     try {
       await request("/v1/alerts", {
         method: "POST",
@@ -6598,7 +6588,7 @@ function LiveDeskScreen({
       });
       setThreshold("");
       setAlertError("");
-      await reload();
+      void reload().catch(() => undefined);
       onNotice("Price alert created.");
     } catch (error) {
       setAlertError(
@@ -6607,6 +6597,8 @@ function LiveDeskScreen({
       onNotice(
         error instanceof Error ? error.message : "Could not create the alert.",
       );
+    } finally {
+      setAlertPending(null);
     }
   };
   const generateAnalystBriefing = async () => {
@@ -6766,10 +6758,10 @@ function LiveDeskScreen({
           </div>
           <button
             className="primary-action"
-            disabled={!Number(threshold) || Number(threshold) <= 0}
+            disabled={!Number(threshold) || Number(threshold) <= 0 || alertPending === "create"}
             onClick={createAlert}
           >
-            Create alert <Bell />
+            {alertPending === "create" ? "Creating…" : "Create alert"} <Bell />
           </button>
       </GradientPanel>
       <GradientPanel className="active-alerts">
@@ -6791,13 +6783,17 @@ function LiveDeskScreen({
               <button
                 className="icon-button"
                 aria-label="Remove alert"
+                disabled={alertPending === `remove:${alert.id}`}
+                aria-busy={alertPending === `remove:${alert.id}`}
                 onClick={async () => {
+                  if (alertPending) return;
+                  setAlertPending(`remove:${alert.id}`);
                   try {
                     await request(`/v1/alerts/${alert.id}/remove`, {
                       method: "POST",
                       body: "{}",
                     });
-                    await reload();
+                    void reload().catch(() => undefined);
                     onNotice("Alert removed.");
                   } catch (error) {
                     onNotice(
@@ -6805,6 +6801,8 @@ function LiveDeskScreen({
                         ? error.message
                         : "Could not remove alert.",
                     );
+                  } finally {
+                    setAlertPending(null);
                   }
                 }}
               >
@@ -7029,7 +7027,7 @@ function LiveAccountScreen({
       await request(path, { method: "POST", body: JSON.stringify(body) });
       setModalFeedback({ message, error: false });
       onNotice(message);
-      await reload();
+      void reload().catch(() => undefined);
       if (closeModal) setModal("");
       return true;
     } catch (error) {
@@ -7450,9 +7448,10 @@ function LiveBotsScreen({
   const [amount, setAmount] = useState("20");
   const [review, setReview] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(initialBotId);
-  const [pendingAction, setPendingAction] = useState(false);
-  const [pendingActionType, setPendingActionType] = useState<string | null>(null);
-  const actionInFlightRef = useRef(false);
+  // Pending state is scoped to the action and its resource. A slow request on
+  // one bot must never make another bot, position, or Flashback control look
+  // like it is processing.
+  const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
   const [reviewError, setReviewError] = useState("");
   const [closeReview, setCloseReview] = useState(false);
   const [flashbackAmount, setFlashbackAmount] = useState(20);
@@ -7530,14 +7529,23 @@ function LiveBotsScreen({
   useEffect(() => {
     if (view !== "flashback" || flashback?.state !== "sealed") return;
     const tick = () => setFlashbackNow(Date.now());
+    const refreshSession = async () => {
+      try {
+        const snapshot = await request("/v1/flashback");
+        if (!snapshot?.session || typeof snapshot.session !== "object") return;
+        onActionResult("/v1/flashback/refresh", {}, snapshot);
+      } catch {
+        // The countdown remains useful while the targeted status check retries.
+      }
+    };
     tick();
     const countdown = window.setInterval(tick, 1_000);
-    const refresh = window.setInterval(() => void reload(), 15_000);
+    const refresh = window.setInterval(() => void refreshSession(), 15_000);
     return () => {
       window.clearInterval(countdown);
       window.clearInterval(refresh);
     };
-  }, [flashback?.expires_at, flashback?.state, reload, view]);
+  }, [flashback?.expires_at, flashback?.state, onActionResult, request, view]);
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
     const assets = Array.isArray(response.assets)
@@ -7687,12 +7695,23 @@ function LiveBotsScreen({
       .catch(() => { if (!cancelled) setMemecoinInsights({}); });
     return () => { cancelled = true; };
   }, [selected?.id, selected?.product, memecoinAssets, request]);
+  const actionKeyFor = (path: string, payload: Record<string, unknown>) => {
+    const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
+    if (botAction) return `bot:${botAction[1]}:${String(payload.action || "action")}`;
+    const position = path.match(/^\/v1\/memecoin\/positions\/([^/]+)\/close$/);
+    if (position) return `memecoin-position:${position[1]}:close`;
+    if (path === "/v1/memecoin/orders") return `memecoin-order:${String(payload.bot_id || "new")}`;
+    if (path === "/v1/flashback/start") return "flashback:start";
+    if (path === "/v1/flashback/reveal") return "flashback:reveal";
+    if (path === "/v1/bots") return "bot:create";
+    return path;
+  };
+  const isActionPending = (key: string) => Boolean(pendingActions[key]);
   const run = async (path: string, payload: Record<string, unknown>) => {
-    if (actionInFlightRef.current) return false;
-    actionInFlightRef.current = true;
+    const actionKey = actionKeyFor(path, payload);
+    if (isActionPending(actionKey)) return false;
     setReviewError("");
-    setPendingAction(true);
-    setPendingActionType(String(payload.action || "action"));
+    setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(path, {
         method: "POST",
@@ -7701,11 +7720,12 @@ function LiveBotsScreen({
       onNotice(response.message || "Saved successfully.");
       // The parent owns the desk snapshot. Apply an authoritative response
       // there rather than reaching across component scope; only responses
-      // without a usable projection require the slower full refresh.
+      // without a usable projection are reconciled in the background. The
+      // completed action should not remain stuck behind a full dashboard load.
       if (response.bot || response.wallet || response.position || response.session) {
         onActionResult(path, payload, response);
       } else {
-        await reload();
+        void reload().catch(() => undefined);
       }
       return true;
     } catch (error) {
@@ -7714,14 +7734,16 @@ function LiveBotsScreen({
       onNotice(message);
       return false;
     } finally {
-      actionInFlightRef.current = false;
-      setPendingAction(false);
-      setPendingActionType(null);
+      setPendingActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
   };
   const updateCompound = async (percent: number) => {
     const botId = selected?.id;
-    if (!botId || pendingAction || selected.compound_percent === percent) return;
+    if (!botId || isActionPending(`bot:${botId}:compound`) || selected.compound_percent === percent) return;
     const hadOverride = Object.prototype.hasOwnProperty.call(compoundOverrides, botId);
     const previous = compoundOverrides[botId] ?? selected.compound_percent;
     setCompoundOverrides((current) => ({ ...current, [botId]: percent }));
@@ -7802,7 +7824,7 @@ function LiveBotsScreen({
       </div>
       <div className="fleet-bot-actions">
         <span className="compound-chip">SEALED RETURN · SEPARATE FROM BOTS</span>
-        <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
+        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
           {flashbackFleetAction} <ChevronRight />
         </button>
       </div>
@@ -7814,15 +7836,12 @@ function LiveBotsScreen({
       setFlashbackReview(false);
       setFlashbackNewSession(false);
       setFlashbackNow(Date.now());
-      void reload().catch(() => undefined);
     }
   };
   const revealFlashback = async () => {
-    const revealed = await run("/v1/flashback/reveal", {});
-    // `run` applies the returned settled session before this promise resolves,
-    // so the sealed state is never left on screen while a background refresh
-    // catches up with the ledger and related projections.
-    if (revealed) void reload().catch(() => undefined);
+    await run("/v1/flashback/reveal", {});
+    // `run` applies the settled session before it resolves, so no dashboard
+    // reload is needed to leave the sealed state.
   };
   if (view === "flashback")
     return (
@@ -7857,7 +7876,7 @@ function LiveBotsScreen({
           </div>
           <GradientPanel className="compound-panel">
             <p>The complete entry can be lost. The published table includes the entry in every return, and larger outcomes are rarer. There is no performance fee, and a sealed return cannot be ended early.</p>
-            <button className="primary-action" disabled={pendingAction || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>
+            <button className="primary-action" disabled={flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>
               Review sealed Flashback <ChevronRight />
             </button>
           </GradientPanel>
@@ -7883,7 +7902,7 @@ function LiveBotsScreen({
             <h2>Your result is ready</h2>
             <p>The reveal window has closed. Your result stayed sealed until this reveal.</p>
             <div className="fact-block"><span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
-            <button className="primary-action" disabled={pendingAction} onClick={() => void revealFlashback()}>Reveal result <StateIcon name="check" /></button>
+            <button className="primary-action" disabled={isActionPending("flashback:reveal")} aria-busy={isActionPending("flashback:reveal")} onClick={() => void revealFlashback()}>{isActionPending("flashback:reveal") ? "Revealing…" : "Reveal result"} <StateIcon name="check" /></button>
           </GradientPanel>
         </>}
         {flashback?.state === "revealed" && !flashbackNewSession && <>
@@ -7904,7 +7923,7 @@ function LiveBotsScreen({
                 <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               </div>
               <p>The revealed nonce, commitment, and external entropy hash preserve the sealed rules for this session.</p>
-              <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button>
+              <button className="small-action" onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button>
             </GradientPanel>
           </> : <>
             <div className="detail-stats">
@@ -7919,17 +7938,17 @@ function LiveBotsScreen({
                 <span>STATUS <b>HISTORICAL TERMS</b></span>
               </div>
               <p>This session was settled under earlier terms. Its original record remains available in account activity.</p>
-              <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackNewSession(true); }}>Start current Flashback <Plus /></button>
+              <button className="small-action" onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackNewSession(true); }}>Start current Flashback <Plus /></button>
             </GradientPanel>
           </>}
         </>}
-        {flashbackReview && <AccessibleDialog label="Review Flashback" onClose={() => setFlashbackReview(false)} dismissible={!pendingAction}>
+        {flashbackReview && <AccessibleDialog label="Review Flashback" onClose={() => setFlashbackReview(false)} dismissible={!isActionPending("flashback:start")}>
           <h2>Start a sealed Flashback?</h2>
           <p>TradePulse will lock {money(flashbackAmount)} for {Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)} minutes and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p>
           <div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>RESULT <b>SEALED</b></span></div>
           {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
-          <button className="primary-action" disabled={pendingAction || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} aria-busy={pendingAction} onClick={() => void startFlashback()}>{pendingAction ? "Starting…" : "Start sealed Flashback"} <StateIcon name="check" /></button>
-          <button className="ghost-action" disabled={pendingAction} onClick={() => setFlashbackReview(false)}>Go back</button>
+          <button className="primary-action" disabled={isActionPending("flashback:start") || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} aria-busy={isActionPending("flashback:start")} onClick={() => void startFlashback()}>{isActionPending("flashback:start") ? "Starting…" : "Start sealed Flashback"} <StateIcon name="check" /></button>
+          <button className="ghost-action" disabled={isActionPending("flashback:start")} onClick={() => setFlashbackReview(false)}>Go back</button>
         </AccessibleDialog>}
       </div>
     );
@@ -7998,7 +8017,7 @@ function LiveBotsScreen({
           Review allocation <ChevronRight />
         </button>
         {review && (
-          <AccessibleDialog label="Confirm deployment" onClose={() => setReview(false)} dismissible={!pendingAction}>
+          <AccessibleDialog label="Confirm deployment" onClose={() => setReview(false)} dismissible={!isActionPending("bot:create")}>
               <span className="eyebrow">FINAL REVIEW</span>
               <h2>Confirm deployment</h2>
               <div className="fact-block">
@@ -8023,8 +8042,8 @@ function LiveBotsScreen({
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
-                disabled={pendingAction}
-                aria-busy={pendingAction}
+                disabled={isActionPending("bot:create")}
+                aria-busy={isActionPending("bot:create")}
                 onClick={async () => {
                   const created = await run("/v1/bots", { product, amount: Number(amount) });
                   if (created) {
@@ -8033,9 +8052,9 @@ function LiveBotsScreen({
                   }
                 }}
               >
-                {pendingAction ? "Submitting…" : "Start trade"} <Zap />
+                {isActionPending("bot:create") ? "Submitting…" : "Start trade"} <Zap />
               </button>
-              <button className="ghost-action" disabled={pendingAction} onClick={() => setReview(false)}>
+              <button className="ghost-action" disabled={isActionPending("bot:create")} onClick={() => setReview(false)}>
                 Go back
               </button>
           </AccessibleDialog>
@@ -8083,7 +8102,7 @@ function LiveBotsScreen({
             </span>
           </div>
         </GradientPanel>
-        <button className="small-action" disabled={pendingAction} onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
+        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
           Open Flashback <ChevronRight />
         </button>
         <div className="detail-stats">
@@ -8121,7 +8140,7 @@ function LiveBotsScreen({
                       <strong title={identity.title}>{identity.chainLabel && <PaymentMark asset={identity.chainLabel} compact />} {identity.label} · {position.direction.toUpperCase()} · {entryType} · {position.status}</strong>
                       <small>{entryType === "automatic" ? "Strategy entry" : "Manual order"} · Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
                     </div>
-                    {position.status === "open" && <button className="small-action" disabled={pendingAction} title={`Close this ${identity.label} position at the next executable market price`} aria-label={`Close ${identity.label} ${position.direction} position`} onClick={() => run(`/v1/memecoin/positions/${position.id}/close`, {})}>Close position <X /></button>}
+                    {position.status === "open" && <button className="small-action" disabled={isActionPending(`memecoin-position:${position.id}:close`)} aria-busy={isActionPending(`memecoin-position:${position.id}:close`)} title={`Close this ${identity.label} position at the next executable market price`} aria-label={`Close ${identity.label} ${position.direction} position`} onClick={() => void run(`/v1/memecoin/positions/${position.id}/close`, {})}>{isActionPending(`memecoin-position:${position.id}:close`) ? "Closing…" : "Close position"} <X /></button>}
                   </div>;
                 })}
               </div>
@@ -8163,7 +8182,7 @@ function LiveBotsScreen({
               {(selected.state === "running" || isDemoCreditOnlyBot) && (
                 <button
                   className="small-action"
-                  disabled={pendingAction || (isDemoBot ? !activeDemoPool : isDemoCreditOnlyBot ? !activeDemoCredit : false)}
+                  disabled={isActionPending(`memecoin-order:${selected.id}`) || (isDemoBot ? !activeDemoPool : isDemoCreditOnlyBot ? !activeDemoCredit : false)}
                   onClick={() => setMemecoinOrder({
                     direction: "long",
                     source: isDemoBot ? "demo" : isDemoCreditOnlyBot ? "credit" : "wallet",
@@ -8190,7 +8209,7 @@ function LiveBotsScreen({
                       selected.compound_percent === percent ? "active" : ""
                     }
                     key={percent}
-                    aria-disabled={pendingAction}
+                    aria-disabled={isActionPending(`bot:${selected.id}:compound`)}
                     onClick={() => void updateCompound(percent)}
                   >
                     {percent}%
@@ -8215,7 +8234,7 @@ function LiveBotsScreen({
                 <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
               ))}
             </div>
-            <button type="button" className="small-action" disabled={pendingAction} onClick={() => void openBasketPicker()}>
+            <button type="button" className="small-action" onClick={() => void openBasketPicker()}>
               Browse eligible markets <ChevronRight />
             </button>
             <span className="eyebrow">LEVERAGE</span>
@@ -8230,10 +8249,10 @@ function LiveBotsScreen({
               <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
               <button
                 className="primary-action"
-                disabled={pendingAction || memecoinAssets.length === 0}
+                disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0}
                 onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
               >
-                {pendingActionType === "authorize" ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? "Authorize Memecoin Bot Beta" : "Save strategy controls"} <StateIcon name="check" />
+                {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? "Authorize Memecoin Bot Beta" : "Save strategy controls"} <StateIcon name="check" />
               </button>
             </GradientPanel>
           )}
@@ -8252,7 +8271,7 @@ function LiveBotsScreen({
               </div>
               <button
                 className="small-action"
-                disabled={Number(amount) < 20 || pendingAction}
+                disabled={Number(amount) < 20 || isActionPending(`bot:${selected.id}:topup`)}
                 onClick={() =>
                   run(`/v1/bots/${selected.id}/actions`, {
                     action: "topup",
@@ -8260,12 +8279,12 @@ function LiveBotsScreen({
                   })
                 }
               >
-                {pendingActionType === "topup" ? "Updating…" : "Top up allocation"} <Plus />
+                {isActionPending(`bot:${selected.id}:topup`) ? "Updating…" : "Top up allocation"} <Plus />
               </button>
             </>}
           {!isDemoCreditOnlyBot && !isClosing && <button
             className="primary-action"
-            disabled={awaitingAuthorization || pendingAction}
+            disabled={awaitingAuthorization || isActionPending(`bot:${selected.id}:toggle`)}
             onClick={() =>
               run(`/v1/bots/${selected.id}/actions`, { action: "toggle" })
             }
@@ -8278,14 +8297,14 @@ function LiveBotsScreen({
           </button>}
             {!isVirtualMemecoinBot && <button
                 className="danger-action"
-                disabled={pendingAction}
+                disabled={isActionPending(`bot:${selected.id}:close`)}
                 onClick={() => { setReviewError(""); setCloseReview(true); }}
               >
                 {isClosing ? "Finish closing bot" : "Close bot"} <X />
               </button>}
           </div>
           {memecoinOrder && (
-            <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!pendingAction}>
+            <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!isActionPending(`memecoin-order:${selected.id}`)}>
               <span className="eyebrow">MANUAL MEMECOIN ORDER</span>
               <h2>Review order</h2>
               <p>Manual orders use the same fresh-price, liquidity, position, and settlement safeguards as automatic entries.</p>
@@ -8309,8 +8328,8 @@ function LiveBotsScreen({
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
-                disabled={pendingAction || Number(memecoinOrder.amount) <= 0 || (isDemoBot && !activeDemoPool) || (isDemoCreditOnlyBot && !activeDemoCredit)}
-                aria-busy={pendingAction}
+                disabled={isActionPending(`memecoin-order:${selected.id}`) || Number(memecoinOrder.amount) <= 0 || (isDemoBot && !activeDemoPool) || (isDemoCreditOnlyBot && !activeDemoCredit)}
+                aria-busy={isActionPending(`memecoin-order:${selected.id}`)}
                 onClick={async () => {
                   const placed = await run("/v1/memecoin/orders", {
                     action: "order",
@@ -8327,13 +8346,13 @@ function LiveBotsScreen({
                   if (placed) setMemecoinOrder(null);
                 }}
               >
-                {pendingAction ? "Submitting…" : "Confirm order"} <StateIcon name="check" />
+                {isActionPending(`memecoin-order:${selected.id}`) ? "Submitting…" : "Confirm order"} <StateIcon name="check" />
               </button>
-              <button className="ghost-action" disabled={pendingAction} onClick={() => setMemecoinOrder(null)}>Go back</button>
+              <button className="ghost-action" disabled={isActionPending(`memecoin-order:${selected.id}`)} onClick={() => setMemecoinOrder(null)}>Go back</button>
             </AccessibleDialog>
           )}
           {closeReview && (
-            <AccessibleDialog label={`Close ${selected.name}`} onClose={() => setCloseReview(false)} dismissible={!pendingAction}>
+            <AccessibleDialog label={`Close ${selected.name}`} onClose={() => setCloseReview(false)} dismissible={!isActionPending(`bot:${selected.id}:close`)}>
               <span className="eyebrow">FINAL REVIEW</span>
               <h2>Close {selected.name}?</h2>
               <p>{isClosing
@@ -8342,11 +8361,11 @@ function LiveBotsScreen({
                   ? "Close every open Synthetic position first. Once none remain, the available product allocation returns to your balance."
                   : "The product’s available allocation returns to your balance. Any open position remains protected until its settlement finishes."}</p>
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
-              <button className="danger-action" disabled={pendingAction} aria-busy={pendingAction} onClick={async () => {
+              <button className="danger-action" disabled={isActionPending(`bot:${selected.id}:close`)} aria-busy={isActionPending(`bot:${selected.id}:close`)} onClick={async () => {
                 const closed = await run(`/v1/bots/${selected.id}/actions`, { action: "close" });
                 if (closed) setCloseReview(false);
-              }}>{pendingAction ? "Closing…" : isClosing ? "Continue closing bot" : "Close bot"} <X /></button>
-              <button className="ghost-action" disabled={pendingAction} onClick={() => setCloseReview(false)}>Go back</button>
+              }}>{isActionPending(`bot:${selected.id}:close`) ? "Closing…" : isClosing ? "Continue closing bot" : "Close bot"} <X /></button>
+              <button className="ghost-action" disabled={isActionPending(`bot:${selected.id}:close`)} onClick={() => setCloseReview(false)}>Go back</button>
             </AccessibleDialog>
           )}
           {basketPickerOpen && (
@@ -8416,11 +8435,11 @@ function LiveBotsScreen({
         <button
           className="primary-action"
           onClick={() => setView("create")}
-          disabled={displayBots.length >= 2 || pendingAction}
+          disabled={displayBots.length >= 2}
         >
           <Plus /> Start trade
         </button>
-        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }} disabled={pendingAction}>
+        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
           Flashback <ChevronRight />
         </button>
       </div>
@@ -9664,9 +9683,8 @@ function LiveTradePulse() {
   const executionModeSubmitting = useRef(false);
   const executionModeRevision = useRef(0);
   const confirmedExecutionMode = useRef<{ revision: number; mode: "MANUAL" | "AUTO" } | null>(null);
-  const actionPending = Object.values(pendingActions).some(Boolean);
   const isActionPending = (key: string) => Boolean(pendingActions[key]);
-  const executionModePending = isActionPending("manual") || isActionPending("auto");
+  const executionModePending = isActionPending("execution:manual") || isActionPending("execution:auto");
   const acceptSyntheticSnapshot = (snapshot: NonNullable<typeof synthetic>, modeRevision: number) => {
     // A read started before/during a mode change must not undo its confirmed state.
     setSynthetic((current) => {
@@ -10128,19 +10146,23 @@ function LiveTradePulse() {
   const act = async (path: string, payload: Record<string, unknown>, onError?: (message: string) => void): Promise<boolean> => {
     const changesExecutionMode = path === "/v1/synthetic/settings/execution-mode";
     if (changesExecutionMode && executionModeSubmitting.current) return false;
+    const syntheticPosition = path.match(/^\/v1\/synthetic\/positions\/([^/]+)\/close$/);
+    const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     const actionKey = path.includes("/synthetic/orders")
-      ? String(payload.direction || "order")
+      ? `synthetic-order:${String(payload.market || syntheticMarket)}:${String(payload.direction || "order")}`
       : path.includes("/synthetic/signals/")
-        ? `approve:${path.split("/")[4]}`
-        : path.includes("/synthetic/positions/")
-          ? "close"
-          : path.match(/^\/v1\/bots\/\d+\/actions$/)
-            ? String(payload.action || "bot-action")
+        ? `signal:${path.split("/")[4]}:approve`
+        : syntheticPosition
+          ? `synthetic-position:${syntheticPosition[1]}:close`
+          : botAction
+            ? `bot:${botAction[1]}:${String(payload.action || "action")}`
             : path.includes("execution-mode")
-              ? String(payload.execution_mode || "execution-mode").toLowerCase()
+              ? `execution:${String(payload.execution_mode || "execution-mode").toLowerCase()}`
               : path.includes("disclosure")
                 ? "disclosure"
-                : "action";
+                : path === "/v1/demo/start"
+                  ? "demo:start"
+                  : path;
     if (isActionPending(actionKey)) return false;
     if (changesExecutionMode) {
       executionModeSubmitting.current = true;
@@ -10160,7 +10182,7 @@ function LiveTradePulse() {
       if (path === "/v1/demo/start") {
         // Starting the demo creates the visible Memecoin projection. Refresh
         // the actual dashboard rather than fabricating a local bot card.
-        await load();
+        void load().catch(() => undefined);
       }
       // The visible product/position is updated locally. Avoid reloading the
       // entire desk after a single click, which can interrupt unrelated work.
@@ -10470,14 +10492,14 @@ function LiveTradePulse() {
               type="button"
               className="primary-action"
               data-dialog-initial-focus
-              disabled={isActionPending("action") || Number(data?.demo?.grant_usd || 0) <= 0}
+              disabled={isActionPending("demo:start") || Number(data?.demo?.grant_usd || 0) <= 0}
               onClick={async () => {
                 if (await act("/v1/demo/start", {})) setDemoReviewOpen(false);
               }}
             >
-              {isActionPending("action") ? "Starting…" : "Start virtual demo"}
+              {isActionPending("demo:start") ? "Starting…" : "Start virtual demo"}
             </button>
-            <button type="button" className="ghost-action" disabled={isActionPending("action")} onClick={() => setDemoReviewOpen(false)}>Go back</button>
+            <button type="button" className="ghost-action" disabled={isActionPending("demo:start")} onClick={() => setDemoReviewOpen(false)}>Go back</button>
           </AccessibleDialog>
         )}
         {avatarPickerOpen && (
@@ -10749,10 +10771,10 @@ function LiveTradePulse() {
                           {synthetic.demo?.active && <button className={syntheticFundingSource === "demo" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "demo"} onClick={() => setSyntheticFundingSource("demo")}>Demo pool · {money(synthetic.demo.available_usd)}</button>}
                           {Number(synthetic.demo?.credit_available_usd || 0) > 0 && <button className={syntheticFundingSource === "credit" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "credit"} onClick={() => setSyntheticFundingSource("credit")}>Trading credit · {money(Number(synthetic.demo?.credit_available_usd || 0))}</button>}
                         </div>}
-                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || isActionPending("topup")} onClick={() => {
+                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`)} onClick={() => {
                           const bot = data.bots.find((item) => item.product === "synthetic");
                           if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
-                        }}>{isActionPending("topup") ? "Updating…" : "Top up Synthetic"}</button>}
+                        }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Updating…" : "Top up Synthetic"}</button>}
                         <div className="fact-block">
                           <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
                           {syntheticFundingSource === "wallet" && <span>Synthetic available <b>{money(Number(synthetic.allocation?.available_usd || 0))}</b></span>}
@@ -10760,8 +10782,8 @@ function LiveTradePulse() {
                           <span>Estimated spread <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                         </div>
                         <div className="button-row" role="group" aria-label="Execution mode">
-                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("manual") ? "Saving…" : "Manual"}</button>
-                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={actionPending} onClick={() => openSyntheticReview("auto")}>{isActionPending("auto") ? "Saving…" : "Auto"}</button>
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("execution:manual") ? "Saving…" : "Manual"}</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={executionModePending || syntheticReviewSubmitting.current} onClick={() => openSyntheticReview("auto")}>{isActionPending("execution:auto") ? "Saving…" : "Auto"}</button>
                         </div>
                         <p>{synthetic.execution_mode === "AUTO"
                           ? "Auto enabled across synthetic markets. Manual orders and signal approvals remain separate orders."
@@ -10774,12 +10796,12 @@ function LiveTradePulse() {
                           </div>
                         </div>}
                         <div className="button-row" role="group" aria-label="Manual orders">
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("long")}>{isActionPending("long") ? "Submitting…" : "Review Long"}</button>
-                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("short")}>{isActionPending("short") ? "Submitting…" : "Review Short"}</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("long")}>Review Long</button>
+                          <button className="small-action" disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending} onClick={() => openSyntheticReview("short")}>Review Short</button>
                         </div>
                         {syntheticSignals.filter((signal) => signal.expires_at * 1000 > signalNow).slice(0, 3).map((signal) => {
                           const submitted = Boolean(signalResults[signal.id]) || synthetic.positions.some((position) => position.signal_id === signal.id);
-                          return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - signalNow) / 1000))}s</small></div><button className="small-action" aria-label={`${submitted ? "Submitted" : "Review"} ${signal.market} ${signal.direction} signal`} disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending || submitted} onClick={() => openSyntheticReview("approve", signal)}>{isActionPending(`approve:${signal.id}`) ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>;
+                          return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - signalNow) / 1000))}s</small></div><button className="small-action" aria-label={`${submitted ? "Submitted" : "Review"} ${signal.market} ${signal.direction} signal`} disabled={!synthetic.live_disclosure_accepted || syntheticReviewPending || submitted} onClick={() => openSyntheticReview("approve", signal)}>{isActionPending(`signal:${signal.id}:approve`) ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>;
                         })}
                         {signalLoadError ? <p role="status">{signalLoadError}</p> : !syntheticSignals.some((signal) => signal.expires_at * 1000 > signalNow) && <p role="status">No current signals. Waiting for the next update.</p>}
                       </>
@@ -10787,7 +10809,7 @@ function LiveTradePulse() {
                       <div className="button-row"><button className="small-action" onClick={() => act("/v1/synthetic/actions", { action: "open", market: syntheticMarket, direction: "long", amount: 20 })}>Open $20 long</button><button className="small-action" onClick={() => act("/v1/synthetic/actions", { action: "open", market: syntheticMarket, direction: "short", amount: 20 })}>Open $20 short</button><button className="danger-action" onClick={() => act("/v1/synthetic/actions", { action: "reset" })}>Reset virtual balance</button></div>
                     ) : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
                     {synthetic.positions?.filter((position) => position.status === "open").map((position) => (
-                      <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" disabled={isActionPending("close")} onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>{isActionPending("close") ? "Closing…" : "Close"}</button></div>
+                      <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" disabled={isActionPending(`synthetic-position:${position.id}:close`)} aria-busy={isActionPending(`synthetic-position:${position.id}:close`)} onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>{isActionPending(`synthetic-position:${position.id}:close`) ? "Closing…" : "Close"}</button></div>
                     ))}
                   </>
                 ) : <div className="activity-row" role="status" aria-live="polite">
