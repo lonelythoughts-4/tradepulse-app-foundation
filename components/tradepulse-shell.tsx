@@ -5609,7 +5609,8 @@ function LiveAdminScreen({
     note: string;
     message: string;
   } | null>(null);
-  const [pendingAccountAction, setPendingAccountAction] = useState<"fund" | "onboarding" | "pilot" | null>(null);
+  const [pendingAccountActions, setPendingAccountActions] = useState<Record<"fund" | "onboarding" | "pilot", boolean>>({ fund: false, onboarding: false, pilot: false });
+  const accountActionSubmitting = useRef<Record<"fund" | "onboarding" | "pilot", boolean>>({ fund: false, onboarding: false, pilot: false });
   const [autouserFile, setAutouserFile] = useState<File | null>(null);
   const [autouserMinimum, setAutouserMinimum] = useState("");
   const [autouserMaximum, setAutouserMaximum] = useState("");
@@ -5760,12 +5761,14 @@ function LiveAdminScreen({
     body: object,
     message: string,
   ) => {
-    if (pendingAccountAction) return;
-    setPendingAccountAction(action);
+    if (accountActionSubmitting.current[action]) return;
+    accountActionSubmitting.current[action] = true;
+    setPendingAccountActions((current) => ({ ...current, [action]: true }));
     try {
       await post(path, body, message);
     } finally {
-      setPendingAccountAction(null);
+      accountActionSubmitting.current[action] = false;
+      setPendingAccountActions((current) => ({ ...current, [action]: false }));
     }
   };
   const saveSyntheticConfig = async (settings: Record<string, string>) => {
@@ -6250,8 +6253,8 @@ function LiveAdminScreen({
           <div className="admin-actions">
             <button
               className="small-action"
-              disabled={!validFunding || pendingAccountAction !== null}
-              aria-busy={pendingAccountAction === "fund"}
+              disabled={!validFunding || pendingAccountActions.fund}
+              aria-busy={pendingAccountActions.fund}
               onClick={() =>
                 void runAccountAction(
                   "fund",
@@ -6261,12 +6264,12 @@ function LiveAdminScreen({
                 )
               }
             >
-              {pendingAccountAction === "fund" ? "Funding…" : "Fund user"}
+              {pendingAccountActions.fund ? "Funding…" : "Fund user"}
             </button>
             <button
               className="danger-action"
-              disabled={!/^\d+$/.test(target) || pendingAccountAction !== null}
-              aria-busy={pendingAccountAction === "onboarding"}
+              disabled={!/^\d+$/.test(target) || pendingAccountActions.onboarding}
+              aria-busy={pendingAccountActions.onboarding}
               onClick={() =>
                 void runAccountAction(
                   "onboarding",
@@ -6276,12 +6279,12 @@ function LiveAdminScreen({
                 )
               }
             >
-              {pendingAccountAction === "onboarding" ? "Resetting…" : "Reset onboarding"}
+              {pendingAccountActions.onboarding ? "Resetting…" : "Reset onboarding"}
             </button>
             <button
               className="small-action"
-              disabled={environment !== "testnet" || pendingAccountAction !== null}
-              aria-busy={pendingAccountAction === "pilot"}
+              disabled={environment !== "testnet" || pendingAccountActions.pilot}
+              aria-busy={pendingAccountActions.pilot}
               onClick={() =>
                 void runAccountAction(
                   "pilot",
@@ -6291,7 +6294,7 @@ function LiveAdminScreen({
                 )
               }
             >
-              {pendingAccountAction === "pilot" ? "Resetting…" : "Reset my testnet pilot"}
+              {pendingAccountActions.pilot ? "Resetting…" : "Reset my testnet pilot"}
             </button>
           </div>
           {environment !== "testnet" && <small className="mono">TESTNET PILOT RESET IS AVAILABLE ONLY IN THE TESTNET ADMIN WORKSPACE.</small>}
@@ -6910,7 +6913,7 @@ function LiveDeskScreen({
               <span>Ask the analyst</span>
               <input
                 value={analystQuestion}
-                maxLength={280}
+                maxLength={2000}
                 disabled={!analystReady || analystLoading}
                 onChange={(event) => {
                   setAnalystQuestion(event.target.value);
