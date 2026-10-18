@@ -8509,44 +8509,43 @@ function LiveBotsScreen({
         </div>
     );
   }
+  const deployedCapital = displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0);
   return (
     <div className="bots-screen">
       <GradientPanel className="fleet-hero">
-        <div>
-          <span className="eyebrow">BOT FLEET</span>
+        <div className="fleet-hero-copy">
           <h2>Bot fleet</h2>
           <p>
-            {runningStrategies.length} running
-            strategy
+            {runningStrategies.length} active strateg
             {runningStrategies.length === 1
-              ? ""
-              : "ies"}{" "}
-            / {money(displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0))}{" "}
-            deployed
+              ? "y"
+              : "ies"} using your allocated capital.
           </p>
         </div>
-        <strong>
-          {money(displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0))}
-        </strong>
+        <div className="fleet-total">
+          <span>DEPLOYED</span>
+          <strong>{money(deployedCapital)}</strong>
+        </div>
       </GradientPanel>
       <div className="fleet-heading">
         <div>
-          <span className="eyebrow">YOUR STRATEGIES</span>
           <h2>
-            My bots{" "}
-            <small>{String(displayBots.length).padStart(2, "0")} / 02</small>
+            Strategies{" "}
+            <small>{displayBots.length} of 2 slots in use</small>
           </h2>
         </div>
-        <button
-          className="primary-action"
-          onClick={() => setView("create")}
-          disabled={displayBots.length >= 2}
-        >
-          <Plus /> Start trade
-        </button>
-        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
-          Flashback <ChevronRight />
-        </button>
+        <div className="fleet-heading-actions">
+          <button
+            className="primary-action fleet-start-action"
+            onClick={() => setView("create")}
+            disabled={displayBots.length >= 2}
+          >
+            <Plus /> Start strategy
+          </button>
+          <button className="small-action fleet-flashback-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
+            Flashback <ChevronRight />
+          </button>
+        </div>
       </div>
       {displayBots.length ? (
         <div className="fleet-bot-grid">
