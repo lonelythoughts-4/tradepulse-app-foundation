@@ -7055,6 +7055,8 @@ function LiveAccountScreen({
     "" | "code" | "notifications" | "whitelist" | "reset" | "support"
   >("");
   const [code, setCode] = useState("");
+  const [currentCode, setCurrentCode] = useState("");
+  const [confirmCode, setConfirmCode] = useState("");
   const [showCode, setShowCode] = useState(false);
   const [chain, setChain] = useState("ERC20");
   const [nickname, setNickname] = useState("");
@@ -7068,7 +7070,15 @@ function LiveAccountScreen({
   const [accountPending, setAccountPending] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ message: string; error: boolean } | null>(null);
   const modalPending = accountPending;
-  useEffect(() => setModalFeedback(null), [modal]);
+  useEffect(() => {
+    setModalFeedback(null);
+    if (modal === "code") {
+      setCode("");
+      setCurrentCode("");
+      setConfirmCode("");
+      setShowCode(false);
+    }
+  }, [modal]);
   useEffect(() => {
     setNotificationState(data.notifications);
   }, [data.notifications]);
@@ -7261,7 +7271,7 @@ function LiveAccountScreen({
       {modal && (
         <AccessibleDialog
           className="account-modal"
-          label={{ code: "Set security code", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences", support: "Help and support" }[modal]}
+          label={{ code: securityCodeSet ? "Change security code" : "Set security code", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences", support: "Help and support" }[modal]}
           onClose={() => setModal("")}
           dismissible={!modalPending}
         >
@@ -7287,13 +7297,29 @@ function LiveAccountScreen({
                   decoding="async"
                 />
                 <span className="eyebrow">SECURITY / WITHDRAWALS</span>
-                <h2>Set security code</h2>
+                <h2>{securityCodeSet ? "Change security code" : "Set security code"}</h2>
                 <p>
-                  This six-digit code is required to request a withdrawal. Never
-                  share it with support or an administrator.
+                  {securityCodeSet
+                    ? "Confirm your current code, then choose and confirm a new one. Never share either code with support or an administrator."
+                    : "Create and confirm a six-digit code required to request a withdrawal. Never share it with support or an administrator."}
                 </p>
+                {securityCodeSet && (
+                  <label className="amount-field">
+                    <span>1 · CURRENT CODE</span>
+                    <div className="secure-code-field">
+                      <input
+                        type={showCode ? "text" : "password"}
+                        value={currentCode}
+                        onChange={(event) => setCurrentCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        inputMode="numeric"
+                        autoComplete="current-password"
+                        placeholder="••••••"
+                      />
+                    </div>
+                  </label>
+                )}
                 <label className="amount-field">
-                  <span>SIX-DIGIT CODE</span>
+                  <span>{securityCodeSet ? "2 · NEW CODE" : "1 · SIX-DIGIT CODE"}</span>
                   <div className="secure-code-field">
                     <input
                       type={showCode ? "text" : "password"}
@@ -7302,6 +7328,7 @@ function LiveAccountScreen({
                         setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
                       }
                       inputMode="numeric"
+                      autoComplete="new-password"
                       placeholder="••••••"
                     />
                     <button
@@ -7317,20 +7344,37 @@ function LiveAccountScreen({
                     </button>
                   </div>
                 </label>
+                <label className="amount-field">
+                  <span>{securityCodeSet ? "3 · CONFIRM NEW CODE" : "2 · CONFIRM CODE"}</span>
+                  <div className="secure-code-field">
+                    <input
+                      type={showCode ? "text" : "password"}
+                      value={confirmCode}
+                      onChange={(event) => setConfirmCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      placeholder="••••••"
+                    />
+                  </div>
+                </label>
                 <button
                   className="primary-action"
-                  disabled={code.length !== 6 || accountPending}
+                  disabled={code.length !== 6 || confirmCode !== code || (securityCodeSet && currentCode.length !== 6) || accountPending}
                   aria-busy={accountPending}
                   onClick={async () => {
+                    if (code !== confirmCode) {
+                      setModalFeedback({ message: "New code and confirmation must match.", error: true });
+                      return;
+                    }
                     const saved = await post(
                       "/v1/account/security-code",
-                      { code },
-                      "Withdrawal security code saved.",
+                      securityCodeSet ? { code, current_code: currentCode } : { code },
+                      securityCodeSet ? "Withdrawal security code changed." : "Withdrawal security code saved.",
                     );
                     if (saved) setSecurityCodeSet(true);
                   }}
                 >
-                  {accountPending ? "Saving…" : "Save security code"} <ShieldCheck />
+                  {accountPending ? "Saving…" : securityCodeSet ? "Confirm code change" : "Save security code"} <ShieldCheck />
                 </button>
               </>
             )}
