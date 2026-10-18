@@ -735,7 +735,7 @@ function Header({
       </div>
       <div className="top-actions">
         <div className="live-indicator">
-          {environment === "mainnet" ? "Mainnet" : "Testnet"}
+          {String(environment).toLowerCase() === "mainnet" ? "Mainnet" : "Testnet"}
         </div>
         {isAdmin && pageTitle !== "Admin" && (
           <button
