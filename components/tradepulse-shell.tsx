@@ -5829,10 +5829,10 @@ function LiveAdminScreen({
           ))}
         </div></div>
       </div>
-      <GradientPanel className="admin-hero">
+      <div className="admin-status-row">
         <div>
-          <h2>{environment.toUpperCase()} operations</h2>
-          <p>{admin.sweeps_enabled ? "Treasury sweeps are enabled." : "Treasury sweeps are disabled."}</p>
+          <strong>{environment.toUpperCase()}</strong>
+          <span>{admin.sweeps_enabled ? "Sweeps enabled" : "Sweeps disabled"}</span>
         </div>
         <button
           className="small-action"
@@ -5844,7 +5844,7 @@ function LiveAdminScreen({
         >
           {isAdminActionPending("sweeps:toggle") ? "Updating…" : "Toggle sweeps"}
         </button>
-      </GradientPanel>
+      </div>
       {withdrawalReview && (
         <AccessibleDialog label={withdrawalReview.action === "approve" ? "Review withdrawal approval" : "Review withdrawal rejection"}
           onClose={() => setWithdrawalReview(null)} dismissible={!withdrawalPending}>
@@ -8516,26 +8516,11 @@ function LiveBotsScreen({
   const deployedCapital = displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0);
   return (
     <div className="bots-screen">
-      <GradientPanel className="fleet-hero">
-        <div className="fleet-hero-copy">
-          <h2>Bot fleet</h2>
-          <p>
-            {runningStrategies.length} active strateg
-            {runningStrategies.length === 1
-              ? "y"
-              : "ies"} using your allocated capital.
-          </p>
-        </div>
-        <div className="fleet-total">
-          <span>DEPLOYED</span>
-          <strong>{money(deployedCapital)}</strong>
-        </div>
-      </GradientPanel>
       <div className="fleet-heading">
         <div>
           <h2>
-            Strategies{" "}
-            <small>{displayBots.length} of 2 slots in use</small>
+            Bot fleet{" "}
+            <small>{runningStrategies.length} active · {money(deployedCapital)} deployed · {displayBots.length} of 2 slots</small>
           </h2>
         </div>
         <div className="fleet-heading-actions">

@@ -45,6 +45,10 @@
 .profile-code-status svg{width:14px;height:14px}
 .profile-code-status:hover{color:#d9defd}.profile-code-status:focus-visible{outline:2px solid #7c8cf8;outline-offset:3px;border-radius:4px}
 @media(min-width:700px){.account-screen>.profile-card{align-self:start}.account-screen>.account-actions{grid-row:span 2}.account-screen>.screen-title{grid-column:span 2}}
+.admin-status-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:4px 0 2px;border-bottom:1px solid rgba(148,163,184,.12)}
+.admin-status-row>div{display:flex;align-items:baseline;gap:9px;min-width:0}.admin-status-row strong{color:#e6eaf2;font:600 12px var(--font-jetbrains-mono),monospace;letter-spacing:.08em}.admin-status-row span{color:var(--tp-supporting-text);font-size:11px}.admin-status-row .small-action{padding:7px 0}.admin-status-row .small-action:focus-visible{outline:2px solid #7c8cf8;outline-offset:3px;border-radius:4px}
+.parsed-preview,.warning-block,.minimum-warning{border-left:1px solid rgba(251,191,36,.28);border-right:0}.parsed-preview{border-left-color:rgba(52,211,153,.28)}
+@media(max-width:480px){.fleet-heading h2 small{display:block;margin-top:5px;line-height:1.45}.admin-status-row{align-items:flex-start}.admin-status-row>div{flex-direction:column;gap:3px}.admin-status-row .small-action{white-space:nowrap}}
 
 /*
  * Live desk chrome: retain the original responsive desktop rail and mobile
