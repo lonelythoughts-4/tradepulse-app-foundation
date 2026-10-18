@@ -9903,11 +9903,6 @@ function LiveTradePulse() {
   const [autoAcknowledged, setAutoAcknowledged] = useState(false);
   const [syntheticFundingSource, setSyntheticFundingSource] = useState<"wallet" | "demo" | "credit">("wallet");
   useEffect(() => {
-    if (synthetic && !syntheticAutoAllocation) {
-      setSyntheticAutoAllocation(String(Number(synthetic.execution?.auto_allocation_usd || 0)));
-    }
-  }, [synthetic, syntheticAutoAllocation]);
-  useEffect(() => {
     setSyntheticReview(null);
     setSyntheticReviewError("");
   }, [tab, webEnvironment, syntheticMarket]);
@@ -9951,6 +9946,11 @@ function LiveTradePulse() {
     allocation?: { allocated_usd: number; reserved_usd: number; available_usd: number; state: string; auto_allocation_usd?: number; manual_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number };
     demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
   } | null>(null);
+  useEffect(() => {
+    if (synthetic && !syntheticAutoAllocation) {
+      setSyntheticAutoAllocation(String(Number(synthetic.execution?.auto_allocation_usd || 0)));
+    }
+  }, [synthetic, syntheticAutoAllocation]);
   const [syntheticSignals, setSyntheticSignals] = useState<Array<{
     id: string;
     market: string;
