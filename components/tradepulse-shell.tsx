@@ -9881,7 +9881,7 @@ function LiveTradePulse() {
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
   const [syntheticAmount, setSyntheticAmount] = useState("20");
-  const [syntheticAutoAmount, setSyntheticAutoAmount] = useState("20");
+  const [syntheticAutoAmount, setSyntheticAutoAmount] = useState("");
   const [syntheticAutoAllocation, setSyntheticAutoAllocation] = useState("");
   const [syntheticQuoteHelpOpen, setSyntheticQuoteHelpOpen] = useState(false);
   const [syntheticReview, setSyntheticReview] = useState<{
@@ -9956,10 +9956,16 @@ function LiveTradePulse() {
     demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
   } | null>(null);
   useEffect(() => {
-    if (synthetic && !syntheticAutoAllocation) {
-      setSyntheticAutoAllocation(String(Number(synthetic.execution?.auto_allocation_usd || 0)));
-    }
-  }, [synthetic, syntheticAutoAllocation]);
+    if (!synthetic) return;
+    setSyntheticAutoAmount((value) => value || String(Number(synthetic.execution?.auto_margin_usd || 20)));
+    setSyntheticAutoAllocation((value) => value || String(Number(synthetic.execution?.auto_allocation_usd || 0)));
+  }, [synthetic]);
+  const confirmedAutoMargin = Number(synthetic?.execution?.auto_margin_usd || 0);
+  const confirmedAutoAllocation = Number(synthetic?.execution?.auto_allocation_usd || 0);
+  const autoSettingsChanged = synthetic?.execution_mode === "AUTO" && (
+    Math.round(Number(syntheticAutoAmount) * 100) !== Math.round(confirmedAutoMargin * 100)
+    || Math.round(Number(syntheticAutoAllocation) * 100) !== Math.round(confirmedAutoAllocation * 100)
+  );
   const [syntheticSignals, setSyntheticSignals] = useState<Array<{
     id: string;
     market: string;
@@ -11132,9 +11138,9 @@ function LiveTradePulse() {
                           <input value={syntheticAutoAllocation} onChange={(event) => setSyntheticAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" placeholder="0.00" />
                         </label>
                         {syntheticFundingSource === "wallet" && <p>Auto: {money(Number(synthetic.execution?.auto_available_usd || 0))} reserved · Manual: {money(Number(synthetic.execution?.manual_available_usd || synthetic.allocation?.available_usd || 0))} available</p>}
-                        <button className="primary-action" disabled={!synthetic.live_disclosure_accepted || executionModePending || syntheticReviewSubmitting.current || Number(syntheticAutoAmount) < 20 || Number(syntheticAutoAllocation) < Number(syntheticAutoAmount)} onClick={() => openSyntheticReview("auto")}>{synthetic.execution_mode === "AUTO" ? "Review Auto changes" : "Review & enable Auto"}</button>
+                        {(synthetic.execution_mode !== "AUTO" || autoSettingsChanged) && <button className="primary-action" disabled={!synthetic.live_disclosure_accepted || executionModePending || syntheticReviewSubmitting.current || Number(syntheticAutoAmount) < 20 || Number(syntheticAutoAllocation) < Number(syntheticAutoAmount)} onClick={() => openSyntheticReview("auto")}>{synthetic.execution_mode === "AUTO" ? "Review Auto changes" : "Review & enable Auto"}</button>}
                         <p>{synthetic.execution_mode === "AUTO"
-                          ? "Automatic uses the confirmed per-order margin within its assigned capacity."
+                          ? autoSettingsChanged ? "Review the edited settings before they replace the confirmed Auto configuration." : "Automatic uses the confirmed per-order margin within its assigned capacity."
                           : "Manual review is required before each order."}</p>
                         {synthetic.execution_mode === "AUTO" && syntheticFundingSource !== "wallet" && <p role="status">Auto remains wallet-funded. The selected virtual source applies only to manually reviewed orders.</p>}
                         {synthetic.execution_mode === "AUTO" && <div className="activity-row" role="status" aria-live="polite">
