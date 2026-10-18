@@ -10842,8 +10842,14 @@ function LiveTradePulse() {
           {tab === "Synthetic" && (
             <div className="desk-screen">
               <GradientPanel className="synthetic-pilot">
-                <span className="eyebrow">SYNTHETIC INDICES</span>
-                <div className="segment-control">
+                <div className="synthetic-market-header">
+                  <div>
+                    <h2>Market</h2>
+                    <span className="live-indicator" role="status"><i />LIVE QUOTE · 1s</span>
+                  </div>
+                  <button type="button" className="small-action synthetic-help-link" onClick={() => setTab("Help")}>How quotes work</button>
+                </div>
+                <div className="segment-control synthetic-market-rail" role="group" aria-label="Synthetic markets">
                   {(["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"] as const).map((market) => (
                     <button
                       key={market}
@@ -10861,12 +10867,11 @@ function LiveTradePulse() {
                     </button>
                   ))}
                 </div>
-                <p>{webEnvironment === "testnet" && data.user.is_admin
-                  ? "Admin testnet · Virtual funds only. Mainnet balances are unaffected."
-                  : "Model-generated quote. Higher tiers increase price movement—not expected return."}</p>
-                <span className="live-indicator"><i />MODEL FEED · 1s</span>
+                {webEnvironment === "testnet" && data.user.is_admin && (
+                  <p className="synthetic-environment-note">Admin test environment · Virtual funds only.</p>
+                )}
                 {synthetic ? (
-                  <>
+                  <div id="synthetic-market-snapshot" aria-label={`${syntheticMarket} market snapshot`}>
                     <MarketChart points={chartPoints} market={syntheticMarket} />
                     <div className="wallet-stat-grid">
                       <div><span className="eyebrow">LAST TICK</span><strong>{Number(synthetic.latest?.reference || 0).toFixed(5)}</strong></div>
@@ -10930,7 +10935,7 @@ function LiveTradePulse() {
                     {synthetic.positions?.filter((position) => position.status === "open").map((position) => (
                       <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"} · spread {money(position.spread_charged_usd || 0)} · fee {money(position.tier_fee_usd || 0)}</small></div><button className="small-action" disabled={isActionPending(`synthetic-position:${position.id}:close`)} aria-busy={isActionPending(`synthetic-position:${position.id}:close`)} onClick={() => act(`/v1/synthetic/positions/${position.id}/close`, {})}>{isActionPending(`synthetic-position:${position.id}:close`) ? "Closing…" : "Close"}</button></div>
                     ))}
-                  </>
+                  </div>
                 ) : <div className="activity-row" role="status" aria-live="polite">
                   <div className="activity-info">
                     <strong>{syntheticLoadError ? "Market data is temporarily unavailable" : `Loading ${syntheticMarket}`}</strong>
