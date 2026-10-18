@@ -6712,7 +6712,7 @@ function LiveAdminScreen({
             <option value="PRINCIPAL">Principal clearing</option>
           </select>
           {[
-            ["per_user_exposure_cap_usd", "Per-user cap"],
+            ["per_user_exposure_cap_usd", "User exposure cap"],
             ["per_market_exposure_cap_usd", "Per-market cap"],
             ["global_exposure_cap_usd", "Global cap"],
             ["principal_liquidity_usd", "Principal liquidity"],
@@ -9874,6 +9874,8 @@ function LiveTradePulse() {
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
   const [syntheticAmount, setSyntheticAmount] = useState("20");
+  const [syntheticAutoAmount, setSyntheticAutoAmount] = useState("20");
+  const [syntheticTopUpAmount, setSyntheticTopUpAmount] = useState("20");
   const [syntheticAutoAllocation, setSyntheticAutoAllocation] = useState("");
   const [syntheticReview, setSyntheticReview] = useState<{
     kind: "long" | "short" | "auto" | "approve";
@@ -10514,7 +10516,7 @@ function LiveTradePulse() {
   };
   const openSyntheticReview = (kind: "long" | "short" | "auto" | "approve", signal?: { id: string; market: string; direction: string; expires_at: number }) => {
     if (!synthetic || !data || syntheticReviewSubmitting.current || webEnvironment !== "mainnet") return;
-    const margin = Number(syntheticAmount);
+    const margin = Number(kind === "auto" ? syntheticAutoAmount : syntheticAmount);
     const autoAllocation = Number(syntheticAutoAllocation);
     const market = signal?.market || syntheticMarket;
     const direction = signal?.direction || kind;
@@ -10524,6 +10526,19 @@ function LiveTradePulse() {
     if (kind === "auto" && !synthetic.live_disclosure_accepted) {
       setSyntheticReviewError("");
       setNotice("Review and accept the live-risk acknowledgement before enabling Auto.");
+      return;
+    }
+    if (!Number.isFinite(margin) || margin < 20) {
+      setNotice("Set an order size of at least $20.00.");
+      return;
+    }
+    if (kind === "auto" && (!Number.isFinite(autoAllocation) || autoAllocation < margin)) {
+      setNotice("Auto capacity must cover at least one Auto order.");
+      return;
+    }
+    const availableCapacity = Number(synthetic.allocation?.manual_available_usd || synthetic.allocation?.available_usd || 0);
+    if (kind !== "auto" && syntheticFundingSource === "wallet" && margin > availableCapacity) {
+      setNotice(`Manual capacity has ${money(availableCapacity)} available. Reduce the order size or change the allocation split.`);
       return;
     }
     if (kind === "auto" && (usingPool || usingCredit)) {
@@ -11081,16 +11096,23 @@ function LiveTradePulse() {
                             <button className="primary-action" onClick={() => act("/v1/synthetic/disclosure", {})}>Review &amp; accept</button>
                           </div>
                         )}
-                        <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic margin" /></div>
+                        <label className="amount-field">Order size
+                          <div className="amount-input"><span>$</span><input value={syntheticAmount} onChange={(event) => setSyntheticAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic order size" /></div>
+                        </label>
                         {(synthetic.demo?.active || Number(synthetic.demo?.credit_available_usd || 0) > 0) && <div className="button-row" role="group" aria-label="Synthetic funding source">
                           <button className={syntheticFundingSource === "wallet" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "wallet"} onClick={() => setSyntheticFundingSource("wallet")}>Wallet</button>
                           {synthetic.demo?.active && <button className={syntheticFundingSource === "demo" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "demo"} onClick={() => setSyntheticFundingSource("demo")}>Demo pool · {money(synthetic.demo.available_usd)}</button>}
                           {Number(synthetic.demo?.credit_available_usd || 0) > 0 && <button className={syntheticFundingSource === "credit" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "credit"} onClick={() => setSyntheticFundingSource("credit")}>Trading credit · {money(Number(synthetic.demo?.credit_available_usd || 0))}</button>}
                         </div>}
-                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`)} onClick={() => {
-                          const bot = data.bots.find((item) => item.product === "synthetic");
-                          if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
-                        }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Updating…" : "Top up Synthetic"}</button>}
+                        {data.bots.find((bot) => bot.product === "synthetic") && <div className="synthetic-allocation-control">
+                          <label className="amount-field">Add to Synthetic allocation
+                            <input value={syntheticTopUpAmount} onChange={(event) => setSyntheticTopUpAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic allocation amount" />
+                          </label>
+                          <button className="small-action" disabled={Number(syntheticTopUpAmount) < 20 || isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`)} onClick={() => {
+                            const bot = data.bots.find((item) => item.product === "synthetic");
+                            if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticTopUpAmount) });
+                          }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Updating…" : "Add funds"}</button>
+                        </div>}
                         <div className="fact-block">
                           <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
                           {syntheticFundingSource === "wallet" && <span>Manual capacity <b>{money(Number(synthetic.allocation?.manual_available_usd || synthetic.allocation?.available_usd || 0))}</b></span>}
@@ -11101,6 +11123,9 @@ function LiveTradePulse() {
                           <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("execution:manual") ? "Saving…" : "Manual review"}</button>
                           <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={executionModePending || syntheticReviewSubmitting.current} onClick={() => openSyntheticReview("auto")}>{isActionPending("execution:auto") ? "Saving…" : "Automatic"}</button>
                         </div>
+                        <label className="amount-field">Auto order size
+                          <input value={syntheticAutoAmount} onChange={(event) => setSyntheticAutoAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic order size" />
+                        </label>
                         <label className="amount-field">Auto capacity from this allocation
                           <input value={syntheticAutoAllocation} onChange={(event) => setSyntheticAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" placeholder="0.00" />
                         </label>
