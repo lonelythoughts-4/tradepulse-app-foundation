@@ -9472,36 +9472,42 @@ function LiveWalletScreen({
     );
   return (
     <div className="wallet-grid">
-      <div className="wallet-stat-grid">
-        <WalletCard
-          label="AVAILABLE"
-          value={money(data.wallet.available)}
-          detail="Ready to deploy or withdraw"
-          accent="mint"
-          masked={!balancesVisible}
-        />
-        <WalletCard
-          label="LOCKED"
-          value={money(data.wallet.locked)}
-          detail="Allocated to active bots"
-          masked={!balancesVisible}
-        />
-        <WalletCard
-          label="TOTAL EQUITY"
-          value={money(data.wallet.equity)}
-          detail="Account value"
-          accent="mint"
-          masked={!balancesVisible}
-          onToggleVisibility={() => setBalancesVisible((visible) => !visible)}
-        />
-        <WalletCard
-          label="HIGH-WATER MARK"
-          value={money(data.wallet.hwm)}
-          detail="Performance fee reference"
-          masked={!balancesVisible}
-        />
-      </div>
-      <div className="wallet-actions">
+      <GradientPanel className="wallet-balance-overview">
+        <div className="wallet-balance-primary">
+          <div className="wallet-balance-heading">
+            <h2>Available balance</h2>
+            <button
+              type="button"
+              className="visibility"
+              aria-label={balancesVisible ? "Hide wallet balances" : "Show wallet balances"}
+              aria-pressed={balancesVisible}
+              onClick={() => setBalancesVisible((visible) => !visible)}
+            >
+              <StateIcon name={balancesVisible ? "eye" : "eye-off"} size={17} />
+            </button>
+          </div>
+          <strong className="mint">{balancesVisible ? money(data.wallet.available) : "••••••"}</strong>
+          <small>Available now</small>
+        </div>
+        <div className="wallet-balance-facts" aria-label="Wallet account state">
+          <div>
+            <span>LOCKED</span>
+            <strong>{balancesVisible ? money(data.wallet.locked) : "••••••"}</strong>
+            <small>Active bots</small>
+          </div>
+          <div>
+            <span>TOTAL EQUITY</span>
+            <strong className="mint">{balancesVisible ? money(data.wallet.equity) : "••••••"}</strong>
+            <small>Account value</small>
+          </div>
+          <div>
+            <span>HIGH-WATER MARK</span>
+            <strong>{balancesVisible ? money(data.wallet.hwm) : "••••••"}</strong>
+            <small>Fee baseline</small>
+          </div>
+        </div>
+      </GradientPanel>
+      <div className="wallet-actions" role="group" aria-label="Wallet actions">
         <button onClick={() => setView("deposit")}>
           <span>
             <Download />
@@ -9531,7 +9537,6 @@ function LiveWalletScreen({
           <ChevronRight />
         </button>
       </div>
-      <WalletLedgerNote />
     </div>
   );
 }
