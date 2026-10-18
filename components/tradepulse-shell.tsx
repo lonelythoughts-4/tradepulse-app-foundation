@@ -6784,6 +6784,7 @@ function LiveDeskScreen({
     }
     return null;
   }, [data.memecoin?.authorization?.settings_json, data.memecoin?.demo_authorization?.settings_json]);
+  const marketLabelRefreshKey = useRef("");
   const [asset, setAsset] = useState("BTC");
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
@@ -6801,8 +6802,22 @@ function LiveDeskScreen({
     : "";
   const selectionAssetLabel = (asset: string) => {
     const labels = data.memecoin?.market_labels;
-    return labels?.[asset] || labels?.[asset.toLowerCase()] || labels?.[asset.toUpperCase()] || "Unresolved asset";
+    return labels?.[asset] || labels?.[asset.toLowerCase()] || labels?.[asset.toUpperCase()] || "Saved market";
   };
+  useEffect(() => {
+    if (!selection) return;
+    const labels = data.memecoin?.market_labels || {};
+    const needsLabels = selection.assets.some((saved) => !labels[saved] && !labels[saved.toLowerCase()] && !labels[saved.toUpperCase()]);
+    if (!needsLabels) return;
+    // The catalogue is deliberately read off the critical dashboard path.
+    // Make one quiet retry after its background warm-up, without unmounting
+    // the desk or making the customer refresh the page.
+    const key = `${data.user.id}:${data.environment}:${selection.assets.join("|")}`;
+    if (marketLabelRefreshKey.current === key) return;
+    marketLabelRefreshKey.current = key;
+    const timer = window.setTimeout(() => void reload(), 1_200);
+    return () => window.clearTimeout(timer);
+  }, [data.environment, data.memecoin?.market_labels, data.user.id, reload, selection]);
   const createAlert = async () => {
     if (alertPending) return;
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
