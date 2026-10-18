@@ -7510,10 +7510,8 @@ function LiveBotsScreen({
     return [
       ["CRASH", `${(probability(0, 0) * 100).toFixed(1)}%`],
       ["LADDER", "1.01×–3.00× / 0.01× steps"],
-      ["1.01×–1.20×", `${(probability(1.01, 1.20) * 100).toFixed(1)}%`],
-      ["1.21×–1.50×", `${(probability(1.21, 1.50) * 100).toFixed(1)}%`],
-      ["1.51×–2.00×", `${(probability(1.51, 2) * 100).toFixed(1)}%`],
-      ["2.01×–3.00×", `${(probability(2.01, 3) * 100).toFixed(1)}%`],
+      ["1.01×–1.50×", `${(probability(1.01, 1.5) * 100).toFixed(1)}%`],
+      ["1.51×–3.00×", `${(probability(1.51, 3) * 100).toFixed(1)}%`],
     ] as const;
   };
   const sealedReturn = flashback?.product_version === "sealed-return-v2";
