@@ -7852,7 +7852,7 @@ function LiveBotsScreen({
               <GradientPanel><span>RETURNED</span><strong>{money(Number(flashback.return_usd || 0))}</strong></GradientPanel>
               <GradientPanel><span>NET CHANGE</span><strong className={Number(flashback.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback.user_net_usd || 0))}</strong></GradientPanel>
             </div>
-            <GradientPanel className="compound-panel">
+            <GradientPanel className="compound-panel flashback-reveal">
               <h2>Flashback revealed</h2>
               <div className="fact-block">
                 <span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span>
