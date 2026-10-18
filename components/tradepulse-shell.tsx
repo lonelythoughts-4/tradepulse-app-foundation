@@ -5290,15 +5290,15 @@ function LiveHelpScreen({
     const response = await request("/v1/support/tickets");
     setTickets(Array.isArray(response.tickets) ? response.tickets : []);
   };
-  const openTicket = async (ticket: { id: number; topic?: string; status: string }, managePending = true) => {
+  const openTicket = async (ticket: { id: number; topic?: string; status: string }, managePending = true, resetReply = true, quiet = false) => {
     if (managePending) setTicketPending(true);
     try {
       const response = await request(`/v1/support/tickets/${ticket.id}`);
       setActiveTicket(response.ticket || ticket);
       setTicketMessages(Array.isArray(response.messages) ? response.messages : []);
-      setTicketReply("");
+      if (resetReply) setTicketReply("");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not load this support request.");
+      if (!quiet) onNotice(error instanceof Error ? error.message : "Could not load this support request.");
     } finally {
       if (managePending) setTicketPending(false);
     }
@@ -5310,6 +5310,18 @@ function LiveHelpScreen({
   useEffect(() => {
     setRecoveryCases(data.recovery_cases || []);
   }, [data.recovery_cases]);
+  useEffect(() => {
+    if (!activeTicket || activeTicket.status === "closed") return;
+    let cancelled = false;
+    const refreshThread = () => {
+      if (!cancelled) void openTicket(activeTicket, false, false, true);
+    };
+    const timer = window.setInterval(refreshThread, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeTicket?.id, activeTicket?.status]);
   return (
     <div className="account-screen">
       <div className="screen-title">
