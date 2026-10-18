@@ -4632,7 +4632,10 @@ type LiveDashboard = {
   flashback_rules?: {
     version?: string;
     duration_seconds?: number;
+    min_entry_usd?: number;
+    max_entry_usd?: number;
     max_return_multiplier?: number;
+    bands?: Array<{ up_to_usd: number | null; table: Array<{ multiplier: number; probability: number }> }>;
     payout_tables?: Record<string, Array<{ multiplier: number; probability: number }>>;
   };
   flashback?: {
@@ -7420,7 +7423,7 @@ function LiveBotsScreen({
   const actionInFlightRef = useRef(false);
   const [reviewError, setReviewError] = useState("");
   const [closeReview, setCloseReview] = useState(false);
-  const [flashbackAmount, setFlashbackAmount] = useState<20 | 50 | 100>(20);
+  const [flashbackAmount, setFlashbackAmount] = useState(20);
   const [flashbackReview, setFlashbackReview] = useState(false);
   const [flashbackNewSession, setFlashbackNewSession] = useState(false);
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
@@ -7469,9 +7472,10 @@ function LiveBotsScreen({
   const flashback = data.flashback || null;
   const flashbackAvailable = String(data.environment || "").toLowerCase() === "mainnet";
   const flashbackRules = data.flashback_rules;
-  const flashbackReturnTable = (amount: number) => (
-    flashbackRules?.payout_tables?.[String(amount)] || []
-  );
+  const flashbackReturnTable = (amount: number) => {
+    const band = flashbackRules?.bands?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd));
+    return band?.table || flashbackRules?.payout_tables?.[String(amount)] || [];
+  };
   const sealedReturn = flashback?.product_version === "sealed-return-v2";
   useEffect(() => {
     const clientNow = Date.now();
@@ -7735,8 +7739,8 @@ function LiveBotsScreen({
       </div>
       <div className="fleet-metrics">
         {!flashback && <>
-          <div><span>FIXED ENTRIES</span><strong>$20 / $50 / $100</strong></div>
-          <div><span>MAX RETURN</span><strong>{Number(flashbackRules?.max_return_multiplier || 1.5).toFixed(2)}×</strong></div>
+          <div><span>ENTRY RANGE</span><strong>{money(Number(flashbackRules?.min_entry_usd || 20))}–{money(Number(flashbackRules?.max_entry_usd || 1000))}</strong></div>
+          <div><span>MAX RETURN</span><strong>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</strong></div>
           <div><span>STATUS</span><strong>AVAILABLE</strong></div>
         </>}
         {flashbackFleetState === "sealed" && <>
@@ -7797,22 +7801,22 @@ function LiveBotsScreen({
         {(!flashback || flashbackNewSession) && <>
           <GradientPanel className="compound-panel">
             <h2>A sealed return</h2>
-            <p>Choose one fixed entry. Flashback locks the published return table, then keeps the randomly determined return sealed until the reveal window closes. It does not place or simulate a market trade.</p>
-            <div className="segment-control" role="radiogroup" aria-label="Flashback allocation" onKeyDown={handleBotChoiceKeyDown}>
-              {([20, 50, 100] as const).map((value) => <button type="button" role="radio" aria-checked={flashbackAmount === value} tabIndex={flashbackAmount === value ? 0 : -1} key={value} className={flashbackAmount === value ? "active" : ""} onClick={() => setFlashbackAmount(value)}>{money(value)}</button>)}
-            </div>
+            <p>Choose an entry within the published range. Flashback locks its published return table, then keeps the randomly determined return sealed until the reveal window closes. It does not place or simulate a market trade.</p>
+            <label className="amount-field">ENTRY AMOUNT (USD)
+              <div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Flashback entry amount" /></div>
+            </label>
             <div className="fact-block">
               {flashbackReturnTable(flashbackAmount).map((row) => <span key={`${row.multiplier}-${row.probability}`}><b>{Number(row.multiplier).toFixed(2)}× RETURN</b><b>{Math.round(Number(row.probability) * 100)}%</b></span>)}
             </div>
           </GradientPanel>
           <div className="detail-stats">
             <GradientPanel><span>AMOUNT AT RISK</span><strong>{money(flashbackAmount)}</strong></GradientPanel>
-            <GradientPanel><span>MAX DURATION</span><strong>30m</strong></GradientPanel>
-            <GradientPanel><span>MAX RETURN</span><strong>{money(flashbackAmount * 1.5)}</strong></GradientPanel>
+            <GradientPanel><span>REVEAL WINDOW</span><strong>{Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)}m</strong></GradientPanel>
+            <GradientPanel><span>MAX RETURN</span><strong>{money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}</strong></GradientPanel>
           </div>
           <GradientPanel className="compound-panel">
-            <p>The complete entry can be lost. A 1.50× result is the total returned amount, including the entry. There is no performance fee, and a sealed return cannot be ended early.</p>
-            <button className="primary-action" disabled={pendingAction || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>
+            <p>The complete entry can be lost. The published table includes the entry in every return, and larger outcomes are rarer. There is no performance fee, and a sealed return cannot be ended early.</p>
+            <button className="primary-action" disabled={pendingAction || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>
               Review sealed Flashback <ChevronRight />
             </button>
           </GradientPanel>
@@ -7828,7 +7832,7 @@ function LiveBotsScreen({
             <p>{sealedReturn ? "The return table and entry are committed. The future external entropy source is used only after the reveal window ends, and the session cannot be revealed early." : "This session was created before the current sealed-return product. It will complete at its scheduled reveal time; early settlement is no longer available."}</p>
             {sealedReturn ? <div className="fact-block">
               <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
-              <span>MAX RETURN <b>1.50×</b></span>
+              <span>MAX RETURN <b>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</b></span>
               {(flashback.payout_table || []).map((row) => <span key={`${row.multiplier}-${row.probability}`}><b>{Number(row.multiplier).toFixed(2)}× RETURN</b><b>{Math.round(Number(row.probability) * 100)}%</b></span>)}
             </div> : <div className="fact-block"><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span><span>STATUS <b>HISTORICAL TERMS</b></span></div>}
           </GradientPanel>
@@ -7880,10 +7884,10 @@ function LiveBotsScreen({
         </>}
         {flashbackReview && <AccessibleDialog label="Review Flashback" onClose={() => setFlashbackReview(false)} dismissible={!pendingAction}>
           <h2>Start a sealed Flashback?</h2>
-          <p>TradePulse will lock {money(flashbackAmount)} for 30 minutes and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * 1.5)}. There is no performance fee.</p>
+          <p>TradePulse will lock {money(flashbackAmount)} for {Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)} minutes and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p>
           <div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>RESULT <b>SEALED</b></span></div>
           {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
-          <button className="primary-action" disabled={pendingAction || flashbackAmount > data.wallet.available} aria-busy={pendingAction} onClick={() => void startFlashback()}>{pendingAction ? "Starting…" : "Start sealed Flashback"} <StateIcon name="check" /></button>
+          <button className="primary-action" disabled={pendingAction || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} aria-busy={pendingAction} onClick={() => void startFlashback()}>{pendingAction ? "Starting…" : "Start sealed Flashback"} <StateIcon name="check" /></button>
           <button className="ghost-action" disabled={pendingAction} onClick={() => setFlashbackReview(false)}>Go back</button>
         </AccessibleDialog>}
       </div>
