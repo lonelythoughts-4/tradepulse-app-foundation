@@ -4628,6 +4628,7 @@ type LiveDashboard = {
     demo_authorization?: { accepted_at?: number; settings_json?: string } | null;
     health?: { status?: string; assets?: number; latest_tick_at?: number | null };
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
+    market_labels?: Record<string, string>;
   };
   flashback_rules?: {
     version?: string;
@@ -6579,6 +6580,7 @@ function LiveDeskScreen({
   const analystUnavailableReason = !analystReady
     ? "The Desk Analyst is being connected. Try again shortly."
     : "";
+  const selectionAssetLabel = (asset: string) => data.memecoin?.market_labels?.[asset] || "Unresolved asset";
   const createAlert = async () => {
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
       setAlertError("Enter a positive price threshold before creating an alert.");
@@ -6671,7 +6673,7 @@ function LiveDeskScreen({
         {selection ? (
           <>
             <div className="selection-assets" aria-label="Selected memecoin markets">
-              {selection.assets.map((item) => <span key={item}>{item}</span>)}
+              {selection.assets.map((item) => <span key={item}>{selectionAssetLabel(item)}</span>)}
             </div>
             <div className="selection-facts">
               <div><span>MARKETS</span><strong>{selection.assets.length}</strong></div>
