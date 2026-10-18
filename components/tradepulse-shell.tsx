@@ -9883,6 +9883,7 @@ function LiveTradePulse() {
   const [syntheticAmount, setSyntheticAmount] = useState("20");
   const [syntheticAutoAmount, setSyntheticAutoAmount] = useState("20");
   const [syntheticAutoAllocation, setSyntheticAutoAllocation] = useState("");
+  const [syntheticQuoteHelpOpen, setSyntheticQuoteHelpOpen] = useState(false);
   const [syntheticReview, setSyntheticReview] = useState<{
     kind: "long" | "short" | "auto" | "approve";
     path: string;
@@ -11060,7 +11061,7 @@ function LiveTradePulse() {
                     <h2>Market</h2>
                     <span className="live-indicator" role="status"><i />LIVE QUOTE · 1s</span>
                   </div>
-                  <button type="button" className="small-action synthetic-help-link" onClick={() => setTab("Help")}>How quotes work</button>
+                  <button type="button" className="small-action synthetic-help-link" onClick={() => setSyntheticQuoteHelpOpen(true)}>How quotes work</button>
                 </div>
                 <div className="segment-control synthetic-market-rail" role="group" aria-label="Synthetic markets">
                   {(["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"] as const).map((market) => (
@@ -11175,6 +11176,20 @@ function LiveTradePulse() {
                   )}
                 </div>}
               </GradientPanel>
+              {syntheticQuoteHelpOpen && (
+                <AccessibleDialog label="How Synthetic quotes work" onClose={() => setSyntheticQuoteHelpOpen(false)}>
+                  <span className="eyebrow">SYNTHETIC QUOTES</span>
+                  <h2>How quotes work</h2>
+                  <p>Each index uses TradePulse’s shared model feed. The displayed reference updates about once a second; it is not an external spot-market price.</p>
+                  <div className="fact-block">
+                    <span>ORDER PRICE <b>Checked again at execution</b></span>
+                    <span>SPREAD <b>Shown before review</b></span>
+                    <span>TIER FEE <b>Applied at execution</b></span>
+                  </div>
+                  <p>A stale or unavailable quote prevents a new order. Existing positions remain unchanged until a valid close can be priced.</p>
+                  <button type="button" className="primary-action" onClick={() => setSyntheticQuoteHelpOpen(false)}>Back to market</button>
+                </AccessibleDialog>
+              )}
               {syntheticReview && (
                 <AccessibleDialog label={syntheticReview.kind === "auto" ? "Review automatic execution" : "Review synthetic order"}
                   onClose={() => setSyntheticReview(null)}>
