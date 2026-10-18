@@ -5278,6 +5278,7 @@ function LiveHelpScreen({
   const [address, setAddress] = useState("");
   const [details, setDetails] = useState("");
   const [recoveryPending, setRecoveryPending] = useState(false);
+  const [recoveryCases, setRecoveryCases] = useState(data.recovery_cases || []);
   const fieldId = useId();
   const [supportMessage, setSupportMessage] = useState("");
   const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string; message_count?: number }>>([]);
@@ -5289,8 +5290,8 @@ function LiveHelpScreen({
     const response = await request("/v1/support/tickets");
     setTickets(Array.isArray(response.tickets) ? response.tickets : []);
   };
-  const openTicket = async (ticket: { id: number; topic?: string; status: string }) => {
-    setTicketPending(true);
+  const openTicket = async (ticket: { id: number; topic?: string; status: string }, managePending = true) => {
+    if (managePending) setTicketPending(true);
     try {
       const response = await request(`/v1/support/tickets/${ticket.id}`);
       setActiveTicket(response.ticket || ticket);
@@ -5299,13 +5300,16 @@ function LiveHelpScreen({
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not load this support request.");
     } finally {
-      setTicketPending(false);
+      if (managePending) setTicketPending(false);
     }
   };
   useEffect(() => {
     loadTickets()
       .catch(() => setTickets([]));
   }, []);
+  useEffect(() => {
+    setRecoveryCases(data.recovery_cases || []);
+  }, [data.recovery_cases]);
   return (
     <div className="account-screen">
       <div className="screen-title">
@@ -5411,7 +5415,7 @@ function LiveHelpScreen({
             if (recoveryPending) return;
             setRecoveryPending(true);
             try {
-              await request("/v1/recovery", {
+              const result = await request("/v1/recovery", {
                 method: "POST",
                 body: JSON.stringify({
                   network,
@@ -5426,6 +5430,12 @@ function LiveHelpScreen({
               setHash("");
               setAddress("");
               setDetails("");
+              if (result.recovery_case) {
+                setRecoveryCases((current) => [
+                  result.recovery_case,
+                  ...current.filter((recovery) => recovery.id !== result.recovery_case.id),
+                ]);
+              }
               onNotice("Recovery case submitted for review.");
             } catch (error) {
               onNotice(
@@ -5444,9 +5454,9 @@ function LiveHelpScreen({
       <GradientPanel className="flow-card">
         <span className="eyebrow">RECOVERY STATUS</span>
         <h2>Your submitted cases</h2>
-        {(data.recovery_cases || []).length ? (
+        {recoveryCases.length ? (
           <div className="support-ticket-list">
-            {(data.recovery_cases || []).slice(0, 10).map((recovery) => (
+            {recoveryCases.slice(0, 10).map((recovery) => (
               <div className="activity-row" key={recovery.id}>
                 <div className="activity-info">
                   <strong>RC-{recovery.id} · {recovery.asset} / {recovery.network}</strong>
@@ -5501,8 +5511,10 @@ function LiveHelpScreen({
                 }),
               });
               setSupportMessage("");
-              await loadTickets();
-              await openTicket({ id: Number(result.ticket_id), topic: "Web help center", status: "open" });
+              await Promise.all([
+                loadTickets(),
+                openTicket({ id: Number(result.ticket_id), topic: "Web help center", status: "open" }, false),
+              ]);
               onNotice(`Support ticket #${result.ticket_id} opened.`);
             } catch (error) {
               onNotice(
@@ -5545,8 +5557,7 @@ function LiveHelpScreen({
                 setTicketPending(true);
                 try {
                   await request(`/v1/support/tickets/${activeTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: ticketReply.trim() }) });
-                  await openTicket(activeTicket);
-                  await loadTickets();
+                  await Promise.all([openTicket(activeTicket, false), loadTickets()]);
                   onNotice("Reply sent to support.");
                 } catch (error) {
                   onNotice(error instanceof Error ? error.message : "Could not send the support reply.");
