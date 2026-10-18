@@ -6858,7 +6858,7 @@ function LiveDeskScreen({
       const response = await request("/v1/live-desk/analyst", {
         method: "POST",
         body: JSON.stringify({ question: question || undefined }),
-      }, undefined, 45_000);
+      }, undefined, 25_000);
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
       if (!text) throw new Error("The analyst did not return a usable briefing.");
       setAnalystBriefing(text);
