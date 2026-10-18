@@ -5528,19 +5528,28 @@ function LiveAdminScreen({
   const [vaultChain, setVaultChain] = useState("");
   const [vaultAsset, setVaultAsset] = useState("USDT");
   const [vaultAddress, setVaultAddress] = useState("");
+  const [vaultSavePending, setVaultSavePending] = useState(false);
   const [vaults, setVaults] = useState<
     Array<{ chain: string; asset: string; address: string }>
   >([]);
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
+  const [pendingAdminActions, setPendingAdminActions] = useState<Record<string, boolean>>({});
   const [pendingRecovery, setPendingRecovery] = useState<string | null>(null);
+  const [recoveryReview, setRecoveryReview] = useState<{
+    row: LiveTradePulseAdmin["recovery_cases"][number];
+    status: "verified" | "treasury_review" | "rejected";
+    note: string;
+    message: string;
+  } | null>(null);
   const [pendingAccountAction, setPendingAccountAction] = useState<"fund" | "onboarding" | "pilot" | null>(null);
   const [autouserFile, setAutouserFile] = useState<File | null>(null);
   const [autouserMinimum, setAutouserMinimum] = useState("");
   const [autouserMaximum, setAutouserMaximum] = useState("");
   const [autouserConfirmed, setAutouserConfirmed] = useState(false);
   const [autouserPending, setAutouserPending] = useState(false);
+  const [autouserRunPending, setAutouserRunPending] = useState<Record<string, boolean>>({});
   const [communityGroup, setCommunityGroup] = useState("");
   const [adminHelpOpen, setAdminHelpOpen] = useState(false);
   const fundingFieldId = useId();
@@ -5625,7 +5634,10 @@ function LiveAdminScreen({
     : (/^@[A-Za-z0-9_]{5,32}$/.test(broadcastTarget) || /^-?\d{5,20}$/.test(broadcastTarget));
   const broadcastConfirmed = confirm.trim().toUpperCase() === "SEND ALL";
   const canSendBroadcast = Boolean(broadcast.trim()) && !broadcastPending && (!broadcastNeedsTarget || validBroadcastTarget) && (broadcastScope !== "all" || broadcastConfirmed);
-  const post = async (path: string, body: object, message: string) => {
+  const isAdminActionPending = (key: string) => Boolean(pendingAdminActions[key]);
+  const post = async (path: string, body: object, message: string, actionKey = path) => {
+    if (isAdminActionPending(actionKey)) return false;
+    setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
       // Reconcile the control room after the confirmed mutation without
@@ -5636,6 +5648,12 @@ function LiveAdminScreen({
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Admin action failed.");
       return false;
+    } finally {
+      setPendingAdminActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
   };
   const runAccountAction = async (
@@ -5653,6 +5671,9 @@ function LiveAdminScreen({
     }
   };
   const saveSyntheticConfig = async (settings: Record<string, string>) => {
+    const actionKey = `synthetic-config:${Object.keys(settings).sort().join(",")}`;
+    if (isAdminActionPending(actionKey)) return;
+    setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request("/v1/admin/synthetic-config", {
         method: "PUT",
@@ -5662,16 +5683,35 @@ function LiveAdminScreen({
       onNotice("Synthetic configuration saved and audit logged.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not save synthetic configuration.");
+    } finally {
+      setPendingAdminActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
+  };
+  const reviewRecovery = (row: LiveTradePulseAdmin["recovery_cases"][number], status: "verified" | "treasury_review" | "rejected", note: string, message: string) => {
+    setRecoveryReview({ row: { ...row }, status, note, message });
   };
   const updateRecovery = async (caseId: string, status: string, note: string, message: string) => {
     if (pendingRecovery !== null) return;
     setPendingRecovery(caseId);
     try {
-      await post(`/v1/admin/recovery/${caseId}`, { status, note }, message);
+      return await post(`/v1/admin/recovery/${caseId}`, { status, note }, message, `recovery:${caseId}:${status}`);
     } finally {
       setPendingRecovery(null);
     }
+  };
+  const confirmRecoveryReview = async () => {
+    if (!recoveryReview || pendingRecovery) return;
+    const saved = await updateRecovery(
+      recoveryReview.row.id,
+      recoveryReview.status,
+      recoveryReview.note,
+      recoveryReview.message,
+    );
+    if (saved) setRecoveryReview(null);
   };
   const submitAutouserRun = async () => {
     if (!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)) return;
@@ -5700,12 +5740,21 @@ function LiveAdminScreen({
     }
   };
   const updateAutouserRun = async (runId: string, action: "pause" | "resume" | "cancel") => {
+    const actionKey = `${runId}:${action}`;
+    if (autouserRunPending[actionKey]) return;
+    setAutouserRunPending((current) => ({ ...current, [actionKey]: true }));
     try {
       const result = await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
       onNotice(result.message || `Auto-user run ${action}d.`);
       void reload().catch(() => undefined);
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
+    } finally {
+      setAutouserRunPending((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
   };
   const sendBroadcast = async () => {
@@ -5769,11 +5818,13 @@ function LiveAdminScreen({
         </div>
         <button
           className="small-action"
+          disabled={isAdminActionPending("sweeps:toggle")}
+          aria-busy={isAdminActionPending("sweeps:toggle")}
           onClick={() =>
-            post("/v1/admin/sweeps/toggle", {}, "Sweep policy updated.")
+            void post("/v1/admin/sweeps/toggle", {}, "Sweep policy updated.", "sweeps:toggle")
           }
         >
-          Toggle sweeps
+          {isAdminActionPending("sweeps:toggle") ? "Updating…" : "Toggle sweeps"}
         </button>
       </GradientPanel>
       {withdrawalReview && (
@@ -5802,6 +5853,23 @@ function LiveAdminScreen({
           <button className="ghost-action" disabled={withdrawalPending} onClick={() => setWithdrawalReview(null)}>Go back</button>
         </AccessibleDialog>
       )}
+      {recoveryReview && (
+        <AccessibleDialog label="Review recovery update" onClose={() => setRecoveryReview(null)} dismissible={!pendingRecovery}>
+          <span className="eyebrow">ADMIN / RECOVERY REVIEW</span>
+          <h2>{recoveryReview.status === "verified" ? "Mark recovery verified?" : recoveryReview.status === "treasury_review" ? "Send recovery to Treasury Review?" : "Reject recovery case?"}</h2>
+          <div className="fact-block">
+            <span>ENVIRONMENT <b>{environment.toUpperCase()}</b></span>
+            <span>USER <b>{recoveryReview.row.user_id}</b></span>
+            <span>ASSET / NETWORK <b>{recoveryReview.row.asset} / {recoveryReview.row.network}</b></span>
+            <span>STATUS <b>{recoveryReview.row.status.replace("_", " ")}</b></span>
+          </div>
+          <p>{recoveryReview.status === "verified" ? "Confirm that the supporting evidence has been manually checked. This does not move funds." : recoveryReview.status === "treasury_review" ? "This changes the case routing to Treasury Review. It does not move funds." : "This records the rejection and closes this recovery path. Review the evidence before continuing."}</p>
+          <button className={recoveryReview.status === "rejected" ? "danger-action" : "primary-action"} disabled={Boolean(pendingRecovery)} aria-busy={Boolean(pendingRecovery)} onClick={() => void confirmRecoveryReview()}>
+            {pendingRecovery ? "Updating…" : recoveryReview.status === "verified" ? "Confirm verification" : recoveryReview.status === "treasury_review" ? "Confirm Treasury Review" : "Confirm rejection"}
+          </button>
+          <button className="ghost-action" disabled={Boolean(pendingRecovery)} onClick={() => setRecoveryReview(null)}>Go back</button>
+        </AccessibleDialog>
+      )}
       <div className="admin-grid">
         <GradientPanel className="admin-table">
           <div className="section-heading">
@@ -5824,27 +5892,33 @@ function LiveAdminScreen({
                 </div>
                 <button
                   className="small-action"
+                  disabled={isAdminActionPending(`sweep:${row.id}:retry`)}
+                  aria-busy={isAdminActionPending(`sweep:${row.id}:retry`)}
                   onClick={() =>
-                    post(
+                    void post(
                       `/v1/admin/sweeps/${row.id}`,
                       { action: "retry" },
                       "Sweep retry requested.",
+                      `sweep:${row.id}:retry`,
                     )
                   }
                 >
-                  Retry
+                  {isAdminActionPending(`sweep:${row.id}:retry`) ? "Retrying…" : "Retry"}
                 </button>
                 <button
                   className="small-action"
+                  disabled={isAdminActionPending(`sweep:${row.id}:manual`)}
+                  aria-busy={isAdminActionPending(`sweep:${row.id}:manual`)}
                   onClick={() =>
-                    post(
+                    void post(
                       `/v1/admin/sweeps/${row.id}`,
                       { action: "manual" },
                       "Manual sweep requested.",
+                      `sweep:${row.id}:manual`,
                     )
                   }
                 >
-                  Manual
+                  {isAdminActionPending(`sweep:${row.id}:manual`) ? "Requesting…" : "Manual"}
                 </button>
               </div>
             ))
@@ -5905,23 +5979,23 @@ function LiveAdminScreen({
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
-                      onClick={() => updateRecovery(row.id, "verified", "Marked verified after manual evidence review.", "Recovery marked verified. No funds were moved.")}
+                      onClick={() => reviewRecovery(row, "verified", "Marked verified after manual evidence review.", "Recovery marked verified. No funds were moved.")}
                     >
-                      {pendingRecovery === row.id ? "Updating…" : "Mark verified"}
+                      Review verification
                     </button>
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
-                      onClick={() => updateRecovery(row.id, "treasury_review", "Escalated for custody review.", "Recovery sent to Treasury Review.")}
+                      onClick={() => reviewRecovery(row, "treasury_review", "Escalated for custody review.", "Recovery sent to Treasury Review.")}
                     >
-                      {pendingRecovery === row.id ? "Updating…" : "Treasury review"}
+                      Review for Treasury
                     </button>
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
-                      onClick={() => updateRecovery(row.id, "rejected", "Rejected after manual evidence review.", "Recovery rejected.")}
+                      onClick={() => reviewRecovery(row, "rejected", "Rejected after manual evidence review.", "Recovery rejected.")}
                     >
-                      {pendingRecovery === row.id ? "Updating…" : "Reject"}
+                      Review rejection
                     </button>
                   </>
                 ) : row.status === "verified" ? (
@@ -5929,25 +6003,25 @@ function LiveAdminScreen({
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
-                      onClick={() => updateRecovery(row.id, "treasury_review", "Escalated for custody review after evidence verification.", "Recovery sent to Treasury Review.")}
+                      onClick={() => reviewRecovery(row, "treasury_review", "Escalated for custody review after evidence verification.", "Recovery sent to Treasury Review.")}
                     >
-                      {pendingRecovery === row.id ? "Updating…" : "Treasury review"}
+                      Review for Treasury
                     </button>
                     <button
                       className="small-action"
                       disabled={pendingRecovery !== null}
-                      onClick={() => updateRecovery(row.id, "rejected", "Rejected after verification review.", "Recovery rejected.")}
+                      onClick={() => reviewRecovery(row, "rejected", "Rejected after verification review.", "Recovery rejected.")}
                     >
-                      {pendingRecovery === row.id ? "Updating…" : "Reject"}
+                      Review rejection
                     </button>
                   </>
                 ) : row.status === "treasury_review" ? (
                   <button
                     className="small-action"
                     disabled={pendingRecovery !== null}
-                    onClick={() => updateRecovery(row.id, "rejected", "Rejected during treasury review.", "Recovery rejected.")}
+                    onClick={() => reviewRecovery(row, "rejected", "Rejected during treasury review.", "Recovery rejected.")}
                   >
-                    {pendingRecovery === row.id ? "Updating…" : "Reject"}
+                    Review rejection
                   </button>
                 ) : (
                   <span className="status-chip review">{row.status.replace("_", " ")}</span>
@@ -6114,40 +6188,45 @@ function LiveAdminScreen({
           <div className="admin-actions">
             <button
               className="small-action"
-              disabled={!validCommunityGroup}
-              onClick={() => void post("/v1/admin/community-cards", { group: communityGroup }, "Dedicated community group saved. Publication is off until checks pass.").then((saved) => {
+              disabled={!validCommunityGroup || isAdminActionPending("community:destination")}
+              aria-busy={isAdminActionPending("community:destination")}
+              onClick={() => void post("/v1/admin/community-cards", { group: communityGroup }, "Dedicated community group saved. Publication is off until checks pass.", "community:destination").then((saved) => {
                 if (saved) setCommunityGroup(communityGroup);
               })}
             >
-              Save destination
+              {isAdminActionPending("community:destination") ? "Saving…" : "Save destination"}
             </button>
             <button
               className="small-action"
-              disabled={!admin.community_cards?.config?.group}
-              onClick={() => void post("/v1/admin/community-cards/verify", {}, "Telegram posting permission confirmed.")}
+              disabled={!admin.community_cards?.config?.group || isAdminActionPending("community:verify")}
+              aria-busy={isAdminActionPending("community:verify")}
+              onClick={() => void post("/v1/admin/community-cards/verify", {}, "Telegram posting permission confirmed.", "community:verify")}
             >
-              Check permission
+              {isAdminActionPending("community:verify") ? "Checking…" : "Check permission"}
             </button>
             <button
               className={admin.community_cards?.config?.enabled ? "danger-action" : "primary-action"}
-              disabled={!admin.community_cards?.config?.enabled && (!admin.community_cards?.config?.group || !admin.community_cards?.renderer?.ready)}
-              onClick={() => void post("/v1/admin/community-cards/enabled", { enabled: !admin.community_cards?.config?.enabled }, admin.community_cards?.config?.enabled ? "Community cards disabled." : "Community cards enabled.")}
+              disabled={isAdminActionPending("community:publication") || (!admin.community_cards?.config?.enabled && (!admin.community_cards?.config?.group || !admin.community_cards?.renderer?.ready))}
+              aria-busy={isAdminActionPending("community:publication")}
+              onClick={() => void post("/v1/admin/community-cards/enabled", { enabled: !admin.community_cards?.config?.enabled }, admin.community_cards?.config?.enabled ? "Community cards disabled." : "Community cards enabled.", "community:publication")}
             >
-              {admin.community_cards?.config?.enabled ? "Disable publication" : "Enable publication"}
+              {isAdminActionPending("community:publication") ? "Updating…" : admin.community_cards?.config?.enabled ? "Disable publication" : "Enable publication"}
             </button>
             <button
               className="small-action"
-              disabled={!admin.community_cards?.config?.group}
-              onClick={() => void post("/v1/admin/community-cards/stress-test-presentation", { enabled: !admin.community_cards?.config?.stress_test_presentation }, admin.community_cards?.config?.stress_test_presentation ? "Stress-test cards will show their test label." : "Stress-test cards will match customer cards in this dedicated demo group.")}
+              disabled={!admin.community_cards?.config?.group || isAdminActionPending("community:presentation")}
+              aria-busy={isAdminActionPending("community:presentation")}
+              onClick={() => void post("/v1/admin/community-cards/stress-test-presentation", { enabled: !admin.community_cards?.config?.stress_test_presentation }, admin.community_cards?.config?.stress_test_presentation ? "Stress-test cards will show their test label." : "Stress-test cards will match customer cards in this dedicated demo group.", "community:presentation")}
             >
-              {admin.community_cards?.config?.stress_test_presentation ? "Use test labels" : "Match customer cards"}
+              {isAdminActionPending("community:presentation") ? "Updating…" : admin.community_cards?.config?.stress_test_presentation ? "Use test labels" : "Match customer cards"}
             </button>
             <button
               className="small-action"
-              disabled={!admin.community_cards?.config?.enabled || !admin.community_cards?.renderer?.ready}
-              onClick={() => void post("/v1/admin/community-cards/test", {}, "Test card queued for the dedicated group.")}
+              disabled={!admin.community_cards?.config?.enabled || !admin.community_cards?.renderer?.ready || isAdminActionPending("community:test")}
+              aria-busy={isAdminActionPending("community:test")}
+              onClick={() => void post("/v1/admin/community-cards/test", {}, "Test card queued for the dedicated group.", "community:test")}
             >
-              Send test card
+              {isAdminActionPending("community:test") ? "Queuing…" : "Send test card"}
             </button>
           </div>
           {!admin.community_cards?.config?.enabled && (
@@ -6165,7 +6244,7 @@ function LiveAdminScreen({
                 <strong>{event.kind.replace(/_/g, " ")} / {event.id.slice(0, 8)}</strong>
                 <small className="mono">ATTEMPTS {event.attempts} / {event.render_error || "delivery outcome needs review"}</small>
               </div>
-              <button className="small-action" onClick={() => void post(`/v1/admin/community-cards/${event.id}/retry`, {}, "Card queued for an explicit retry.")}>Retry</button>
+              <button className="small-action" disabled={isAdminActionPending(`community:${event.id}:retry`)} aria-busy={isAdminActionPending(`community:${event.id}:retry`)} onClick={() => void post(`/v1/admin/community-cards/${event.id}/retry`, {}, "Card queued for an explicit retry.", `community:${event.id}:retry`)}>{isAdminActionPending(`community:${event.id}:retry`) ? "Retrying…" : "Retry"}</button>
             </div>
           ))}
           <small>Retry only after checking Telegram: an unknown send outcome can create a duplicate post. Group membership is managed through Telegram’s invite or community flow.</small>
@@ -6225,9 +6304,9 @@ function LiveAdminScreen({
                 <strong>{run.status === "paused" && !run.import_complete ? "importing" : run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
                 <small className="mono">{run.status === "paused" && !run.import_complete ? `${Number(run.imported_accounts || 0).toLocaleString()}/${Number(run.imported_users || 0).toLocaleString()} accounts prepared / ${Number(run.pending_imports || 0).toLocaleString()} remaining` : `${Number(run.completed_events || 0).toLocaleString()} money events complete / ${Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / ${Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / ${Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / ${Number(run.active_event_bots || 0).toLocaleString()}/${Number(run.event_participants || 0).toLocaleString()} event bots active`}</small>
               </div>
-              {run.status === "scheduled" && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "pause")}>Pause</button>}
-              {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "resume")}>Resume</button>}
-              {(run.status === "scheduled" || run.status === "paused") && <button className="small-action" onClick={() => void updateAutouserRun(run.id, "cancel")}>Cancel</button>}
+              {run.status === "scheduled" && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:pause`])} aria-busy={Boolean(autouserRunPending[`${run.id}:pause`])} onClick={() => void updateAutouserRun(run.id, "pause")}>{autouserRunPending[`${run.id}:pause`] ? "Pausing…" : "Pause"}</button>}
+              {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:resume`])} aria-busy={Boolean(autouserRunPending[`${run.id}:resume`])} onClick={() => void updateAutouserRun(run.id, "resume")}>{autouserRunPending[`${run.id}:resume`] ? "Resuming…" : "Resume"}</button>}
+              {(run.status === "scheduled" || run.status === "paused") && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:cancel`])} aria-busy={Boolean(autouserRunPending[`${run.id}:cancel`])} onClick={() => void updateAutouserRun(run.id, "cancel")}>{autouserRunPending[`${run.id}:cancel`] ? "Cancelling…" : "Cancel"}</button>}
             </div>
           ))}
         </GradientPanel>
@@ -6258,16 +6337,18 @@ function LiveAdminScreen({
           />
           <button
             className="primary-action"
-            disabled={!settingValue.trim()}
+            disabled={!settingValue.trim() || isAdminActionPending(`settings:${settingKey}`)}
+            aria-busy={isAdminActionPending(`settings:${settingKey}`)}
             onClick={() =>
-              post(
+              void post(
                 "/v1/admin/settings",
                 { key: settingKey, value: settingValue },
                 "Runtime setting saved.",
+                `settings:${settingKey}`,
               )
             }
           >
-            Save rule
+            {isAdminActionPending(`settings:${settingKey}`) ? "Saving…" : "Save rule"}
           </button>
           {admin.settings.slice(0, 5).map((row) => (
             <div className="admin-row" key={row.key}>
@@ -6363,18 +6444,20 @@ function LiveAdminScreen({
           </small>
           <button
             className="primary-action"
-            disabled={!validTarget}
+            disabled={!validTarget || isAdminActionPending("admin:member:add")}
+            aria-busy={isAdminActionPending("admin:member:add")}
             onClick={() =>
-              post(
+              void post(
                 "/v1/admin/members",
                 { user_id: adminMember },
                 "Administrator access updated.",
+                "admin:member:add",
               ).then((saved) => {
                 if (saved) setAdminMember("");
               })
             }
           >
-            Add administrator <ShieldCheck />
+            {isAdminActionPending("admin:member:add") ? "Adding…" : "Add administrator"} <ShieldCheck />
           </button>
         </GradientPanel>
         <GradientPanel className="admin-table">
@@ -6413,8 +6496,11 @@ function LiveAdminScreen({
           />
           <button
             className="primary-action"
-            disabled={!vaultChain || !vaultAsset || !vaultAddress}
+            disabled={!vaultChain || !vaultAsset || !vaultAddress || vaultSavePending}
+            aria-busy={vaultSavePending}
             onClick={async () => {
+              if (vaultSavePending) return;
+              setVaultSavePending(true);
               try {
                 await request("/v1/admin/vaults", {
                   method: "POST",
@@ -6434,10 +6520,12 @@ function LiveAdminScreen({
                     ? error.message
                     : "Could not save vault destination.",
                 );
+              } finally {
+                setVaultSavePending(false);
               }
             }}
           >
-            Save vault route <ShieldCheck />
+            {vaultSavePending ? "Saving…" : "Save vault route"} <ShieldCheck />
           </button>
           {vaults.length ? (
             vaults
@@ -6465,7 +6553,7 @@ function LiveAdminScreen({
           </div>
           <div className="admin-row">
             <div><strong>Global entry pause</strong><small className="mono">{syntheticConfig.global_trading_pause === "true" ? "PAUSED" : "OPEN"}</small></div>
-            <button className={syntheticConfig.global_trading_pause === "true" ? "small-action" : "danger-action"} onClick={() => saveSyntheticConfig({ global_trading_pause: syntheticConfig.global_trading_pause === "true" ? "false" : "true" })}>{syntheticConfig.global_trading_pause === "true" ? "Resume" : "Pause"}</button>
+            <button className={syntheticConfig.global_trading_pause === "true" ? "small-action" : "danger-action"} disabled={isAdminActionPending("synthetic-config:global_trading_pause")} aria-busy={isAdminActionPending("synthetic-config:global_trading_pause")} onClick={() => void saveSyntheticConfig({ global_trading_pause: syntheticConfig.global_trading_pause === "true" ? "false" : "true" })}>{isAdminActionPending("synthetic-config:global_trading_pause") ? "Updating…" : syntheticConfig.global_trading_pause === "true" ? "Resume" : "Pause"}</button>
           </div>
           <select value="PRINCIPAL" disabled>
             <option value="PRINCIPAL">Principal clearing</option>
