@@ -404,6 +404,7 @@ function AvatarPicker({
   current,
   fee = 10,
   available = 0,
+  pending = false,
 }: {
   selected: AvatarId;
   onSelect: (id: AvatarId) => void;
@@ -414,16 +415,17 @@ function AvatarPicker({
   current?: AvatarId;
   fee?: number;
   available?: number;
+  pending?: boolean;
 }) {
   return (
     <AccessibleDialog
       label="Choose your TradePulse desk identity"
       onClose={onClose}
-      dismissible={!required}
+      dismissible={!required && !pending}
     >
       <div className="avatar-picker-dialog">
         {!required && (
-            <button className="modal-close" type="button" onClick={onClose} aria-label="Close identity picker">
+            <button className="modal-close" type="button" disabled={pending} onClick={onClose} aria-label="Close identity picker">
             <X size={16} />
           </button>
         )}
@@ -437,6 +439,7 @@ function AvatarPicker({
               type="button"
               className={`avatar-choice ${selected === option.id ? "selected" : ""}`}
               aria-pressed={selected === option.id}
+              disabled={pending}
               onClick={() => onSelect(option.id)}
             >
               <PulseAvatar id={option.id} />
@@ -447,8 +450,8 @@ function AvatarPicker({
         </div>
         <div className="identity-seal" aria-live="polite"><span>SEALED COSMETIC REVEAL</span><strong>{locked ? `Next artifact: ${avatarOptions.find((option) => option.id === selected)?.artifact}` : "Your identity artifact reveals after confirmation"}</strong></div>
         {locked && <p className="identity-fee-note">{selected === current ? "This is your current identity. No charge applies." : `Available now $${available.toFixed(2)} · after change $${(Math.max(0, available - fee)).toFixed(2)}`}</p>}
-        <button className="primary-action" type="button" disabled={locked && selected !== current && available < fee} onClick={() => onConfirm(selected)}>
-          {locked ? (selected === current ? `Keep ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}` : `Pay $${fee.toFixed(2)} & use ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`) : `Seal ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`}
+        <button className="primary-action" type="button" disabled={pending || (locked && selected !== current && available < fee)} aria-busy={pending} onClick={() => onConfirm(selected)}>
+          {pending ? "Saving identity…" : locked ? (selected === current ? `Keep ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}` : `Pay $${fee.toFixed(2)} & use ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`) : `Seal ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`}
           <ChevronRight />
         </button>
       </div>
@@ -9679,6 +9682,7 @@ function LiveTradePulse() {
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
   const [botEntryId, setBotEntryId] = useState<string | null>(null);
+  const [identityPending, setIdentityPending] = useState(false);
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -9734,7 +9738,9 @@ function LiveTradePulse() {
     }
   }, [data?.user.id, data?.user.avatar_id]);
   const chooseAvatar = async (next: AvatarId) => {
+    if (identityPending) return;
     const prior = avatarId;
+    setIdentityPending(true);
     setAvatarId(next);
     try {
       if (avatarStorageKey) window.localStorage.setItem(avatarStorageKey, next);
@@ -9756,6 +9762,8 @@ function LiveTradePulse() {
       setNotice(prior === next ? "Identity unchanged." : `Identity sealed: ${avatarOptions.find((option) => option.id === next)?.name || next}.`);
     } catch {
       setAvatarId(prior);
+    } finally {
+      setIdentityPending(false);
     }
   };
   const [amount, setAmount] = useState("20");
@@ -10730,6 +10738,7 @@ function LiveTradePulse() {
           <AccessibleDialog
             label="Review shared virtual demo terms"
             onClose={() => setDemoReviewOpen(false)}
+            dismissible={!isActionPending("demo:start")}
           >
             <span className="eyebrow">SHARED VIRTUAL DEMO</span>
             <h2>Review virtual demo terms</h2>
@@ -10765,6 +10774,7 @@ function LiveTradePulse() {
             current={data.user.avatar_id as AvatarId | undefined}
             fee={Number(data.user.identity?.change_fee_usd || 10)}
             available={Number(data.wallet.available || 0)}
+            pending={identityPending}
           />
         )}
         <div className="content-wrap">
