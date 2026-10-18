@@ -5562,7 +5562,24 @@ function LiveAdminScreen({
   } | null>(null);
   const [withdrawalPending, setWithdrawalPending] = useState(false);
   const withdrawalSubmitting = useRef(false);
+  const adminReconcileTimer = useRef<number | null>(null);
   const [withdrawalError, setWithdrawalError] = useState("");
+  const scheduleReconcile = () => {
+    // Do not make a confirmed write compete with an immediate, heavyweight
+    // control-room read.  Several quick actions collapse into one quiet
+    // reconciliation, while the initiating button becomes available as soon
+    // as its own request completes.
+    if (adminReconcileTimer.current !== null) return;
+    adminReconcileTimer.current = window.setTimeout(() => {
+      adminReconcileTimer.current = null;
+      void reload().catch(() => undefined);
+    }, 900);
+  };
+  useEffect(() => () => {
+    if (adminReconcileTimer.current !== null) {
+      window.clearTimeout(adminReconcileTimer.current);
+    }
+  }, []);
   useEffect(() => {
     setWithdrawalReview(null);
     setWithdrawalError("");
@@ -5593,7 +5610,7 @@ function LiveAdminScreen({
       }, withdrawalReview.environment);
       onNotice(withdrawalReview.action === "approve" ? "Withdrawal approved and logged." : "Withdrawal rejected.");
       setWithdrawalReview(null);
-      void reload().catch(() => undefined);
+      scheduleReconcile();
     } catch (error) {
       setWithdrawalError(error instanceof Error ? error.message : "Withdrawal action failed. Review the current status before trying again.");
     } finally {
@@ -5640,9 +5657,9 @@ function LiveAdminScreen({
     setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
-      // Reconcile the control room after the confirmed mutation without
-      // holding the initiating control behind a second request.
-      void reload().catch(() => undefined);
+      // Reconcile after the mutation without holding the initiating control
+      // behind a second request or starting one refresh per button click.
+      scheduleReconcile();
       onNotice(message);
       return true;
     } catch (error) {
@@ -5732,7 +5749,7 @@ function LiveAdminScreen({
       setAutouserMaximum("");
       setAutouserConfirmed(false);
       onNotice(result.message || "Auto-user testnet deposit run scheduled.");
-      void reload().catch(() => undefined);
+      scheduleReconcile();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be scheduled.");
     } finally {
@@ -5746,7 +5763,7 @@ function LiveAdminScreen({
     try {
       const result = await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
       onNotice(result.message || `Auto-user run ${action}d.`);
-      void reload().catch(() => undefined);
+      scheduleReconcile();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
     } finally {
@@ -5774,7 +5791,7 @@ function LiveAdminScreen({
       setConfirm("");
       setBroadcastTarget("");
       onNotice(result.message || "Broadcast queued for delivery.");
-      void reload().catch(() => undefined);
+      scheduleReconcile();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Broadcast could not be queued.");
     } finally {
@@ -7019,7 +7036,6 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
 function LiveAccountScreen({
   data,
   request,
-  reload,
   onNotice,
   avatarId = "orbit",
   onAvatarClick,
@@ -7028,7 +7044,6 @@ function LiveAccountScreen({
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
-  reload: () => Promise<void>;
   onNotice: (message: string) => void;
   avatarId?: AvatarId;
   onAvatarClick?: () => void;
@@ -7115,7 +7130,9 @@ function LiveAccountScreen({
       await request(path, { method: "POST", body: JSON.stringify(body) });
       setModalFeedback({ message, error: false });
       onNotice(message);
-      void reload().catch(() => undefined);
+      // Account controls confirm their own result in this modal. Do not make
+      // a security or preference save trigger a full desk refresh and delay
+      // the next interaction.
       if (closeModal) setModal("");
       return true;
     } catch (error) {
@@ -9533,6 +9550,7 @@ function LiveTradePulse() {
   const reduceMotion = useReducedMotion();
   const [data, setData] = useState<LiveDashboard | null>(null);
   const authenticatedUserRef = useRef<number | null>(null);
+  const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
@@ -9838,6 +9856,12 @@ function LiveTradePulse() {
     return result.notices || [];
   });
   const load = async (targetEnvironment = webEnvironment) => {
+    // Every view reads the same account projection.  Reuse an in-flight read
+    // for its environment instead of letting an alert, account change, or
+    // deposit monitor stack several expensive dashboard requests together.
+    const activeLoad = dashboardLoadRef.current;
+    if (activeLoad?.environment === targetEnvironment) return activeLoad.promise;
+    const performLoad = async () => {
     // Keep the current desk mounted during background refreshes. This lets
     // optimistic toggles and button feedback render immediately instead of
     // replacing the whole surface with the boot screen after every action.
@@ -9875,6 +9899,16 @@ function LiveTradePulse() {
       );
     } finally {
       if (showBootScreen) setLoading(false);
+    }
+    };
+    const promise = performLoad();
+    dashboardLoadRef.current = { environment: targetEnvironment, promise };
+    try {
+      await promise;
+    } finally {
+      if (dashboardLoadRef.current?.promise === promise) {
+        dashboardLoadRef.current = null;
+      }
     }
   };
   useEffect(() => {
@@ -10533,7 +10567,6 @@ function LiveTradePulse() {
   };
   const refreshAdmin = async () => {
     setAdmin(await request("/v1/admin/overview"));
-    await load();
   };
   return (
     <div className="app-shell">
@@ -10800,7 +10833,6 @@ function LiveTradePulse() {
             <LiveAccountScreen
               data={data}
               request={request}
-              reload={load}
               onNotice={setNotice}
               avatarId={avatarId}
               onAvatarClick={() => setAvatarPickerOpen(true)}
