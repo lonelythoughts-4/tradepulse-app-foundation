@@ -5277,10 +5277,30 @@ function LiveHelpScreen({
   const [recoveryPending, setRecoveryPending] = useState(false);
   const fieldId = useId();
   const [supportMessage, setSupportMessage] = useState("");
-  const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string }>>([]);
+  const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string; message_count?: number }>>([]);
+  const [activeTicket, setActiveTicket] = useState<{ id: number; topic?: string; status: string } | null>(null);
+  const [ticketMessages, setTicketMessages] = useState<Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }>>([]);
+  const [ticketReply, setTicketReply] = useState("");
+  const [ticketPending, setTicketPending] = useState(false);
+  const loadTickets = async () => {
+    const response = await request("/v1/support/tickets");
+    setTickets(Array.isArray(response.tickets) ? response.tickets : []);
+  };
+  const openTicket = async (ticket: { id: number; topic?: string; status: string }) => {
+    setTicketPending(true);
+    try {
+      const response = await request(`/v1/support/tickets/${ticket.id}`);
+      setActiveTicket(response.ticket || ticket);
+      setTicketMessages(Array.isArray(response.messages) ? response.messages : []);
+      setTicketReply("");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not load this support request.");
+    } finally {
+      setTicketPending(false);
+    }
+  };
   useEffect(() => {
-    request("/v1/support/tickets")
-      .then((response) => setTickets(Array.isArray(response.tickets) ? response.tickets : []))
+    loadTickets()
       .catch(() => setTickets([]));
   }, []);
   return (
@@ -5445,12 +5465,13 @@ function LiveHelpScreen({
         {tickets.length > 0 && (
           <div className="support-ticket-list">
             {tickets.slice(0, 5).map((ticket) => (
-              <div className="activity-row" key={ticket.id}>
+              <button className="activity-row support-ticket-row" type="button" key={ticket.id} onClick={() => void openTicket(ticket)} disabled={ticketPending}>
                 <div className="activity-info">
                   <strong>TP-{ticket.id} · {ticket.topic || "General"}</strong>
-                  <small>{ticket.status.replace("_", " ")} · {ticket.body}</small>
+                  <small>{ticket.status.replace("_", " ")} · {ticket.message_count || 1} message{(ticket.message_count || 1) === 1 ? "" : "s"}</small>
                 </div>
-              </div>
+                <ChevronRight />
+              </button>
             ))}
           </div>
         )}
@@ -5465,8 +5486,9 @@ function LiveHelpScreen({
         />
         <button
           className="primary-action"
-          disabled={!supportMessage.trim()}
+          disabled={supportMessage.trim().length < 10 || ticketPending}
           onClick={async () => {
+            setTicketPending(true);
             try {
               const result = await request("/v1/support/tickets", {
                 method: "POST",
@@ -5476,8 +5498,8 @@ function LiveHelpScreen({
                 }),
               });
               setSupportMessage("");
-              const latest = await request("/v1/support/tickets");
-              setTickets(Array.isArray(latest.tickets) ? latest.tickets : []);
+              await loadTickets();
+              await openTicket({ id: Number(result.ticket_id), topic: "Web help center", status: "open" });
               onNotice(`Support ticket #${result.ticket_id} opened.`);
             } catch (error) {
               onNotice(
@@ -5485,12 +5507,52 @@ function LiveHelpScreen({
                   ? error.message
                   : "Could not open a support ticket.",
               );
+            } finally {
+              setTicketPending(false);
             }
           }}
         >
-          Open support ticket <Send />
+          {ticketPending ? "Opening…" : "Open support ticket"} <Send />
         </button>
       </GradientPanel>
+      {activeTicket && (
+        <GradientPanel className="flow-card support-thread" aria-live="polite">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">SUPPORT THREAD</span>
+              <h2>TP-{activeTicket.id} · {activeTicket.topic || "General"}</h2>
+            </div>
+            <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status.replace("_", " ")}</span>
+          </div>
+          <div className="support-thread-messages" aria-label={`Messages for support ticket ${activeTicket.id}`}>
+            {ticketMessages.map((message) => (
+              <div className={`support-message ${message.author_role}`} key={message.id}>
+                <strong>{message.author_role === "admin" ? "TradePulse support" : "You"}</strong>
+                <p>{message.body}</p>
+              </div>
+            ))}
+          </div>
+          {activeTicket.status === "closed" ? (
+            <p>This request is closed. Open a new request if you need further help.</p>
+          ) : (
+            <>
+              <label className="amount-field" htmlFor={`${fieldId}-reply`}>Reply to support</label>
+              <textarea id={`${fieldId}-reply`} value={ticketReply} onChange={(event) => setTicketReply(event.target.value)} placeholder="Add details without sharing a security code or private key." rows={4} />
+              <button className="primary-action" disabled={ticketReply.trim().length < 2 || ticketPending} onClick={async () => {
+                setTicketPending(true);
+                try {
+                  await request(`/v1/support/tickets/${activeTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: ticketReply.trim() }) });
+                  await openTicket(activeTicket);
+                  await loadTickets();
+                  onNotice("Reply sent to support.");
+                } catch (error) {
+                  onNotice(error instanceof Error ? error.message : "Could not send the support reply.");
+                } finally { setTicketPending(false); }
+              }}>{ticketPending ? "Sending…" : "Send reply"} <Send /></button>
+            </>
+          )}
+        </GradientPanel>
+      )}
     </div>
   );
 }
@@ -5553,6 +5615,9 @@ function LiveAdminScreen({
   const [autouserRunPending, setAutouserRunPending] = useState<Record<string, boolean>>({});
   const [communityGroup, setCommunityGroup] = useState("");
   const [adminHelpOpen, setAdminHelpOpen] = useState(false);
+  const [adminTicket, setAdminTicket] = useState<(LiveTradePulseAdmin["tickets"][number] & { messages?: Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }> }) | null>(null);
+  const [adminTicketReply, setAdminTicketReply] = useState("");
+  const [adminTicketPending, setAdminTicketPending] = useState(false);
   const fundingFieldId = useId();
   const autouserFileId = useId();
   const autouserFileRef = useRef<HTMLInputElement>(null);
@@ -5672,6 +5737,18 @@ function LiveAdminScreen({
         delete next[actionKey];
         return next;
       });
+    }
+  };
+  const openAdminTicket = async (ticket: LiveTradePulseAdmin["tickets"][number]) => {
+    setAdminTicketPending(true);
+    try {
+      const response = await request(`/v1/admin/tickets/${ticket.id}`);
+      setAdminTicket({ ...(response.ticket || ticket), messages: Array.isArray(response.messages) ? response.messages : [] });
+      setAdminTicketReply("");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not load the support conversation.");
+    } finally {
+      setAdminTicketPending(false);
     }
   };
   const runAccountAction = async (
@@ -5811,6 +5888,32 @@ function LiveAdminScreen({
           <div><strong>Channel gates</strong><span>Set the onboarding channel ID and invite link, then enable the gate only after the bot can post and verify membership there.</span></div>
         </div>
         <button className="primary-action" onClick={() => setAdminHelpOpen(false)}>Close guide</button>
+      </AccessibleDialog>}
+      {adminTicket && <AccessibleDialog className="admin-ticket-dialog" label={`Support ticket TP-${adminTicket.id}`} onClose={() => setAdminTicket(null)} dismissible={!adminTicketPending}>
+        <button className="modal-close" aria-label="Close" disabled={adminTicketPending} onClick={() => setAdminTicket(null)}><X /></button>
+        <span className="eyebrow">SUPPORT CONVERSATION</span>
+        <h2>TP-{adminTicket.id} · {adminTicket.topic || "General"}</h2>
+        <p className="mono">USER {adminTicket.user_id} · {adminTicket.status.replace("_", " ")}</p>
+        <div className="support-thread-messages" aria-label={`Messages for support ticket ${adminTicket.id}`}>
+          {(adminTicket.messages || []).map((message) => <div className={`support-message ${message.author_role}`} key={message.id}>
+            <strong>{message.author_role === "admin" ? "Admin" : "User"}</strong><p>{message.body}</p>
+          </div>)}
+        </div>
+        {adminTicket.status !== "closed" && <>
+          <label className="amount-field">Reply to user
+            <textarea value={adminTicketReply} onChange={(event) => setAdminTicketReply(event.target.value)} placeholder="Write a clear, account-safe reply." rows={4} />
+          </label>
+          <button className="primary-action" disabled={adminTicketReply.trim().length < 2 || adminTicketPending} onClick={async () => {
+            setAdminTicketPending(true);
+            try {
+              await request(`/v1/admin/tickets/${adminTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: adminTicketReply.trim() }) });
+              await openAdminTicket(adminTicket);
+              onNotice(`Reply sent on TP-${adminTicket.id}.`);
+              scheduleReconcile();
+            } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send the support reply."); }
+            finally { setAdminTicketPending(false); }
+          }}>{adminTicketPending ? "Sending…" : "Send reply"} <Send /></button>
+        </>}
       </AccessibleDialog>}
       <div className="admin-head">
         <div>
@@ -6068,6 +6171,9 @@ function LiveAdminScreen({
                   </small>
                   <small>{ticket.body}</small>
                 </div>
+                <button className="small-action" onClick={() => void openAdminTicket(ticket)} disabled={adminTicketPending}>
+                  Open conversation
+                </button>
                 {ticket.status === "open" && (
                   <button
                     className="small-action"
@@ -7042,6 +7148,7 @@ function LiveAccountScreen({
   onAvatarClick,
   onIdentityUtility,
   openNotificationsRequest = 0,
+  onOpenHelp,
 }: {
   data: LiveDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
@@ -7050,9 +7157,10 @@ function LiveAccountScreen({
   onAvatarClick?: () => void;
   onIdentityUtility?: () => void;
   openNotificationsRequest?: number;
+  onOpenHelp?: () => void;
 }) {
   const [modal, setModal] = useState<
-    "" | "code" | "notifications" | "whitelist" | "reset" | "support"
+    "" | "code" | "notifications" | "whitelist" | "reset"
   >("");
   const [code, setCode] = useState("");
   const [currentCode, setCurrentCode] = useState("");
@@ -7061,7 +7169,6 @@ function LiveAccountScreen({
   const [chain, setChain] = useState("ERC20");
   const [nickname, setNickname] = useState("");
   const [address, setAddress] = useState("");
-  const [support, setSupport] = useState("");
   const [notificationState, setNotificationState] = useState(data.notifications);
   const [securityCodeSet, setSecurityCodeSet] = useState(Boolean(data.user.security_code_set));
   const enabledNotificationCount = ["fills", "fees", "deposits", "hwm_breaks"].filter((key) => Boolean(notificationState[key])).length;
@@ -7244,7 +7351,7 @@ function LiveAccountScreen({
           </div>
           <ChevronRight />
         </button>
-        <button className="account-action" onClick={() => setModal("support")}>
+        <button className="account-action" onClick={onOpenHelp}>
           <span>
             <NavIcon name="help" />
           </span>
@@ -7271,7 +7378,7 @@ function LiveAccountScreen({
       {modal && (
         <AccessibleDialog
           className="account-modal"
-          label={{ code: securityCodeSet ? "Change security code" : "Set security code", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences", support: "Help and support" }[modal]}
+          label={{ code: securityCodeSet ? "Change security code" : "Set security code", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences" }[modal]}
           onClose={() => setModal("")}
           dismissible={!modalPending}
         >
@@ -7492,36 +7599,6 @@ function LiveAccountScreen({
                   }
                 >
                   {accountPending ? "Saving…" : "Save destination"} <ShieldCheck />
-                </button>
-              </>
-            )}
-            {modal === "support" && (
-              <>
-                <span className="eyebrow">HELP / SUPPORT</span>
-                <h2>How can we help?</h2>
-                <p>
-                  Include the transaction reference and network if your request
-                  concerns a transfer.
-                </p>
-                <textarea
-                  value={support}
-                  onChange={(event) => setSupport(event.target.value)}
-                  aria-label="Support request details"
-                  placeholder="Describe the issue"
-                />
-                <button
-                  className="primary-action"
-                  disabled={!support.trim() || accountPending}
-                  aria-busy={accountPending}
-                  onClick={() =>
-                    post(
-                      "/v1/support/tickets",
-                      { topic: "Web desk support", message: support },
-                      "Support request opened.",
-                    )
-                  }
-                >
-                  {accountPending ? "Submitting…" : "Open support request"} <Send />
                 </button>
               </>
             )}
@@ -10886,6 +10963,7 @@ function LiveTradePulse() {
               onAvatarClick={() => setAvatarPickerOpen(true)}
               onIdentityUtility={openIdentityUtility}
               openNotificationsRequest={openNotificationsRequest}
+              onOpenHelp={() => setTab("Help")}
             />
           )}
           {tab === "Synthetic" && (
