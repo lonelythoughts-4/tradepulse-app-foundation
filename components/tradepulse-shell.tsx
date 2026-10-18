@@ -9602,6 +9602,7 @@ function LiveTradePulse() {
     execution_mode?: "MANUAL" | "AUTO";
     auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>;
     settings?: Record<string, string>;
+    allocation?: { allocated_usd: number; reserved_usd: number; available_usd: number; state: string };
     demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
   } | null>(null);
   const [syntheticSignals, setSyntheticSignals] = useState<Array<{
@@ -10709,6 +10710,7 @@ function LiveTradePulse() {
                         }}>{isActionPending("topup") ? "Updating…" : "Top up Synthetic"}</button>}
                         <div className="fact-block">
                           <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
+                          {syntheticFundingSource === "wallet" && <span>Synthetic available <b>{money(Number(synthetic.allocation?.available_usd || 0))}</b></span>}
                           <span>Estimated tier fee <b>{money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}</b></span>
                           <span>Estimated spread <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                         </div>
