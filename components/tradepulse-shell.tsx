@@ -4702,7 +4702,7 @@ type LiveTradePulseAdmin = {
     user_id: number;
   }>;
   tickets: Array<{
-    id: number;
+    id: string;
     user_id: number;
     topic?: string;
     body: string;
@@ -4989,7 +4989,7 @@ function signedActivityAmount(kind: string, status: string, amount: number) {
   const description = `${kind} ${status}`.toLowerCase();
   // Engine rows are occasionally stored as an absolute realised amount. The
   // event label remains authoritative for the direction shown to the user.
-  return /\bloss\b|performance_fee/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
+  return /\bloss\b|performance_fee|identity_change_fee/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
 }
 
 function activityAmountTone(amount: number) {
@@ -5281,8 +5281,8 @@ function LiveHelpScreen({
   const [recoveryCases, setRecoveryCases] = useState(data.recovery_cases || []);
   const fieldId = useId();
   const [supportMessage, setSupportMessage] = useState("");
-  const [tickets, setTickets] = useState<Array<{ id: number; topic?: string; body: string; status: string; message_count?: number }>>([]);
-  const [activeTicket, setActiveTicket] = useState<{ id: number; topic?: string; status: string } | null>(null);
+  const [tickets, setTickets] = useState<Array<{ id: string; topic?: string; body: string; status: string; message_count?: number }>>([]);
+  const [activeTicket, setActiveTicket] = useState<{ id: string; topic?: string; status: string } | null>(null);
   const [ticketMessages, setTicketMessages] = useState<Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }>>([]);
   const [ticketReply, setTicketReply] = useState("");
   const [ticketPending, setTicketPending] = useState(false);
@@ -5290,7 +5290,7 @@ function LiveHelpScreen({
     const response = await request("/v1/support/tickets");
     setTickets(Array.isArray(response.tickets) ? response.tickets : []);
   };
-  const openTicket = async (ticket: { id: number; topic?: string; status: string }, managePending = true, resetReply = true, quiet = false) => {
+  const openTicket = async (ticket: { id: string; topic?: string; status: string }, managePending = true, resetReply = true, quiet = false) => {
     if (managePending) setTicketPending(true);
     try {
       const response = await request(`/v1/support/tickets/${ticket.id}`);
