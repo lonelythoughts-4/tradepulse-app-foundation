@@ -11028,17 +11028,17 @@ function LiveTradePulse() {
                         }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Updating…" : "Top up Synthetic"}</button>}
                         <div className="fact-block">
                           <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
-                          {syntheticFundingSource === "wallet" && <span>Synthetic available <b>{money(Number(synthetic.allocation?.available_usd || 0))}</b></span>}
+                          {syntheticFundingSource === "wallet" && <span>Available in Synthetic <b>{money(Number(synthetic.allocation?.available_usd || 0))}</b></span>}
                           <span>Estimated tier fee <b>{money((Number(syntheticAmount) || 0) * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000)}</b></span>
                           <span>Estimated spread <b>{estimatedSyntheticSpread === null ? "Unavailable" : money(estimatedSyntheticSpread)}</b></span>
                         </div>
                         <div className="button-row" role="group" aria-label="Execution mode">
-                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("execution:manual") ? "Saving…" : "Manual"}</button>
-                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={executionModePending || syntheticReviewSubmitting.current} onClick={() => openSyntheticReview("auto")}>{isActionPending("execution:auto") ? "Saving…" : "Auto"}</button>
+                          <button className={synthetic.execution_mode === "MANUAL" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "MANUAL"} disabled={executionModePending} onClick={() => act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" })}>{isActionPending("execution:manual") ? "Saving…" : "Manual review"}</button>
+                          <button className={synthetic.execution_mode === "AUTO" ? "small-action active" : "small-action"} aria-pressed={synthetic.execution_mode === "AUTO"} disabled={executionModePending || syntheticReviewSubmitting.current} onClick={() => openSyntheticReview("auto")}>{isActionPending("execution:auto") ? "Saving…" : "Automatic"}</button>
                         </div>
                         <p>{synthetic.execution_mode === "AUTO"
-                          ? "Auto enabled across synthetic markets. Manual orders and signal approvals remain separate orders."
-                          : "Manual mode. Review and confirm each order; existing positions stay open."}</p>
+                          ? "Automatic uses the confirmed margin when an eligible signal passes."
+                          : "Manual review is required before each order."}</p>
                         {synthetic.execution_mode === "AUTO" && syntheticFundingSource !== "wallet" && <p role="status">Auto remains wallet-funded. The selected virtual source applies only to manually reviewed orders.</p>}
                         {synthetic.execution_mode === "AUTO" && <div className="activity-row" role="status" aria-live="polite">
                           <div className="activity-info">
