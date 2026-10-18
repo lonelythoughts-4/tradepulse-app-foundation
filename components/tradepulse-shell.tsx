@@ -4636,6 +4636,8 @@ type LiveDashboard = {
     min_entry_usd?: number;
     max_entry_usd?: number;
     max_return_multiplier?: number;
+    multiplier_step?: number;
+    progressive_multiplier?: boolean;
     bands?: Array<{ up_to_usd: number | null; table: Array<{ multiplier: number; probability: number }> }>;
     payout_tables?: Record<string, Array<{ multiplier: number; probability: number }>>;
   };
@@ -7503,6 +7505,17 @@ function LiveBotsScreen({
     const band = flashbackRules?.bands?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd));
     return band?.table || flashbackRules?.payout_tables?.[String(amount)] || [];
   };
+  const flashbackTableSummary = (table: Array<{ multiplier: number; probability: number }>) => {
+    const probability = (lower: number, upper: number) => table.reduce((total, row) => total + (Number(row.multiplier) >= lower && Number(row.multiplier) <= upper ? Number(row.probability) : 0), 0);
+    return [
+      ["CRASH", `${(probability(0, 0) * 100).toFixed(1)}%`],
+      ["LADDER", "1.01×–3.00× / 0.01× steps"],
+      ["1.01×–1.20×", `${(probability(1.01, 1.20) * 100).toFixed(1)}%`],
+      ["1.21×–1.50×", `${(probability(1.21, 1.50) * 100).toFixed(1)}%`],
+      ["1.51×–2.00×", `${(probability(1.51, 2) * 100).toFixed(1)}%`],
+      ["2.01×–3.00×", `${(probability(2.01, 3) * 100).toFixed(1)}%`],
+    ] as const;
+  };
   const sealedReturn = flashback?.product_version === "sealed-return-v2";
   useEffect(() => {
     const clientNow = Date.now();
@@ -7833,7 +7846,7 @@ function LiveBotsScreen({
               <div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Flashback entry amount" /></div>
             </label>
             <div className="fact-block">
-              {flashbackReturnTable(flashbackAmount).map((row) => <span key={`${row.multiplier}-${row.probability}`}><b>{Number(row.multiplier).toFixed(2)}× RETURN</b><b>{Math.round(Number(row.probability) * 100)}%</b></span>)}
+              {flashbackTableSummary(flashbackReturnTable(flashbackAmount)).map(([label, value]) => <span key={label}><b>{label}</b><b>{value}</b></span>)}
             </div>
           </GradientPanel>
           <div className="detail-stats">
@@ -7860,7 +7873,7 @@ function LiveBotsScreen({
             {sealedReturn ? <div className="fact-block">
               <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               <span>MAX RETURN <b>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</b></span>
-              {(flashback.payout_table || []).map((row) => <span key={`${row.multiplier}-${row.probability}`}><b>{Number(row.multiplier).toFixed(2)}× RETURN</b><b>{Math.round(Number(row.probability) * 100)}%</b></span>)}
+              {flashbackTableSummary(flashback.payout_table || []).map(([label, value]) => <span key={label}><b>{label}</b><b>{value}</b></span>)}
             </div> : <div className="fact-block"><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span><span>STATUS <b>HISTORICAL TERMS</b></span></div>}
           </GradientPanel>
         </>}
