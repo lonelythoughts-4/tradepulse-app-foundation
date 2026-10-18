@@ -6694,7 +6694,7 @@ function LiveDeskScreen({
             <div><strong>Desk Analyst</strong><small>{analystReady ? "Your account context" : "Connection pending"}</small></div>
           </div>
           <div className="analyst-copy">
-            {analystMessages.length ? <div className="analyst-thread">{analystMessages.map((message, index) => <p key={`${message.role}-${index}`} className={`analyst-message analyst-message-${message.role}`}>{message.text}</p>)}</div> : analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask about your activity, wins and losses, saved controls, listed markets, current reference data, or an issue that needs admin support."}</p>}
+            {analystMessages.length ? <div className="analyst-thread">{analystMessages.map((message, index) => <p key={`${message.role}-${index}`} className={`analyst-message analyst-message-${message.role}`}>{message.text}</p>)}</div> : analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask anything about your strategy, allocations, what to add or remove, activity, market scenarios, or your account. It will explain its reasoning; you always choose and confirm any action."}</p>}
             {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
             <label className="analyst-question">
               <span>Ask the analyst</span>
@@ -6709,7 +6709,7 @@ function LiveDeskScreen({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") void generateAnalystBriefing();
                 }}
-                placeholder="Ask about your activity, strategy, or type ‘escalate’ for admin support"
+                placeholder="What could I add to my strategy, and why?"
               />
             </label>
             <div className="analyst-actions"><button className="small-action analyst-action" disabled={!analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Checking context…" : analystQuestion.trim() ? "Send message" : analystBriefing ? "Refresh overview" : "Start conversation"}<StateIcon name="refresh" /></button><button className="small-action analyst-escalate" disabled={analystLoading || analystQuestion.trim().length < 10} onClick={() => void escalateAnalystIssue()}>Escalate to admin</button></div>
