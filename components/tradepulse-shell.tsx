@@ -5551,7 +5551,10 @@ function LiveHelpScreen({
               <span className="eyebrow">SUPPORT THREAD</span>
               <h2>TP-{activeTicket.id} · {activeTicket.topic || "General"}</h2>
             </div>
-            <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status.replace("_", " ")}</span>
+            <div className="button-row">
+              <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status.replace("_", " ")}</span>
+              <button type="button" className="small-action" onClick={() => setActiveTicket(null)}>Close conversation</button>
+            </div>
           </div>
           <div className="support-thread-messages" aria-label={`Messages for support ticket ${activeTicket.id}`}>
             {ticketMessages.map((message) => (
