@@ -9146,7 +9146,11 @@ function LiveWalletScreen({
               </div>
               <button
                 className="primary-action"
+                disabled={depositPending}
+                aria-busy={depositPending}
                 onClick={async () => {
+                  if (depositPending) return;
+                  setDepositPending(true);
                   try {
                     const result = await request(
                       `/v1/deposits/${intent.id}/watch`,
@@ -9172,10 +9176,12 @@ function LiveWalletScreen({
                         ? error.message
                         : "Could not start deposit monitoring.",
                     );
+                  } finally {
+                    setDepositPending(false);
                   }
                 }}
               >
-                I made this deposit <ChevronRight />
+                {depositPending ? "Checking deposit…" : "I made this deposit"} <ChevronRight />
               </button>
               <div className="timeline">
                 <span className="eyebrow">DEPOSIT STATUS</span>
