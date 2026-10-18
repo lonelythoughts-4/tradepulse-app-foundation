@@ -10374,11 +10374,22 @@ function LiveTradePulse() {
     setSyntheticReviewPending(true);
     setSyntheticReviewError("");
     try {
-      if (await act(syntheticReview.path, syntheticReview.payload, setSyntheticReviewError)) {
+      let failedMessage = "";
+      const submitted = await act(syntheticReview.path, syntheticReview.payload, (message) => {
+        failedMessage = message;
+        setSyntheticReviewError(message);
+      });
+      if (submitted) {
         if (syntheticReview.signalId) {
           setSignalResults((current) => ({ ...current, [syntheticReview.signalId!]: "Submitted" }));
         }
         setSyntheticReview(null);
+      } else if (syntheticReview.signalId && /signal.*(?:expired|no longer)/i.test(failedMessage)) {
+        // Signals intentionally cannot execute at a stale price. Do not keep
+        // the person inside a failed confirmation after the feed moved on.
+        setSyntheticReview(null);
+        setSyntheticReloadRevision((value) => value + 1);
+        setNotice("That signal is no longer current. A fresh signal will appear when available.");
       }
     } finally {
       syntheticReviewSubmitting.current = false;
