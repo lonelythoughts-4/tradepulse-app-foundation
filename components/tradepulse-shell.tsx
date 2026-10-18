@@ -5546,14 +5546,14 @@ function LiveHelpScreen({
       </GradientPanel>
       {activeTicket && (
         <GradientPanel className="flow-card support-thread" aria-live="polite">
-          <div className="section-heading">
-            <div>
+          <div className="section-heading support-thread-heading">
+            <div className="support-thread-title">
               <span className="eyebrow">SUPPORT THREAD</span>
               <h2>TP-{activeTicket.id} · {activeTicket.topic || "General"}</h2>
             </div>
-            <div className="button-row">
-              <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status.replace("_", " ")}</span>
-              <button type="button" className="small-action" onClick={() => setActiveTicket(null)}>Close conversation</button>
+            <div className="support-thread-meta">
+              <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status === "closed" ? "Closed" : "Open"}</span>
+              <button type="button" className="small-action" onClick={() => setActiveTicket(null)}>Hide thread</button>
             </div>
           </div>
           <div className="support-thread-messages" aria-label={`Messages for support ticket ${activeTicket.id}`}>
