@@ -9877,7 +9877,6 @@ function LiveTradePulse() {
   const [recoveryDestination, setRecoveryDestination] = useState("");
   const [syntheticAmount, setSyntheticAmount] = useState("20");
   const [syntheticAutoAmount, setSyntheticAutoAmount] = useState("20");
-  const [syntheticTopUpAmount, setSyntheticTopUpAmount] = useState("20");
   const [syntheticAutoAllocation, setSyntheticAutoAllocation] = useState("");
   const [syntheticReview, setSyntheticReview] = useState<{
     kind: "long" | "short" | "auto" | "approve";
@@ -11106,15 +11105,10 @@ function LiveTradePulse() {
                           {synthetic.demo?.active && <button className={syntheticFundingSource === "demo" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "demo"} onClick={() => setSyntheticFundingSource("demo")}>Demo pool · {money(synthetic.demo.available_usd)}</button>}
                           {Number(synthetic.demo?.credit_available_usd || 0) > 0 && <button className={syntheticFundingSource === "credit" ? "small-action active" : "small-action"} type="button" aria-pressed={syntheticFundingSource === "credit"} onClick={() => setSyntheticFundingSource("credit")}>Trading credit · {money(Number(synthetic.demo?.credit_available_usd || 0))}</button>}
                         </div>}
-                        {data.bots.find((bot) => bot.product === "synthetic") && <div className="synthetic-allocation-control">
-                          <label className="amount-field">Move unassigned wallet funds into Synthetic
-                            <input value={syntheticTopUpAmount} onChange={(event) => setSyntheticTopUpAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Amount to move from unassigned wallet funds into Synthetic" />
-                          </label>
-                          <button className="small-action" disabled={Number(syntheticTopUpAmount) < 20 || isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`)} onClick={() => {
+                        {data.bots.find((bot) => bot.product === "synthetic") && <button className="small-action" disabled={Number(syntheticAmount) < 20 || isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`)} onClick={() => {
                             const bot = data.bots.find((item) => item.product === "synthetic");
-                            if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticTopUpAmount) });
-                          }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Moving…" : "Move funds"}</button>
-                        </div>}
+                            if (bot) void act(`/v1/bots/${bot.id}/actions`, { action: "topup", amount: Number(syntheticAmount) });
+                          }}>{isActionPending(`bot:${data.bots.find((item) => item.product === "synthetic")?.id}:topup`) ? "Updating…" : "Top up Synthetic"}</button>}
                         <div className="fact-block">
                           <span>{syntheticFundingSource === "demo" ? "Demo margin · 1:1" : syntheticFundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(syntheticAmount) || 0)}</b></span>
                           {syntheticFundingSource === "wallet" && <span>Manual capacity <b>{money(Number(synthetic.allocation?.manual_available_usd || synthetic.allocation?.available_usd || 0))}</b></span>}
