@@ -7752,7 +7752,7 @@ function LiveBotsScreen({
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
   const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
     source: "wallet" | "demo" | "credit";
@@ -8412,7 +8412,9 @@ function LiveBotsScreen({
                   return <div className="activity-row" key={position.id}>
                     <div className="activity-info">
                       <strong title={identity.title}>{identity.chainLabel && <PaymentMark asset={identity.chainLabel} compact />} {identity.label} · {position.direction.toUpperCase()} · {entryType} · {position.status}</strong>
-                      <small>{entryType === "automatic" ? "Strategy entry" : "Manual order"} · Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}</small>
+                      {position.status === "open"
+                        ? <small>{entryType === "automatic" ? "Auto-managed" : "Manual order"} · Margin {money(position.margin_usd)} · Entry {formatMarketPrice(position.entry_price)}{entryType === "automatic" && position.stop_loss_price && position.take_profit_price ? ` · Stop ${formatMarketPrice(position.stop_loss_price)} · Target ${formatMarketPrice(position.take_profit_price)}` : ""}</small>
+                        : <small>{entryType === "automatic" ? "Auto exit" : "Manual exit"} · Margin {money(position.margin_usd)} · P&amp;L <b className={Number(position.realized_pnl || 0) >= 0 ? "up" : "down"}>{Number(position.realized_pnl || 0) >= 0 ? "+" : ""}{money(Number(position.realized_pnl || 0))}</b>{position.close_reason ? ` · ${String(position.close_reason).replaceAll("_", " ")}` : ""}</small>}
                     </div>
                     {position.status === "open" && <button className="small-action" disabled={isActionPending(`memecoin-position:${position.id}:close`)} aria-busy={isActionPending(`memecoin-position:${position.id}:close`)} title={`Close this ${identity.label} position at the next executable market price`} aria-label={`Close ${identity.label} ${position.direction} position`} onClick={() => void run(`/v1/memecoin/positions/${position.id}/close`, {})}>{isActionPending(`memecoin-position:${position.id}:close`) ? "Closing…" : "Close position"} <X /></button>}
                   </div>;
