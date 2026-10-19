@@ -8256,10 +8256,22 @@ function LiveBotsScreen({
           {flashbackType === "direction" && <>
             <GradientPanel className="compound-panel">
               <h2>Flashback Direction</h2>
-              <p>Choose a public-market direction. A correct call receives the published total return; an incorrect call loses the entry. An exact tie returns the full entry.</p>
-              <div className="segment-control" role="radiogroup" aria-label="Flashback Direction market">{directionMarkets.map((item) => <button type="button" role="radio" aria-checked={flashbackDirectionMarket === item.symbol} key={item.symbol} className={flashbackDirectionMarket === item.symbol ? "active" : ""} onClick={() => setFlashbackDirectionMarket(item.symbol)}>{item.symbol}/USD</button>)}</div>
-              <div className="segment-control" role="radiogroup" aria-label="Flashback Direction choice"><button type="button" role="radio" aria-checked={flashbackDirectionChoice === "up"} className={flashbackDirectionChoice === "up" ? "active" : ""} onClick={() => setFlashbackDirectionChoice("up")}>Up</button><button type="button" role="radio" aria-checked={flashbackDirectionChoice === "down"} className={flashbackDirectionChoice === "down" ? "active" : ""} onClick={() => setFlashbackDirectionChoice("down")}>Down</button></div>
-              <label className="amount-field">ENTRY AMOUNT (USD)<div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Flashback Direction entry amount" /></div></label>
+              <p>Make one five-minute price call. First choose a market, then whether you expect its USD reference price to finish higher or lower.</p>
+              <div className="flashback-direction-steps">
+                <section className="flashback-direction-step" aria-labelledby="direction-market-step">
+                  <div><span>1</span><h3 id="direction-market-step">Choose a market</h3></div>
+                  <div className="segment-control" role="radiogroup" aria-label="Flashback Direction market">{directionMarkets.map((item) => <button type="button" role="radio" aria-checked={flashbackDirectionMarket === item.symbol} key={item.symbol} className={flashbackDirectionMarket === item.symbol ? "active" : ""} onClick={() => setFlashbackDirectionMarket(item.symbol)}>{item.symbol}/USD</button>)}</div>
+                </section>
+                <section className="flashback-direction-step" aria-labelledby="direction-call-step">
+                  <div><span>2</span><h3 id="direction-call-step">Make your call</h3></div>
+                  <p>At the five-minute expiry, will {flashbackDirectionMarket || "the selected market"}/USD be higher or lower than its entry price?</p>
+                  <div className="segment-control direction-call-control" role="radiogroup" aria-label="Flashback Direction choice"><button type="button" role="radio" aria-checked={flashbackDirectionChoice === "up"} className={flashbackDirectionChoice === "up" ? "active" : ""} onClick={() => setFlashbackDirectionChoice("up")}><b>Higher</b><small>Price finishes above entry</small></button><button type="button" role="radio" aria-checked={flashbackDirectionChoice === "down"} className={flashbackDirectionChoice === "down" ? "active" : ""} onClick={() => setFlashbackDirectionChoice("down")}><b>Lower</b><small>Price finishes below entry</small></button></div>
+                </section>
+                <section className="flashback-direction-step" aria-labelledby="direction-entry-step">
+                  <div><span>3</span><h3 id="direction-entry-step">Set your entry</h3></div>
+                  <label className="amount-field">ENTRY AMOUNT (USD)<div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Flashback Direction entry amount" /></div></label>
+                </section>
+              </div>
               <div className="fact-block"><span>WINDOW <b>{Math.round(Number(flashbackDirection?.duration_seconds || 300) / 60)} MINUTES</b></span><span>CORRECT RETURN <b>{directionMultiplier(flashbackAmount).toFixed(2)}×</b></span><span>SETTLEMENT <b>KRAKEN USD MIDPOINT</b></span><span>TIE <b>FULL ENTRY RETURNED</b></span></div>
             </GradientPanel>
             <GradientPanel className="compound-panel"><p>Your market and direction are fixed at confirmation. The entry cannot be changed or ended early. There is no performance fee.</p><button className="primary-action" disabled={!flashbackDirectionChoice || !flashbackDirectionMarket || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>Review Flashback Direction <ChevronRight /></button><button className="ghost-action" onClick={() => setFlashbackType(null)}>Choose another type</button></GradientPanel>
