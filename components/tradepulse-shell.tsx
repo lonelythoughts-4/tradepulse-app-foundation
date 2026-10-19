@@ -4586,7 +4586,7 @@ type LiveDashboard = {
     created_at: number;
     trade_detail?: VisualDeskModel["ledger"][number]["trade_detail"];
   }>;
-  engine: Array<{ net_realized: number; status: string; created_at: number }>;
+  engine: Array<{ bot_id?: number; event_key?: string; net_realized: number; status: string; created_at: number }>;
   alerts: Array<{
     id: number;
     asset: string;
@@ -4633,11 +4633,13 @@ type LiveDashboard = {
     health?: { status?: string; assets?: number; latest_tick_at?: number | null };
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
     market_labels?: Record<string, string>;
+    recent_settlements?: Array<{ id?: string; bot_id?: number; symbol?: string; direction?: string; realized_pnl?: number; close_reason?: string; closed_at?: number }>;
   };
   synthetic?: {
     execution_mode?: "MANUAL" | "AUTO";
     open_positions?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; entry_price?: number; stop_price?: number; take_price?: number }>;
     realized_pnl_usd?: number;
+    recent_settlements?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; user_net_pnl_usd?: number; realized_pnl_usd?: number; close_reason?: string; closed_at?: number }>;
   };
   flashback_rules?: {
     version?: string;
@@ -8857,11 +8859,28 @@ function LiveBotsScreen({
               ? data.synthetic?.open_positions?.find((position) => position.mode === "auto")
               : undefined;
             const realizedSynthetic = Number(data.synthetic?.realized_pnl_usd || 0);
-            const realizedSyntheticLabel = realizedSynthetic === 0
-              ? "NO SETTLED P&L"
-              : `REALIZED ${realizedSynthetic > 0 ? "+" : "−"}${money(Math.abs(realizedSynthetic))}`;
+            const latestSyntheticSettlement = isSynthetic ? data.synthetic?.recent_settlements?.[0] : undefined;
+            const latestMemecoinSettlement = !isSynthetic
+              ? data.memecoin?.recent_settlements?.find((position) => Number(position.bot_id) === Number(bot.id))
+              : undefined;
+            const latestMemecoinEngine = latestMemecoinSettlement
+              ? data.engine.find((run) => run.event_key === `memecoin-close:${latestMemecoinSettlement.id}`)
+              : undefined;
+            const latestSettlement = latestSyntheticSettlement || latestMemecoinSettlement;
+            const latestSettlementPnl = latestSyntheticSettlement
+              ? Number(latestSyntheticSettlement.user_net_pnl_usd ?? latestSyntheticSettlement.realized_pnl_usd ?? 0)
+              : Number(latestMemecoinEngine?.net_realized ?? latestMemecoinSettlement?.realized_pnl ?? 0);
+            const settledPnl = isSynthetic
+              ? realizedSynthetic
+              : data.engine.filter((run) => Number(run.bot_id) === Number(bot.id)).reduce((total, run) => total + Number(run.net_realized || 0), 0);
+            const hasSettledPnl = isSynthetic
+              ? Boolean(latestSyntheticSettlement)
+              : data.engine.some((run) => Number(run.bot_id) === Number(bot.id));
+            const settlementMarket = latestSyntheticSettlement?.market || latestMemecoinSettlement?.symbol;
+            const settlementDirection = latestSyntheticSettlement?.direction || latestMemecoinSettlement?.direction;
+            const settlementReason = latestSyntheticSettlement?.close_reason || latestMemecoinSettlement?.close_reason;
             return (
-            <GradientPanel className="fleet-bot-card reveal-card" key={bot.id}>
+            <GradientPanel className={`fleet-bot-card reveal-card ${isSynthetic ? "fleet-synthetic-card" : "fleet-memecoin-card"}`} key={bot.id}>
               <div className="fleet-bot-head">
                 <div>
                   <div className="bot-title">
@@ -8883,15 +8902,22 @@ function LiveBotsScreen({
                   <strong>{isSynthetic ? `Auto ${syntheticExecution === "AUTO" ? "on" : "off"}` : bot.demo_credit_only ? "Manual only" : sharedDemo ? "Shared across products" : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
-                  <span>{isSynthetic ? "AUTO POSITION" : "STATUS"}</span>
+                  <span>{isSynthetic ? "ACTIVE AUTO ORDER" : "LATEST SETTLEMENT"}</span>
                   <strong className={isSynthetic ? (autoPosition ? "up" : "down") : statusTone === "running" ? "up" : "down"}>
-                    {isSynthetic ? autoPosition ? `${autoPosition.market} · ${money(Number(autoPosition.margin_usd || 0))}` : "No Auto position" : status}
+                    {isSynthetic ? autoPosition ? `${autoPosition.market} · ${String(autoPosition.direction || "").toUpperCase()} · ${money(Number(autoPosition.margin_usd || 0))}` : "No Auto order open" : latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions"}
                   </strong>
+                </div>
+                <div>
+                  <span>{isSynthetic ? "LATEST SETTLEMENT" : "ALL SETTLED P&L"}</span>
+                  <strong className={latestSettlement ? (latestSettlementPnl >= 0 ? "up" : "down") : hasSettledPnl && settledPnl < 0 ? "down" : "up"}>
+                    {isSynthetic ? latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions" : hasSettledPnl ? `${settledPnl >= 0 ? "+" : "−"}${money(Math.abs(settledPnl))}` : "No settled positions"}
+                  </strong>
+                  {latestSettlement && <small>{activityExitLabel(settlementReason)}</small>}
                 </div>
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
-                  {isSynthetic ? realizedSyntheticLabel : bot.demo_credit_only ? "MANUAL ONLY" : sharedDemo ? "SHARED VIRTUAL DEMO" : `COMPOUND ${bot.compound_percent}%`}
+                  {isSynthetic ? hasSettledPnl ? `${settledPnl >= 0 ? "ALL SETTLED P&L +" : "ALL SETTLED P&L −"}${money(Math.abs(settledPnl))}` : "NO SETTLED POSITIONS" : bot.demo_credit_only ? "MANUAL ONLY" : sharedDemo ? "SHARED VIRTUAL DEMO" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
                 <button
                   className="small-action"
