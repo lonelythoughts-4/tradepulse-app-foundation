@@ -4650,6 +4650,12 @@ type LiveDashboard = {
     bands?: Array<{ up_to_usd: number | null; table: Array<{ multiplier: number; probability: number }> }>;
     payout_tables?: Record<string, Array<{ multiplier: number; probability: number }>>;
   };
+  flashback_direction?: {
+    version?: number;
+    duration_seconds?: number;
+    markets?: Array<{ symbol: string; pair?: string }>;
+    schedule?: Array<{ up_to_usd: number | null; multiplier: number }>;
+  };
   flashback?: {
     id?: string;
     allocation_usd?: number;
@@ -4663,14 +4669,15 @@ type LiveDashboard = {
     revealed_at?: number;
     settled_at?: number;
     product_version?: string;
-    payout_table?: Array<{ multiplier: number; probability: number }>;
+    payout_table?: Array<{ multiplier: number; probability: number }> | Record<string, unknown>;
     payout_multiplier?: number;
     return_usd?: number;
     entropy_hash?: string;
     result_ready?: boolean;
     market?: string;
-    direction?: "long" | "short" | "sealed_return";
+    direction?: "long" | "short" | "sealed_return" | "up" | "down";
     entry_price?: number;
+    entry_source?: string;
     exit_price?: number;
     exit_source?: string;
     realized_pnl?: number;
@@ -5632,6 +5639,8 @@ function LiveAdminScreen({
     Array<{ chain: string; asset: string; address: string }>
   >([]);
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
+  const [flashbackDirectionConfig, setFlashbackDirectionConfig] = useState("");
+  const [flashbackDirectionHistory, setFlashbackDirectionHistory] = useState<Array<{ id: string; market: string; direction: string; state: string; allocation_usd: number; return_usd?: number; user_net_usd?: number; close_reason?: string; settled_at?: number }>>([]);
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
   const [memecoinMetrics, setMemecoinMetrics] = useState<Record<string, number | boolean>>({});
   const [pendingAdminActions, setPendingAdminActions] = useState<Record<string, boolean>>({});
@@ -5744,6 +5753,15 @@ function LiveAdminScreen({
         setMemecoinConfig({});
         setMemecoinMetrics({});
       });
+    request("/v1/admin/flashback-direction-config")
+      .then((response) => {
+        setFlashbackDirectionConfig(JSON.stringify(response.config || {}, null, 2));
+        setFlashbackDirectionHistory(Array.isArray(response.sessions) ? response.sessions : []);
+      })
+      .catch(() => {
+        setFlashbackDirectionConfig("");
+        setFlashbackDirectionHistory([]);
+      });
   }, [environment]);
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
@@ -5817,6 +5835,28 @@ function LiveAdminScreen({
       onNotice("Synthetic configuration saved and audit logged.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not save synthetic configuration.");
+    } finally {
+      setPendingAdminActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
+    }
+  };
+  const saveFlashbackDirectionConfig = async () => {
+    const actionKey = "flashback-direction:config";
+    if (isAdminActionPending(actionKey)) return;
+    setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
+    try {
+      const response = await request("/v1/admin/flashback-direction-config", {
+        method: "PUT",
+        body: flashbackDirectionConfig,
+      });
+      setFlashbackDirectionConfig(JSON.stringify(response.config || {}, null, 2));
+      setFlashbackDirectionHistory(Array.isArray(response.sessions) ? response.sessions : []);
+      onNotice("Direction catalog saved. Existing contracts keep their recorded terms.");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not save the Direction catalog.");
     } finally {
       setPendingAdminActions((current) => {
         const next = { ...current };
@@ -6491,12 +6531,13 @@ function LiveAdminScreen({
             <option value="onboarding_channel_id">Onboarding channel ID</option>
             <option value="onboarding_channel_url">Onboarding channel link</option>
             <option value="popup_ttl_seconds">Popup cleanup seconds</option>
+            <option value="flashback_direction_config">Flashback Direction catalog (JSON)</option>
           </select>
           <input
             value={settingValue}
             aria-label="New runtime setting value"
             onChange={(e) => setSettingValue(e.target.value)}
-            placeholder="New value"
+            placeholder={settingKey === "flashback_direction_config" ? '{"version":1,"markets":[{"symbol":"BTC","enabled":true}],"schedule":[...]}' : "New value"}
           />
           <button
             className="primary-action"
@@ -6519,6 +6560,28 @@ function LiveAdminScreen({
               <small className="mono">{row.value}</small>
             </div>
           ))}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">FLASHBACK DIRECTION</span>
+          <h2>Published market catalog</h2>
+          <p>Enable only the reviewed Kraken USD pairs. The stored version, market, direction, return, and reference prices are fixed on each new contract; editing this catalog never changes an existing one.</p>
+          <label className="amount-field" htmlFor="flashback-direction-config">Catalog and schedule</label>
+          <textarea
+            id="flashback-direction-config"
+            value={flashbackDirectionConfig}
+            aria-label="Flashback Direction catalog and schedule"
+            onChange={(event) => setFlashbackDirectionConfig(event.target.value)}
+            placeholder='{"version":1,"markets":[{"symbol":"BTC","pair":"XBTUSD","enabled":true}],"schedule":[...]}'
+          />
+          <button className="primary-action" disabled={!flashbackDirectionConfig.trim() || isAdminActionPending("flashback-direction:config")} aria-busy={isAdminActionPending("flashback-direction:config")} onClick={() => void saveFlashbackDirectionConfig()}>
+            {isAdminActionPending("flashback-direction:config") ? "Saving catalog…" : "Save Direction catalog"}
+          </button>
+          <div className="section-heading"><h3>Settlement audit</h3><span>{flashbackDirectionHistory.length} latest</span></div>
+          {flashbackDirectionHistory.length ? flashbackDirectionHistory.slice(0, 8).map((session) => (
+            <div className="admin-row" key={session.id}>
+              <div><strong>{session.market}/USD · {String(session.direction || "").toUpperCase()} · {session.state}</strong><small className="mono">{money(Number(session.allocation_usd || 0))} ENTRY / {money(Number(session.return_usd || 0))} RETURNED / {money(Number(session.user_net_usd || 0))} NET / {session.close_reason || "PENDING"}</small></div>
+            </div>
+          )) : <p className="mono">NO DIRECTION CONTRACTS HAVE SETTLED OR OPENED.</p>}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">BROADCAST COMPOSER</span>
@@ -7741,6 +7804,9 @@ function LiveBotsScreen({
   const [flashbackAmount, setFlashbackAmount] = useState(20);
   const [flashbackReview, setFlashbackReview] = useState(false);
   const [flashbackNewSession, setFlashbackNewSession] = useState(false);
+  const [flashbackType, setFlashbackType] = useState<"sealed" | "direction" | null>(null);
+  const [flashbackDirectionMarket, setFlashbackDirectionMarket] = useState("");
+  const [flashbackDirectionChoice, setFlashbackDirectionChoice] = useState<"up" | "down" | null>(null);
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
   const [flashbackClockOffset, setFlashbackClockOffset] = useState(0);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
@@ -7787,6 +7853,10 @@ function LiveBotsScreen({
   const flashback = data.flashback || null;
   const flashbackAvailable = String(data.environment || "").toLowerCase() === "mainnet";
   const flashbackRules = data.flashback_rules;
+  const flashbackDirection = data.flashback_direction;
+  const directionMarkets = flashbackDirection?.markets || [];
+  const directionContract = flashback?.product_version === "market-direction-v1";
+  const directionMultiplier = (amount: number) => Number(flashbackDirection?.schedule?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd))?.multiplier || 0);
   const flashbackReturnTable = (amount: number) => {
     const band = flashbackRules?.bands?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd));
     return band?.table || flashbackRules?.payout_tables?.[String(amount)] || [];
@@ -7986,6 +8056,7 @@ function LiveBotsScreen({
     if (position) return `memecoin-position:${position[1]}:close`;
     if (path === "/v1/memecoin/orders") return `memecoin-order:${String(payload.bot_id || "new")}`;
     if (path === "/v1/flashback/start") return "flashback:start";
+    if (path === "/v1/flashback/direction/start") return "flashback:direction:start";
     if (path === "/v1/flashback/reveal") return "flashback:reveal";
     if (path === "/v1/bots") return "bot:create";
     return path;
@@ -8078,7 +8149,7 @@ function LiveBotsScreen({
               {flashbackFleetStatus}
             </span>
           </div>
-          <span className="eyebrow">SEALED RETURN</span>
+          <span className="eyebrow">{directionContract ? "FLASHBACK DIRECTION" : "SEALED RETURN"}</span>
           <strong className="fleet-amount">
             {flashback ? money(Number(flashback.allocation_usd || 0)) : "Choose an entry"}
           </strong>
@@ -8090,7 +8161,12 @@ function LiveBotsScreen({
           <div><span>MAX RETURN</span><strong>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</strong></div>
           <div><span>STATUS</span><strong>AVAILABLE</strong></div>
         </>}
-        {flashbackFleetState === "sealed" && <>
+        {flashbackFleetState === "sealed" && directionContract && <>
+          <div><span>CALL</span><strong>{flashback?.market}/USD · {String(flashback?.direction || "").toUpperCase()}</strong></div>
+          <div><span>SETTLES IN</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></div>
+          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
+        </>}
+        {flashbackFleetState === "sealed" && !directionContract && <>
           <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
           <div><span>REVEAL WINDOW</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></div>
           <div><span>STATUS</span><strong>SEALED</strong></div>
@@ -8100,14 +8176,19 @@ function LiveBotsScreen({
           <div><span>RESULT</span><strong>READY</strong></div>
           <div><span>STATUS</span><strong>REVEAL NOW</strong></div>
         </>}
-        {flashbackFleetState === "revealed" && <>
+        {flashbackFleetState === "revealed" && directionContract && <>
+          <div><span>CALL</span><strong>{flashback?.market}/USD · {String(flashback?.direction || "").toUpperCase()}</strong></div>
+          <div><span>NET CHANGE</span><strong className={Number(flashback?.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback?.user_net_usd || 0))}</strong></div>
+          <div><span>STATUS</span><strong>SETTLED</strong></div>
+        </>}
+        {flashbackFleetState === "revealed" && !directionContract && <>
           <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
           <div><span>RETURNED</span><strong>{money(Number(flashback?.return_usd || 0))}</strong></div>
           <div><span>STATUS</span><strong>SETTLED</strong></div>
         </>}
       </div>
       <div className="fleet-bot-actions">
-        <span className="compound-chip">SEALED RETURN · SEPARATE FROM BOTS</span>
+        <span className="compound-chip">{directionContract ? "DIRECTION CONTRACT · SEPARATE FROM BOTS" : "SEALED RETURN · SEPARATE FROM BOTS"}</span>
         <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
           {flashbackFleetAction} <ChevronRight />
         </button>
@@ -8119,6 +8200,16 @@ function LiveBotsScreen({
     if (started) {
       setFlashbackReview(false);
       setFlashbackNewSession(false);
+      setFlashbackNow(Date.now());
+    }
+  };
+  const startFlashbackDirection = async () => {
+    if (!flashbackDirectionChoice || !flashbackDirectionMarket) return;
+    const started = await run("/v1/flashback/direction/start", { amount: flashbackAmount, market: flashbackDirectionMarket, direction: flashbackDirectionChoice });
+    if (started) {
+      setFlashbackReview(false);
+      setFlashbackNewSession(false);
+      setFlashbackType(null);
       setFlashbackNow(Date.now());
     }
   };
@@ -8138,34 +8229,42 @@ function LiveBotsScreen({
             <h2>Flashback</h2>
             <span className={`status-chip ${flashback?.state === "ready_to_reveal" ? "paused" : "running"}`}>
               <i />
-              {flashback?.state === "sealed" ? (sealedReturn ? "sealed return" : "earlier session") : flashback?.state === "ready_to_reveal" ? "ready to reveal" : flashback?.state === "revealed" ? "settled" : "sealed returns"}
+              {flashback?.state === "sealed" ? (directionContract ? "direction active" : sealedReturn ? "sealed return" : "earlier session") : flashback?.state === "ready_to_reveal" ? "ready to reveal" : flashback?.state === "revealed" ? "settled" : "choose a contract"}
             </span>
           </div>
         </GradientPanel>
         {(!flashback || flashbackNewSession) && <>
-          <GradientPanel className="compound-panel">
-            <h2>A sealed return</h2>
-            <p>Choose an entry within the published range. Flashback locks its published return table, then keeps the randomly determined return sealed until the reveal window closes. It does not place or simulate a market trade.</p>
-            <label className="amount-field">ENTRY AMOUNT (USD)
-              <div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Flashback entry amount" /></div>
-            </label>
-            <div className="fact-block">
-              {flashbackTableSummary(flashbackReturnTable(flashbackAmount)).map(([label, value]) => <span key={label}><b>{label}</b><b>{value}</b></span>)}
-            </div>
-          </GradientPanel>
-          <div className="detail-stats">
-            <GradientPanel><span>AMOUNT AT RISK</span><strong>{money(flashbackAmount)}</strong></GradientPanel>
-            <GradientPanel><span>REVEAL WINDOW</span><strong>{Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)}m</strong></GradientPanel>
-            <GradientPanel><span>MAX RETURN</span><strong>{money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}</strong></GradientPanel>
-          </div>
-          <GradientPanel className="compound-panel">
-            <p>The complete entry can be lost. The published table includes the entry in every return, and larger outcomes are rarer. There is no performance fee, and a sealed return cannot be ended early.</p>
-            <button className="primary-action" disabled={flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>
-              Review sealed Flashback <ChevronRight />
-            </button>
-          </GradientPanel>
+          {!flashbackType && <div className="flashback-type-grid">
+            <GradientPanel className="compound-panel"><h2>Sealed Return</h2><p>Lock a published return table. The result remains hidden until the reveal window closes; this is not a market trade.</p><button className="small-action" onClick={() => { setFlashbackType("sealed"); setReviewError(""); }}>Choose Sealed Return <ChevronRight /></button></GradientPanel>
+            <GradientPanel className="compound-panel"><h2>Flashback Direction</h2><p>Choose an enabled market and Up or Down. The result settles automatically from a public USD reference after five minutes.</p><button className="small-action" disabled={!directionMarkets.length} onClick={() => { setFlashbackType("direction"); setFlashbackDirectionMarket(directionMarkets[0]?.symbol || ""); setReviewError(""); }}>{directionMarkets.length ? "Choose Direction" : "No markets enabled"} <ChevronRight /></button></GradientPanel>
+          </div>}
+          {flashbackType === "sealed" && <>
+            <GradientPanel className="compound-panel">
+              <h2>A sealed return</h2>
+              <p>Choose an entry within the published range. Flashback locks its published return table, then keeps the randomly determined return sealed until the reveal window closes. It does not place or simulate a market trade.</p>
+              <label className="amount-field">ENTRY AMOUNT (USD)<div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Sealed Return entry amount" /></div></label>
+              <div className="fact-block">{flashbackTableSummary(flashbackReturnTable(flashbackAmount)).map(([label, value]) => <span key={label}><b>{label}</b><b>{value}</b></span>)}</div>
+            </GradientPanel>
+            <div className="detail-stats"><GradientPanel><span>AMOUNT AT RISK</span><strong>{money(flashbackAmount)}</strong></GradientPanel><GradientPanel><span>REVEAL WINDOW</span><strong>{Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)}m</strong></GradientPanel><GradientPanel><span>MAX RETURN</span><strong>{money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}</strong></GradientPanel></div>
+            <GradientPanel className="compound-panel"><p>The complete entry can be lost. The published table includes the entry in every return, and larger outcomes are rarer. There is no performance fee, and a sealed return cannot be ended early.</p><button className="primary-action" disabled={flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>Review sealed Flashback <ChevronRight /></button><button className="ghost-action" onClick={() => setFlashbackType(null)}>Choose another type</button></GradientPanel>
+          </>}
+          {flashbackType === "direction" && <>
+            <GradientPanel className="compound-panel">
+              <h2>Flashback Direction</h2>
+              <p>Choose a public-market direction. A correct call receives the published total return; an incorrect call loses the entry. An exact tie returns the full entry.</p>
+              <div className="segment-control" role="radiogroup" aria-label="Flashback Direction market">{directionMarkets.map((item) => <button type="button" role="radio" aria-checked={flashbackDirectionMarket === item.symbol} key={item.symbol} className={flashbackDirectionMarket === item.symbol ? "active" : ""} onClick={() => setFlashbackDirectionMarket(item.symbol)}>{item.symbol}/USD</button>)}</div>
+              <div className="segment-control" role="radiogroup" aria-label="Flashback Direction choice"><button type="button" role="radio" aria-checked={flashbackDirectionChoice === "up"} className={flashbackDirectionChoice === "up" ? "active" : ""} onClick={() => setFlashbackDirectionChoice("up")}>Up</button><button type="button" role="radio" aria-checked={flashbackDirectionChoice === "down"} className={flashbackDirectionChoice === "down" ? "active" : ""} onClick={() => setFlashbackDirectionChoice("down")}>Down</button></div>
+              <label className="amount-field">ENTRY AMOUNT (USD)<div className="amount-input"><span>$</span><input inputMode="decimal" value={String(flashbackAmount)} onChange={(event) => setFlashbackAmount(Number(event.target.value) || 0)} aria-label="Flashback Direction entry amount" /></div></label>
+              <div className="fact-block"><span>WINDOW <b>{Math.round(Number(flashbackDirection?.duration_seconds || 300) / 60)} MINUTES</b></span><span>CORRECT RETURN <b>{directionMultiplier(flashbackAmount).toFixed(2)}×</b></span><span>SETTLEMENT <b>KRAKEN USD MIDPOINT</b></span><span>TIE <b>FULL ENTRY RETURNED</b></span></div>
+            </GradientPanel>
+            <GradientPanel className="compound-panel"><p>Your market and direction are fixed at confirmation. The entry cannot be changed or ended early. There is no performance fee.</p><button className="primary-action" disabled={!flashbackDirectionChoice || !flashbackDirectionMarket || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>Review Flashback Direction <ChevronRight /></button><button className="ghost-action" onClick={() => setFlashbackType(null)}>Choose another type</button></GradientPanel>
+          </>}
         </>}
-        {flashback?.state === "sealed" && <>
+        {flashback?.state === "sealed" && directionContract && <>
+          <div className="detail-stats"><GradientPanel><span>MARKET / CALL</span><strong>{flashback.market}/USD · {String(flashback.direction || "").toUpperCase()}</strong></GradientPanel><GradientPanel><span>SETTLES IN</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></GradientPanel><GradientPanel><span>ENTRY</span><strong>{money(Number(flashback.allocation_usd || 0))}</strong></GradientPanel></div>
+          <GradientPanel className="compound-panel"><h2>Direction is active</h2><p>The entry reference was captured at confirmation. Settlement is automatic at expiry; this call cannot be changed or ended early.</p><div className="fact-block"><span>ENTRY PRICE <b>{Number(flashback.entry_price || 0).toFixed(8)}</b></span><span>PUBLISHED RETURN <b>{Number((flashback.payout_table as Record<string, unknown>)?.multiplier || 0).toFixed(2)}×</b></span><span>PRICE SOURCE <b>{flashback.entry_source || "KRAKEN"}</b></span></div></GradientPanel>
+        </>}
+        {flashback?.state === "sealed" && !directionContract && <>
           <div className="detail-stats">
             <GradientPanel><span>ENTRY</span><strong>{money(Number(flashback.allocation_usd || 0))}</strong></GradientPanel>
             <GradientPanel><span>REVEAL WINDOW</span><strong>{sealedReturn && flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></GradientPanel>
@@ -8177,7 +8276,7 @@ function LiveBotsScreen({
             {sealedReturn ? <div className="fact-block">
               <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               <span>MAX RETURN <b>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</b></span>
-              {flashbackTableSummary(flashback.payout_table || []).map(([label, value]) => <span key={label}><b>{label}</b><b>{value}</b></span>)}
+              {flashbackTableSummary(Array.isArray(flashback.payout_table) ? flashback.payout_table : []).map(([label, value]) => <span key={label}><b>{label}</b><b>{value}</b></span>)}
             </div> : <div className="fact-block"><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span><span>STATUS <b>HISTORICAL TERMS</b></span></div>}
           </GradientPanel>
         </>}
@@ -8190,7 +8289,10 @@ function LiveBotsScreen({
           </GradientPanel>
         </>}
         {flashback?.state === "revealed" && !flashbackNewSession && <>
-          {sealedReturn ? <>
+          {directionContract ? <>
+            <div className="detail-stats"><GradientPanel><span>MARKET / CALL</span><strong>{flashback.market}/USD · {String(flashback.direction || "").toUpperCase()}</strong></GradientPanel><GradientPanel><span>RETURNED</span><strong>{money(Number(flashback.return_usd || 0))}</strong></GradientPanel><GradientPanel><span>NET CHANGE</span><strong className={Number(flashback.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback.user_net_usd || 0))}</strong></GradientPanel></div>
+            <GradientPanel className="compound-panel flashback-reveal"><h2>Flashback Direction settled</h2><div className="fact-block"><span>ENTRY PRICE <b>{Number(flashback.entry_price || 0).toFixed(8)}</b></span><span>SETTLEMENT PRICE <b>{Number(flashback.exit_price || 0).toFixed(8)}</b></span><span>OUTCOME <b>{flashback.close_reason === "tie_refund" ? "TIE · ENTRY RETURNED" : flashback.close_reason === "reference_unavailable_refund" ? "REFERENCE UNAVAILABLE · ENTRY RETURNED" : Number(flashback.user_net_usd || 0) > 0 ? "CORRECT" : "INCORRECT"}</b></span><span>RETURN <b>{Number(flashback.payout_multiplier || 0).toFixed(2)}×</b></span><span>REFERENCE <b>{flashback.exit_source || "KRAKEN"}</b></span><span>FEE <b>$0.00</b></span></div><button className="small-action" onClick={() => { setFlashbackAmount(20); setFlashbackType(null); setFlashbackDirectionChoice(null); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button></GradientPanel>
+          </> : sealedReturn ? <>
             <div className="detail-stats">
               <GradientPanel><span>OUTCOME</span><strong>{Number(flashback.payout_multiplier || 0) === 0 ? "FULL LOSS" : `${Number(flashback.payout_multiplier || 0).toFixed(2)}×`}</strong></GradientPanel>
               <GradientPanel><span>RETURNED</span><strong>{money(Number(flashback.return_usd || 0))}</strong></GradientPanel>
@@ -8226,13 +8328,12 @@ function LiveBotsScreen({
             </GradientPanel>
           </>}
         </>}
-        {flashbackReview && <AccessibleDialog label="Review Flashback" onClose={() => setFlashbackReview(false)} dismissible={!isActionPending("flashback:start")}>
-          <h2>Start a sealed Flashback?</h2>
-          <p>TradePulse will lock {money(flashbackAmount)} for {Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)} minutes and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p>
-          <div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>RESULT <b>SEALED</b></span></div>
+        {flashbackReview && <AccessibleDialog label={flashbackType === "direction" ? "Review Flashback Direction" : "Review Flashback"} onClose={() => setFlashbackReview(false)} dismissible={!isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")}>
+          <h2>{flashbackType === "direction" ? "Confirm Flashback Direction?" : "Start a sealed Flashback?"}</h2>
+          {flashbackType === "direction" ? <><p>TradePulse will lock {money(flashbackAmount)} on {flashbackDirectionMarket}/USD · {String(flashbackDirectionChoice || "").toUpperCase()} for five minutes. A correct direction returns {money(flashbackAmount * directionMultiplier(flashbackAmount))} ({directionMultiplier(flashbackAmount).toFixed(2)}×); an incorrect direction loses the full entry. An exact tie returns the full entry. Settlement uses the Kraken USD midpoint. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>SETTLEMENT <b>AUTOMATIC</b></span></div></> : <><p>TradePulse will lock {money(flashbackAmount)} for {Math.round(Number(flashbackRules?.duration_seconds || 300) / 60)} minutes and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>RESULT <b>SEALED</b></span></div></>}
           {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
-          <button className="primary-action" disabled={isActionPending("flashback:start") || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available} aria-busy={isActionPending("flashback:start")} onClick={() => void startFlashback()}>{isActionPending("flashback:start") ? "Starting…" : "Start sealed Flashback"} <StateIcon name="check" /></button>
-          <button className="ghost-action" disabled={isActionPending("flashback:start")} onClick={() => setFlashbackReview(false)}>Go back</button>
+          <button className="primary-action" disabled={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start") || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available || (flashbackType === "direction" && (!flashbackDirectionChoice || !flashbackDirectionMarket))} aria-busy={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")} onClick={() => void (flashbackType === "direction" ? startFlashbackDirection() : startFlashback())}>{isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start") ? "Starting…" : flashbackType === "direction" ? "Confirm Flashback Direction" : "Start sealed Flashback"} <StateIcon name="check" /></button>
+          <button className="ghost-action" disabled={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")} onClick={() => setFlashbackReview(false)}>Go back</button>
         </AccessibleDialog>}
       </div>
     );
