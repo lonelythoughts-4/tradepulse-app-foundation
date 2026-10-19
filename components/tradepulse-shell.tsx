@@ -5018,6 +5018,11 @@ function activityLabel(kind: string, status = "", amount?: number) {
   if (kind === "flashback_allocation") return "Flashback entry locked";
   if (kind === "flashback_return") return "Flashback return";
   if (kind === "flashback_loss") return Number(amount || 0) === 0 ? "Flashback settled" : "Flashback loss";
+  if (kind === "flashback_direction_return") return "Flashback Direction return";
+  if (kind === "flashback_direction_loss") return "Flashback Direction loss";
+  if (kind === "flashback_direction_refund") return "Flashback Direction entry returned";
+  if (kind === "profit" || kind === "trading_profit") return "Trading settlement profit";
+  if (kind === "loss" || kind === "trading_loss") return "Trading settlement loss";
   if (/trading_(?:profit|loss)/.test(kind) || /\bprofit\b/.test(description)) return "profit";
   if (/\bloss\b/.test(description)) return "loss";
   if (isNonFinancialActivity(kind)) return "Memecoin strategy authorized";
