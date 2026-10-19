@@ -4634,6 +4634,11 @@ type LiveDashboard = {
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
     market_labels?: Record<string, string>;
   };
+  synthetic?: {
+    execution_mode?: "MANUAL" | "AUTO";
+    open_positions?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; entry_price?: number; stop_price?: number; take_price?: number }>;
+    realized_pnl_usd?: number;
+  };
   flashback_rules?: {
     version?: string;
     duration_seconds?: number;
@@ -8728,6 +8733,15 @@ function LiveBotsScreen({
               : sharedDemo
                 ? "VIRTUAL FUNDS"
                 : "ALLOCATION";
+            const isSynthetic = bot.product === "synthetic";
+            const syntheticExecution = data.synthetic?.execution_mode || "MANUAL";
+            const autoPosition = isSynthetic
+              ? data.synthetic?.open_positions?.find((position) => position.mode === "auto")
+              : undefined;
+            const realizedSynthetic = Number(data.synthetic?.realized_pnl_usd || 0);
+            const realizedSyntheticLabel = realizedSynthetic === 0
+              ? "NO SETTLED P&L"
+              : `REALIZED ${realizedSynthetic > 0 ? "+" : "−"}${money(Math.abs(realizedSynthetic))}`;
             return (
             <GradientPanel className="fleet-bot-card reveal-card" key={bot.id}>
               <div className="fleet-bot-head">
@@ -8747,19 +8761,19 @@ function LiveBotsScreen({
               </div>
               <div className="fleet-metrics">
                 <div>
-                  <span>{bot.demo_credit_only ? "EXECUTION" : sharedDemo ? "POOL" : "COMPOUND"}</span>
-                  <strong>{bot.demo_credit_only ? "Manual only" : sharedDemo ? "Shared across products" : `${bot.compound_percent}%`}</strong>
+                  <span>{isSynthetic ? "EXECUTION" : bot.demo_credit_only ? "EXECUTION" : sharedDemo ? "POOL" : "COMPOUND"}</span>
+                  <strong>{isSynthetic ? `Auto ${syntheticExecution === "AUTO" ? "on" : "off"}` : bot.demo_credit_only ? "Manual only" : sharedDemo ? "Shared across products" : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
-                  <span>STATUS</span>
-                  <strong className={statusTone === "running" ? "up" : "down"}>
-                    {status}
+                  <span>{isSynthetic ? "AUTO POSITION" : "STATUS"}</span>
+                  <strong className={isSynthetic ? (autoPosition ? "up" : "down") : statusTone === "running" ? "up" : "down"}>
+                    {isSynthetic ? autoPosition ? `${autoPosition.market} · ${money(Number(autoPosition.margin_usd || 0))}` : "No Auto position" : status}
                   </strong>
                 </div>
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
-                  {bot.demo_credit_only ? "MANUAL ONLY" : sharedDemo ? "SHARED VIRTUAL DEMO" : `COMPOUND ${bot.compound_percent}%`}
+                  {isSynthetic ? realizedSyntheticLabel : bot.demo_credit_only ? "MANUAL ONLY" : sharedDemo ? "SHARED VIRTUAL DEMO" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
                 <button
                   className="small-action"
