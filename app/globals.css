@@ -296,6 +296,44 @@ body {
 }
 
 ::selection { background: rgba(124, 140, 248, .35); color: #fff; }
+
+/* Warm-gold colour pass: preserves the established TradePulse layout and semantics. */
+:root {
+  --tp-accent: #e8b650;
+  --tp-accent-strong: #f3cb72;
+  --tp-accent-wash: rgba(232, 182, 80, .14);
+  --tp-surface: #0d1112;
+  --tp-surface-raised: #151b19;
+  --tp-ink: #f4efe3;
+  --tp-supporting-text: #aeb2a7;
+  --tp-positive: #4ea56f;
+  --tp-negative: #d6654c;
+}
+html, body { background: #090c0d; color: var(--tp-ink); }
+button:focus-visible, a:focus-visible { outline-color: var(--tp-accent-strong); }
+.app-shell { background-image: radial-gradient(ellipse at 70% -10%, rgba(232, 182, 80, .12), transparent 40%), radial-gradient(rgba(244, 239, 227, .025) 1px, transparent 1px); }
+.sidebar, .bottom-nav { background-color: #090c0d !important; border-color: rgba(244, 239, 227, .12); }
+.brand svg, .mobile-brand svg, .brand span span, .mobile-brand span span, .boot-copy span, .nav-item.active, .small-action, .back-action, .text-action, .view-all, .ghost-action { color: var(--tp-accent); }
+.nav-item:hover, .nav-item.active { background: var(--tp-accent-wash); color: var(--tp-ink); }
+.avatar, .top-avatar { background: linear-gradient(135deg, var(--tp-accent), #b87538); color: #15120c; }
+.gradient-panel, .stat-chip, .ticker, .amount-input, .flow-card, .ledger-card, .activity-card, .gas-card, .wallet-actions button { background-color: var(--tp-surface); }
+.gradient-panel { background-image: linear-gradient(var(--tp-surface), var(--tp-surface)) padding-box, linear-gradient(180deg, rgba(244, 239, 227, .13), rgba(244, 239, 227, .035)) border-box; }
+.balance, .stat-chip strong, .fleet-amount, .ledger-row strong, .activity-row strong, .fact-block b { color: var(--tp-ink); }
+.positive-chip, .status-chip, .activity-status.complete, .activity-status.verified, .up, .mint, .secure-chip, .available-line strong { color: var(--tp-positive) !important; }
+.positive-chip, .status-chip, .activity-status.complete, .activity-status.verified { background-color: rgba(78, 165, 111, .13); }
+.down, .activity-status.loss { color: var(--tp-negative) !important; }
+.live-indicator i, .status-dot, .ring-core i { background: var(--tp-positive); box-shadow: 0 0 12px var(--tp-positive); }
+.primary-action, .danger-action { border-color: rgba(243, 203, 114, .52); background: linear-gradient(180deg, var(--tp-accent-strong), var(--tp-accent)); color: #211a0d; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 5px 15px rgba(99,68,17,.22); }
+.primary-action:hover:not(:disabled), .danger-action:hover:not(:disabled) { filter: brightness(1.06); }
+.small-action:hover, .back-action:hover, .text-action:hover, .view-all:hover, .ghost-action:hover { color: var(--tp-accent-strong); }
+.notification b, .segment-control button.active, .bot-detail .compound-panel>.small-action[aria-pressed="true"] { background: var(--tp-accent); color: #211a0d; }
+.amount-input { border-bottom-color: rgba(232, 182, 80, .6); }.amount-input>span { color: var(--tp-accent); }
+.quick-amounts button, .segment-control button { color: var(--tp-accent); background: var(--tp-surface-raised); border-color: rgba(244, 239, 227, .16); }
+.wallet-actions button:hover, .choice-grid button.selected, .choice-grid button:hover, .product-card:hover, .product-card.selected { border-color: var(--tp-accent); background: #1a201b; }
+.product-icon, .demo-mark { background: linear-gradient(135deg, var(--tp-accent), #b87538); color: #17120a; }
+.warning-block, .minimum-warning { border-left-color: var(--tp-accent); background: rgba(232, 182, 80, .08); }.warning-block strong, .minimum-warning strong { color: var(--tp-accent-strong); }
+.blocking-banner { border-color: rgba(232, 182, 80, .32); background: rgba(232, 182, 80, .08); }.blocking-banner>svg, .blocking-banner button { color: var(--tp-accent); }
+::selection { background: rgba(232, 182, 80, .34); color: #fffaf0; }
 button, input, select, textarea { min-height: 0; }
 button, input, select, textarea { font: inherit; }
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
@@ -591,3 +629,6 @@ html,body{overflow-x:clip}
    controls. Keeping them adjacent makes the allocation envelope legible
    without introducing another panel or a second workflow. */
 .synthetic-allocation-control{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px;margin-top:14px}.synthetic-allocation-control .small-action{min-height:48px;padding:0 12px;white-space:nowrap}.synthetic-pilot .amount-field>.amount-input{margin-top:0}@media(max-width:520px){.synthetic-allocation-control{grid-template-columns:minmax(0,1fr)}.synthetic-allocation-control .small-action{width:100%;justify-content:center}}
+
+/* Final cascade point: shared components consume these established tokens. */
+:root { --primary: var(--tp-accent); --foreground: var(--tp-ink); --card: var(--tp-surface); --muted: var(--tp-surface-raised); --border: rgba(244, 239, 227, .14); }
