@@ -57,28 +57,28 @@ const BellOff = (props: FunctionalIconProps) => (
     className={`${props.className ?? ""} icon-off`}
   />
 );
-const ChevronRight = (props: FunctionalIconProps) => (
+export const ChevronRight = (props: FunctionalIconProps) => (
   <FunctionalIcon name="chevronRight" {...props} />
 );
 const Copy = (props: FunctionalIconProps) => (
   <FunctionalIcon name="copy" {...props} />
 );
-const Download = (props: FunctionalIconProps) => (
+export const Download = (props: FunctionalIconProps) => (
   <FunctionalIcon name="download" {...props} />
 );
 const Fuel = (props: FunctionalIconProps) => (
   <FunctionalIcon name="fuel" {...props} />
 );
-const History = (props: FunctionalIconProps) => (
+export const History = (props: FunctionalIconProps) => (
   <FunctionalIcon name="history" {...props} />
 );
 const Plus = (props: FunctionalIconProps) => (
   <FunctionalIcon name="plus" {...props} />
 );
-const Send = (props: FunctionalIconProps) => (
+export const Send = (props: FunctionalIconProps) => (
   <FunctionalIcon name="send" {...props} />
 );
-const ShieldCheck = (props: FunctionalIconProps) => (
+export const ShieldCheck = (props: FunctionalIconProps) => (
   <FunctionalIcon name="shieldCheck" {...props} />
 );
 const X = (props: FunctionalIconProps) => (
@@ -126,7 +126,7 @@ const paymentMarkNames: Record<string, PaymentMarkName> = {
   Solana: "solana",
   SPL: "solana",
 };
-function PaymentMark({ asset, compact = false }: { asset: string; compact?: boolean }) {
+export function PaymentMark({ asset, compact = false }: { asset: string; compact?: boolean }) {
   const name = paymentMarkNames[asset] || "base";
   const isAsset = asset === "USDT" || asset === "USDC";
   return (
@@ -157,7 +157,7 @@ function PaymentMark({ asset, compact = false }: { asset: string; compact?: bool
     </span>
   );
 }
-function StateIcon({
+export function StateIcon({
   name,
   size = 18,
   className = "",
@@ -175,7 +175,7 @@ function StateIcon({
     />
   );
 }
-function StateSwapIcon({
+export function StateSwapIcon({
   name,
   swapKey = name,
   size = 18,
@@ -208,7 +208,7 @@ const Settings = (props: FunctionalIconProps) => (
 const Wallet = (props: FunctionalIconProps) => (
   <NavIcon name="wallet" {...props} />
 );
-const Zap = (props: FunctionalIconProps) => <NavIcon name="desk" {...props} />;
+export const Zap = (props: FunctionalIconProps) => <NavIcon name="desk" {...props} />;
 const Coins = (props: FunctionalIconProps) => (
   <NavIcon name="earn" {...props} />
 );
@@ -301,7 +301,7 @@ function PulseMark({ size = 34 }: { size?: number }) {
   );
 }
 
-function GradientPanel({
+export function GradientPanel({
   children,
   className = "",
   onPointerDown,
@@ -1170,11 +1170,11 @@ function activityMarketLabel(symbol?: string) {
   return symbol.length > 20 ? `${symbol.slice(0, 8)}…${symbol.slice(-4)}` : symbol;
 }
 
-function isNonFinancialActivity(kind: string) {
+export function isNonFinancialActivity(kind: string) {
   return /authorization|strategy_(?:control|setting)|settings?_saved|flashback_allocation/i.test(kind);
 }
 
-function isFlashbackEntryLock(kind: string) {
+export function isFlashbackEntryLock(kind: string) {
   return kind === "flashback_allocation";
 }
 
@@ -1346,7 +1346,7 @@ function WalletCard({
     </GradientPanel>
   );
 }
-function StepRail({ current }: { current: number }) {
+export function StepRail({ current }: { current: number }) {
   return (
     <div className="step-rail">
       {["ASSET", "NETWORK", "CONFIRM"].map((step, index) => (
@@ -4523,7 +4523,7 @@ function ActivationJourney({ data, request, onComplete, onNotice }: { data: Live
   return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation 5 of 5</p><h1 id="activation-title">Confirm your access</h1><p>Review the terms and risk notice before opening your desk. {gateReady ? "Join the dedicated onboarding channel, then ask TradePulse to recheck your Telegram membership." : "Channel verification is not active, so this step will not block your access."}</p>{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">Join onboarding channel</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? "Checking Telegram…" : "I joined · recheck"}</button>{state === "not_joined" || state === "restricted" ? <small>Telegram has not confirmed an active membership yet. Join the channel, then recheck.</small> : null}{state === "unavailable" ? <small>Telegram verification is temporarily unavailable. Try again shortly or contact support.</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>Terms &amp; risk notice</strong><br />You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.</p><button className="primary-action" onClick={accept}>Accept terms and open desk</button></div>}</section></main>;
 }
 
-type LiveDashboard = {
+export type LiveDashboard = {
   user: {
     id: number;
     first_name?: string;
@@ -4998,14 +4998,14 @@ function BrowserBotHandoff() {
     </div>
   );
 }
-function money(value: number) {
+export function money(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
   }).format(Number(value || 0));
 }
 
-function signedActivityAmount(kind: string, status: string, amount: number) {
+export function signedActivityAmount(kind: string, status: string, amount: number) {
   const description = `${kind} ${status}`.toLowerCase();
   // Engine rows are occasionally stored as an absolute realised amount. The
   // event label remains authoritative for the direction shown to the user.
@@ -5016,11 +5016,11 @@ function activityAmountTone(amount: number) {
   return amount > 0 ? "up" : amount < 0 ? "down" : undefined;
 }
 
-function activityAmountDisplay(amount: number) {
+export function activityAmountDisplay(amount: number) {
   return (amount > 0 ? "+" : "") + money(amount);
 }
 
-function activityLabel(kind: string, status = "", amount?: number) {
+export function activityLabel(kind: string, status = "", amount?: number) {
   const description = `${kind} ${status}`.toLowerCase();
   if (kind === "performance_fee") return "performance fee charged";
   if (kind === "flashback_allocation") return "Flashback entry locked";
@@ -5037,7 +5037,7 @@ function activityLabel(kind: string, status = "", amount?: number) {
   return kind.replaceAll("_", " ");
 }
 
-function activityTone(kind: string, status: string, amount?: number) {
+export function activityTone(kind: string, status: string, amount?: number) {
   if (kind === "flashback_loss" && Number(amount || 0) === 0) return "complete";
   const description = `${kind} ${status}`.toLowerCase();
   if (/\bloss\b|failed|rejected/.test(description)) return "loss";
@@ -11193,30 +11193,24 @@ function LiveTradePulse() {
           )}
           {tab === "Wallet" && (
             <WalletWorkspace
-              store={deskStore}
-              poll={() => request("/v1/dashboard")}
-              render={(walletDashboard) => (
-                <LiveWalletScreen
-                  data={walletDashboard}
-                  request={request}
-                  onWalletUpdate={({ wallet, withdrawal, deposits }) =>
-                    updateDashboard((current) =>
-                      current
-                        ? {
-                            ...current,
-                            wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
-                            deposits: deposits || current.deposits,
-                            withdrawals: withdrawal
-                              ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
-                              : current.withdrawals,
-                          }
-                        : current,
-                    )
-                  }
-                  onNotice={setNotice}
-                  initialView={walletEntry}
-                />
-              )}
+              data={data}
+              request={request}
+              onWalletUpdate={({ wallet, withdrawal, deposits }) =>
+                updateDashboard((current) =>
+                  current
+                    ? {
+                        ...current,
+                        wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
+                        deposits: deposits || current.deposits,
+                        withdrawals: withdrawal
+                          ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
+                          : current.withdrawals,
+                      }
+                    : current,
+                )
+              }
+              onNotice={setNotice}
+              initialView={walletEntry}
             />
           )}
           {tab === "Desk" && (
