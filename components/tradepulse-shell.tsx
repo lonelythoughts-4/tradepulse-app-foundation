@@ -4,6 +4,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
+import { createDeskStore, useDeskSelector, type DeskStore } from "../lib/desk-store";
+import type { DeskState } from "../lib/desk-types";
+import { DashboardWorkspace } from "./workspaces/dashboard-workspace";
+import { SyntheticWorkspace } from "./workspaces/synthetic-workspace";
+import { WalletWorkspace } from "./workspaces/wallet-workspace";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -9885,7 +9890,23 @@ function deskTabFromHash(): DeskTab | null {
 
 function LiveTradePulse() {
   const reduceMotion = useReducedMotion();
-  const [data, setData] = useState<LiveDashboard | null>(null);
+  const deskStoreRef = useRef<DeskStore | null>(null);
+  if (!deskStoreRef.current) {
+    deskStoreRef.current = createDeskStore({ resources: { dashboard: null, synthetic: null } });
+  }
+  const deskStore = deskStoreRef.current;
+  const dashboardRevision = useRef(0);
+  const data = useDeskSelector(
+    deskStore,
+    (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
+  );
+  const updateDashboard = useCallback((update: LiveDashboard | null | ((current: LiveDashboard | null) => LiveDashboard | null)) => {
+    const current = deskStore.getState().resources.dashboard as LiveDashboard | null;
+    const next = typeof update === "function"
+      ? (update as (current: LiveDashboard | null) => LiveDashboard | null)(current)
+      : update;
+    deskStore.applyResource("dashboard", next, ++dashboardRevision.current);
+  }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
   const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
@@ -9921,7 +9942,7 @@ function LiveTradePulse() {
         body: JSON.stringify({ avatar_id: next, idempotency_key: `identity:${data?.user.id || "guest"}:${next}:${crypto.randomUUID()}`, expected_identity: data?.user.avatar_id || "", expected_fee_usd: data?.user.identity?.change_fee_usd || 0 }),
       });
       if (response.avatar_id !== next) throw new Error("The saved avatar did not match your selection.");
-      setData((current) => current ? { ...current, user: { ...current.user, avatar_id: next, identity: { ...(current.user.identity || {}), reveal: response.reveal || `${next}-seal` } }, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet } : current);
+      updateDashboard((current) => current ? { ...current, user: { ...current.user, avatar_id: next, identity: { ...(current.user.identity || {}), reveal: response.reveal || `${next}-seal` } }, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet } : current);
       return true;
     } catch {
       setNotice("Your identity could not be sealed. Check your available wallet balance and try again.");
@@ -10090,7 +10111,7 @@ function LiveTradePulse() {
       setSyntheticFundingSource("wallet");
     }
   }, [data?.demo?.state, data?.demo?.pool_state, data?.demo?.credit_available_usd, syntheticFundingSource]);
-  const [synthetic, setSynthetic] = useState<{
+  type SyntheticSnapshot = {
     market: string;
     latest: { price?: number; reference?: number; bid?: number; ask?: number };
     ticks: Array<{ price?: number; reference?: number; timestamp?: number; created_at?: number }>;
@@ -10120,7 +10141,19 @@ function LiveTradePulse() {
     settings?: Record<string, string>;
     allocation?: { allocated_usd: number; reserved_usd: number; available_usd: number; state: string; auto_allocation_usd?: number; manual_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number };
     demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
-  } | null>(null);
+  };
+  const syntheticRevision = useRef(0);
+  const synthetic = useDeskSelector(
+    deskStore,
+    (state: DeskState) => state.resources.synthetic as SyntheticSnapshot | null,
+  );
+  const updateSynthetic = useCallback((update: SyntheticSnapshot | null | ((current: SyntheticSnapshot | null) => SyntheticSnapshot | null)) => {
+    const current = deskStore.getState().resources.synthetic as SyntheticSnapshot | null;
+    const next = typeof update === "function"
+      ? (update as (current: SyntheticSnapshot | null) => SyntheticSnapshot | null)(current)
+      : update;
+    deskStore.applyResource("synthetic", next, ++syntheticRevision.current);
+  }, [deskStore]);
   useEffect(() => {
     if (!synthetic) return;
     setSyntheticAutoAmount((value) => value || String(Number(synthetic.execution?.auto_margin_usd || 20)));
@@ -10150,7 +10183,7 @@ function LiveTradePulse() {
   const executionModePending = isActionPending("execution:manual") || isActionPending("execution:auto");
   const acceptSyntheticSnapshot = (snapshot: NonNullable<typeof synthetic>, modeRevision: number) => {
     // A read started before/during a mode change must not undo its confirmed state.
-    setSynthetic((current) => {
+    updateSynthetic((current) => {
       const confirmed = confirmedExecutionMode.current;
       const mode = confirmed && confirmed.revision >= modeRevision ? confirmed.mode : current?.execution_mode;
       return mode && (executionModeSubmitting.current || modeRevision !== executionModeRevision.current)
@@ -10189,10 +10222,10 @@ function LiveTradePulse() {
           // its Telegram proof or browser handoff has expired. The reconnect
           // surface is the only safe recovery path; retrying market reads
           // cannot recreate an authenticated session.
-          setSynthetic(null);
+          updateSynthetic(null);
           setSyntheticSignals([]);
           setNotice("Your secure desk session ended. Reconnect with Telegram to continue.");
-          setData(null);
+          updateDashboard(null);
         }
         const reference = typeof body.request_id === "string"
           ? body.request_id
@@ -10238,13 +10271,13 @@ function LiveTradePulse() {
         // Never let an earlier account's in-memory projections flash while a
         // new Telegram identity becomes active in the same browser tab.
         setAdmin(null);
-        setSynthetic(null);
+        updateSynthetic(null);
         setSyntheticSignals([]);
         setPendingActions({});
         setWebEnvironment("mainnet");
       }
       authenticatedUserRef.current = next.user.id;
-      setData(next);
+      updateDashboard(next);
       setWebEnvironment(next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet");
     } catch (error) {
       setNotice(
@@ -10320,34 +10353,10 @@ function LiveTradePulse() {
   useEffect(() => {
     if (tab !== "Synthetic" || !data) return;
     let cancelled = false;
-    // A market snapshot is atomic. Clear the previous market immediately so
-    // its chart, signals, price, and order controls cannot be shown under a
-    // newly selected market label.
-    setSynthetic(null);
+    // Signals are a separate short-lived resource. The active Synthetic
+    // workspace owns the slower atomic market snapshot poll.
     setSyntheticSignals([]);
     setSignalLoadError("");
-    setSyntheticLoadError("");
-    let refreshing = false;
-    const refreshSynthetic = () => {
-      if (refreshing || cancelled) return;
-      refreshing = true;
-      const modeRevision = executionModeRevision.current;
-      return request(`/v1/synthetic/${syntheticMarket}`).then((snapshot) => {
-        if (cancelled || snapshot.market !== syntheticMarket || snapshot.market !== syntheticMarketRef.current) return;
-        setSyntheticLoadError("");
-        acceptSyntheticSnapshot(snapshot, modeRevision);
-      })
-        .catch((error) => {
-          if (!cancelled) {
-            setSyntheticLoadError(
-              error instanceof Error && error.message
-                ? error.message
-                : "Market data is temporarily unavailable.",
-            );
-          }
-        })
-        .finally(() => { refreshing = false; });
-    };
     // Short-lived signals must not wait for the slower account snapshot.
     let signalsRefreshing = false;
     const refreshSignals = async () => {
@@ -10366,13 +10375,10 @@ function LiveTradePulse() {
         signalsRefreshing = false;
       }
     };
-    void refreshSynthetic();
     void refreshSignals();
-    const timer = window.setInterval(refreshSynthetic, 5000);
     const signalTimer = window.setInterval(refreshSignals, 1000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
       window.clearInterval(signalTimer);
     };
   }, [tab, data, syntheticMarket, webEnvironment, syntheticReloadRevision]);
@@ -10397,7 +10403,7 @@ function LiveTradePulse() {
         };
         const price = Number(latest.reference ?? latest.price);
         if (!Number.isFinite(price) || price <= 0) return;
-        setSynthetic((current) => {
+        updateSynthetic((current) => {
           if (!current || current.market !== syntheticMarket) return current;
           const last = current.ticks.at(-1);
           if (
@@ -10557,7 +10563,7 @@ function LiveTradePulse() {
       const returnedWallet = response.wallet && typeof response.wallet === "object"
         ? response.wallet as Partial<LiveDashboard["wallet"]>
         : null;
-      setData((current) => {
+      updateDashboard((current) => {
         if (!current) return current;
         const nextBots = returnedBot
           ? current.bots.map((bot) => bot.id === botId ? { ...bot, ...returnedBot } : bot)
@@ -10581,7 +10587,7 @@ function LiveTradePulse() {
     }
     if (response.position && typeof response.position === "object") {
       const position = response.position as { id?: string };
-      setSynthetic((current) =>
+      updateSynthetic((current) =>
         current
           ? {
               ...current,
@@ -10594,19 +10600,19 @@ function LiveTradePulse() {
       );
     }
     if (path === "/v1/synthetic/disclosure" && response.accepted) {
-      setSynthetic((current) =>
+      updateSynthetic((current) =>
         current ? { ...current, live_disclosure_accepted: true } : current,
       );
     }
     if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) {
-      setSynthetic((current) =>
+      updateSynthetic((current) =>
         current
           ? { ...current, execution_mode: response.execution_mode as "MANUAL" | "AUTO", execution: { ...current.execution, ...response } }
           : current,
       );
     }
     if (path === "/v1/demo/start" && response.trial && typeof response.trial === "object") {
-      setData((current) =>
+      updateDashboard((current) =>
         current ? { ...current, demo: response.trial as LiveDashboard["demo"] } : current,
       );
     }
@@ -10618,7 +10624,7 @@ function LiveTradePulse() {
       const wallet = response.wallet && typeof response.wallet === "object"
         ? response.wallet as Partial<LiveDashboard["wallet"]>
         : null;
-      setData((current) => current ? {
+      updateDashboard((current) => current ? {
         ...current,
         flashback: { ...current.flashback, ...session },
         flashback_sessions: sessions || [session, ...(current.flashback_sessions || []).filter((item) => item.id !== session.id)],
@@ -11035,22 +11041,28 @@ function LiveTradePulse() {
             </div>
           )}
           {tab === "Dashboard" && (
-            <Dashboard
-              bots={visualBots}
-              model={visualModel}
-              onManage={() => {
-                setBotEntryId(null);
-                setTab("Bots");
-              }}
-              onStartDemo={() => setDemoReviewOpen(true)}
-              onViewActivity={() => {
-                setWalletEntry("activity");
-                setTab("Wallet");
-              }}
-              onOpenBot={(bot) => {
-                setBotEntryId(bot.id === undefined ? null : String(bot.id));
-                setTab("Bots");
-              }}
+            <DashboardWorkspace
+              store={deskStore}
+              poll={() => request("/v1/dashboard")}
+              render={() => (
+                <Dashboard
+                  bots={visualBots}
+                  model={visualModel}
+                  onManage={() => {
+                    setBotEntryId(null);
+                    setTab("Bots");
+                  }}
+                  onStartDemo={() => setDemoReviewOpen(true)}
+                  onViewActivity={() => {
+                    setWalletEntry("activity");
+                    setTab("Wallet");
+                  }}
+                  onOpenBot={(bot) => {
+                    setBotEntryId(bot.id === undefined ? null : String(bot.id));
+                    setTab("Bots");
+                  }}
+                />
+              )}
             />
           )}
           {tab === "Dashboard" &&
@@ -11180,25 +11192,31 @@ function LiveTradePulse() {
             />
           )}
           {tab === "Wallet" && (
-            <LiveWalletScreen
-              data={data}
-              request={request}
-              onWalletUpdate={({ wallet, withdrawal, deposits }) =>
-                setData((current) =>
-                  current
-                    ? {
-                        ...current,
-                        wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
-                        deposits: deposits || current.deposits,
-                        withdrawals: withdrawal
-                          ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
-                          : current.withdrawals,
-                      }
-                    : current,
-                )
-              }
-              onNotice={setNotice}
-              initialView={walletEntry}
+            <WalletWorkspace
+              store={deskStore}
+              poll={() => request("/v1/dashboard")}
+              render={(walletDashboard) => (
+                <LiveWalletScreen
+                  data={walletDashboard}
+                  request={request}
+                  onWalletUpdate={({ wallet, withdrawal, deposits }) =>
+                    updateDashboard((current) =>
+                      current
+                        ? {
+                            ...current,
+                            wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
+                            deposits: deposits || current.deposits,
+                            withdrawals: withdrawal
+                              ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
+                              : current.withdrawals,
+                          }
+                        : current,
+                    )
+                  }
+                  onNotice={setNotice}
+                  initialView={walletEntry}
+                />
+              )}
             />
           )}
           {tab === "Desk" && (
@@ -11230,7 +11248,22 @@ function LiveTradePulse() {
             />
           )}
           {tab === "Synthetic" && (
-            <div className="desk-screen">
+            <SyntheticWorkspace
+              key={`${syntheticMarket}:${syntheticReloadRevision}`}
+              market={syntheticMarket}
+              store={deskStore}
+              poll={() => request(`/v1/synthetic/${syntheticMarket}`)}
+              applySnapshot={(snapshot) => {
+                if (snapshot.market !== syntheticMarketRef.current) return;
+                setSyntheticLoadError("");
+                acceptSyntheticSnapshot(snapshot, executionModeRevision.current);
+              }}
+              onPollError={(error) => setSyntheticLoadError(
+                error instanceof Error && error.message
+                  ? error.message
+                  : "Market data is temporarily unavailable.",
+              )}
+              render={() => <div className="desk-screen">
               <GradientPanel className="synthetic-pilot">
                 <div className="synthetic-market-header">
                   <div>
@@ -11247,7 +11280,7 @@ function LiveTradePulse() {
                       aria-pressed={syntheticMarket === market}
                       onClick={() => {
                         if (market === syntheticMarket) return;
-                        setSynthetic(null);
+                        updateSynthetic(null);
                         setSyntheticSignals([]);
                         syntheticMarketRef.current = market;
                         setSyntheticMarket(market);
@@ -11399,7 +11432,8 @@ function LiveTradePulse() {
                   <button type="button" className="ghost-action" onClick={() => setSyntheticReview(null)}>{syntheticReviewPending ? "Return to controls" : "Go back"}</button>
                 </AccessibleDialog>
               )}
-            </div>
+            </div>}
+            />
           )}
           {tab === "Admin" && admin && (
             <LiveAdminScreen
