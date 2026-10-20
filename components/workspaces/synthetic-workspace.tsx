@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { ActionKey, DeskState } from "../../lib/desk-types";
@@ -18,11 +18,6 @@ export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet"
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const selectSnapshot = (state: DeskState) => state.resources.synthetic as Snapshot | null;
-
-/** @deprecated Kept only so the disabled legacy JSX type-checks during deletion. */
-export function LegacySyntheticWorkspace({ render }: { render: () => ReactNode } & Record<string, unknown>) {
-  return <>{render()}</>;
-}
 
 export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, request, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
