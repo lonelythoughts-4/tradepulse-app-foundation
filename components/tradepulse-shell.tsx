@@ -11193,7 +11193,8 @@ function LiveTradePulse() {
           )}
           {tab === "Wallet" && (
             <WalletWorkspace
-              data={data}
+              store={deskStore}
+              poll={() => request("/v1/dashboard")}
               request={request}
               onWalletUpdate={({ wallet, withdrawal, deposits }) =>
                 updateDashboard((current) =>

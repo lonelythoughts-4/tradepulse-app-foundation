@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AccessibleDialog } from "../accessible-dialog";
+import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
+import type { DeskState } from "../../lib/desk-types";
+import { useResourcePoller } from "./use-resource-poller";
 import {
   activityAmountDisplay,
   activityLabel,
@@ -26,6 +29,47 @@ import {
 } from "../tradepulse-shell";
 
 export function WalletWorkspace({
+  store,
+  poll,
+  request,
+  onWalletUpdate,
+  onNotice,
+  initialView = "overview",
+}: {
+  store: DeskStore;
+  poll: () => Promise<LiveDashboard>;
+  request: (path: string, options?: RequestInit) => Promise<any>;
+  onWalletUpdate: (update: {
+    wallet?: Partial<LiveDashboard["wallet"]>;
+    withdrawal?: LiveDashboard["withdrawals"][number];
+    deposits?: LiveDashboard["deposits"];
+  }) => void;
+  onNotice: (message: string) => void;
+  initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
+}) {
+  const data = useDeskSelector(
+    store,
+    (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
+  );
+  useResourcePoller(
+    async () => poll(),
+    (next) => store.applyResource("dashboard", next, Date.now()),
+    15_000,
+    true,
+  );
+  if (!data) return null;
+  return (
+    <WalletWorkspaceBody
+      data={data}
+      request={request}
+      onWalletUpdate={onWalletUpdate}
+      onNotice={onNotice}
+      initialView={initialView}
+    />
+  );
+}
+
+function WalletWorkspaceBody({
   data,
   request,
   onWalletUpdate,
