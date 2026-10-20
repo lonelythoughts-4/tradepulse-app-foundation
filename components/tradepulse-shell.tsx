@@ -11193,24 +11193,30 @@ function LiveTradePulse() {
           )}
           {tab === "Wallet" && (
             <WalletWorkspace
-              data={data}
-              request={request}
-              onWalletUpdate={({ wallet, withdrawal, deposits }) =>
-                updateDashboard((current) =>
-                  current
-                    ? {
-                        ...current,
-                        wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
-                        deposits: deposits || current.deposits,
-                        withdrawals: withdrawal
-                          ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
-                          : current.withdrawals,
-                      }
-                    : current,
-                )
-              }
-              onNotice={setNotice}
-              initialView={walletEntry}
+              store={deskStore}
+              poll={() => request("/v1/dashboard")}
+              render={(walletDashboard) => (
+                <LiveWalletScreen
+                  data={walletDashboard}
+                  request={request}
+                  onWalletUpdate={({ wallet, withdrawal, deposits }) =>
+                    updateDashboard((current) =>
+                      current
+                        ? {
+                            ...current,
+                            wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
+                            deposits: deposits || current.deposits,
+                            withdrawals: withdrawal
+                              ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
+                              : current.withdrawals,
+                          }
+                        : current,
+                    )
+                  }
+                  onNotice={setNotice}
+                  initialView={walletEntry}
+                />
+              )}
             />
           )}
           {tab === "Desk" && (
