@@ -2730,7 +2730,7 @@ function BotsScreen({
   );
 }
 
-function Dashboard({
+export function Dashboard({
   bots,
   model,
   onManage,
@@ -10965,25 +10965,21 @@ function LiveTradePulse() {
             <DashboardWorkspace
               store={deskStore}
               poll={() => request("/v1/dashboard")}
-              render={() => (
-                <Dashboard
-                  bots={visualBots}
-                  model={visualModel}
-                  onManage={() => {
-                    setBotEntryId(null);
-                    setTab("Bots");
-                  }}
-                  onStartDemo={() => setDemoReviewOpen(true)}
-                  onViewActivity={() => {
-                    setWalletEntry("activity");
-                    setTab("Wallet");
-                  }}
-                  onOpenBot={(bot) => {
-                    setBotEntryId(bot.id === undefined ? null : String(bot.id));
-                    setTab("Bots");
-                  }}
-                />
-              )}
+              bots={visualBots}
+              model={visualModel}
+              onManage={() => {
+                setBotEntryId(null);
+                setTab("Bots");
+              }}
+              onStartDemo={() => setDemoReviewOpen(true)}
+              onViewActivity={() => {
+                setWalletEntry("activity");
+                setTab("Wallet");
+              }}
+              onOpenBot={(bot) => {
+                setBotEntryId(bot.id === undefined ? null : String(bot.id));
+                setTab("Bots");
+              }}
             />
           )}
           {tab === "Dashboard" &&
