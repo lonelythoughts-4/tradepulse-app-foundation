@@ -7,7 +7,7 @@ import { NoticeCenter, useNoticeCenter } from "./notice-center";
 import { createDeskStore, useDeskSelector, type DeskStore } from "../lib/desk-store";
 import type { DeskState } from "../lib/desk-types";
 import { DashboardWorkspace } from "./workspaces/dashboard-workspace";
-import { SyntheticWorkspace } from "./workspaces/synthetic-workspace";
+import { LegacySyntheticWorkspace, SyntheticWorkspace } from "./workspaces/synthetic-workspace";
 import { WalletWorkspace } from "./workspaces/wallet-workspace";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
@@ -10038,6 +10038,10 @@ function LiveTradePulse() {
   const [syntheticMarket, setSyntheticMarket] = useState<"SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100">(
     "SYN-25",
   );
+  // The extracted workspace is the only live Synthetic owner.  The legacy
+  // state remains temporarily below as dead compatibility code until its
+  // next isolated deletion; it must not keep polling in the background.
+  const extractedSyntheticWorkspace = true;
   const [demoReviewOpen, setDemoReviewOpen] = useState(false);
   const syntheticMarketRef = useRef(syntheticMarket);
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
@@ -10351,7 +10355,7 @@ function LiveTradePulse() {
     setNotice(`${next.title} — ${next.body}`);
   }, [data, notice]);
   useEffect(() => {
-    if (tab !== "Synthetic" || !data) return;
+    if (extractedSyntheticWorkspace || tab !== "Synthetic" || !data) return;
     let cancelled = false;
     // Signals are a separate short-lived resource. The active Synthetic
     // workspace owns the slower atomic market snapshot poll.
@@ -10383,7 +10387,7 @@ function LiveTradePulse() {
     };
   }, [tab, data, syntheticMarket, webEnvironment, syntheticReloadRevision]);
   useEffect(() => {
-    if (tab !== "Synthetic" || !data) return;
+    if (extractedSyntheticWorkspace || tab !== "Synthetic" || !data) return;
     let cancelled = false;
     let inFlight = false;
     const refreshSyntheticTick = async () => {
@@ -11244,6 +11248,17 @@ function LiveTradePulse() {
           )}
           {tab === "Synthetic" && (
             <SyntheticWorkspace
+              account={data}
+              environment={webEnvironment}
+              marketChart={MarketChart}
+              onDashboardPatch={updateDashboard}
+              onNotice={setNotice}
+              request={request}
+              store={deskStore}
+            />
+          )}
+          {false && tab === "Synthetic" && (
+            <LegacySyntheticWorkspace
               key={`${syntheticMarket}:${syntheticReloadRevision}`}
               market={syntheticMarket}
               store={deskStore}
