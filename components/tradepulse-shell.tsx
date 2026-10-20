@@ -9,6 +9,11 @@ import type { DeskState } from "../lib/desk-types";
 import { DashboardWorkspace } from "./workspaces/dashboard-workspace";
 import { SyntheticWorkspace } from "./workspaces/synthetic-workspace";
 import { WalletWorkspace } from "./workspaces/wallet-workspace";
+import { BotsWorkspace } from "./workspaces/bots-workspace";
+import { DeskWorkspace } from "./workspaces/desk-workspace";
+import { AccountWorkspace } from "./workspaces/account-workspace";
+import { HelpWorkspace } from "./workspaces/help-workspace";
+import { AdminWorkspace } from "./workspaces/admin-workspace";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -5288,7 +5293,7 @@ function MarketChart({
   );
 }
 
-function LiveHelpScreen({
+export function LiveHelpScreen({
   data,
   request,
   onNotice,
@@ -5613,7 +5618,7 @@ function LiveHelpScreen({
   );
 }
 
-function LiveAdminScreen({
+export function LiveAdminScreen({
   admin,
   environment,
   request,
@@ -6838,7 +6843,7 @@ function LiveAdminScreen({
   );
 }
 
-function LiveDeskScreen({
+export function LiveDeskScreen({
   data,
   request,
   reload,
@@ -7270,7 +7275,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
   );
 }
 
-function LiveAccountScreen({
+export function LiveAccountScreen({
   data,
   request,
   onNotice,
@@ -7784,7 +7789,7 @@ function createMemecoinOrderIdempotencyKey(userId: number, botId: string) {
   return `memecoin:${userId}:${botId}:${nonce}`;
 }
 
-function LiveBotsScreen({
+export function LiveBotsScreen({
   data,
   request,
   reload,
@@ -11098,7 +11103,7 @@ function LiveTradePulse() {
             </GradientPanel>
           )}
           {tab === "Bots" && (
-            <LiveBotsScreen
+            <BotsWorkspace
               data={data}
               request={request}
               reload={load}
@@ -11132,7 +11137,7 @@ function LiveTradePulse() {
             />
           )}
           {tab === "Desk" && (
-            <LiveDeskScreen
+            <DeskWorkspace
               data={data}
               request={request}
               reload={load}
@@ -11141,14 +11146,14 @@ function LiveTradePulse() {
           )}
           {tab === "Earn" && <LiveEarnScreen data={data} />}
           {tab === "Help" && (
-            <LiveHelpScreen
+            <HelpWorkspace
               data={data}
               request={request}
               onNotice={setNotice}
             />
           )}
           {tab === "Account" && (
-            <LiveAccountScreen
+            <AccountWorkspace
               data={data}
               request={request}
               onNotice={setNotice}
@@ -11171,7 +11176,7 @@ function LiveTradePulse() {
             />
           )}
           {tab === "Admin" && admin && (
-            <LiveAdminScreen
+            <AdminWorkspace
               admin={admin}
               environment={webEnvironment}
               request={request}
