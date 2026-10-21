@@ -86,6 +86,20 @@
 .flow-card{width:100%;max-width:860px;padding:clamp(16px,2.4vw,24px)}
 .choice-grid{width:100%;grid-template-columns:minmax(0,1fr)}
 
+/* Local interaction motion: feedback explains only the control that changed. */
+.motion-dialog-backdrop{animation:motion-backdrop-in var(--motion-duration-transition) var(--motion-ease-enter) both}
+.motion-dialog-panel{animation:motion-dialog-in var(--motion-duration-transition) var(--motion-ease-enter) both}
+.action-feedback{display:inline-flex;align-items:center;min-height:1lh}
+.action-feedback[data-action-feedback="pending"]{animation:motion-feedback-pending var(--motion-duration-feedback) var(--motion-ease-state) both}
+.action-feedback[data-action-feedback="success"]{animation:motion-feedback-success var(--motion-duration-feedback) var(--motion-ease-enter) both}
+.action-feedback[data-action-feedback="error"]{animation:motion-feedback-error var(--motion-duration-feedback) var(--motion-ease-state) both}
+@keyframes motion-backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes motion-dialog-in{from{opacity:0;transform:translateY(var(--motion-distance-panel)) scale(.985)}to{opacity:1;transform:none}}
+@keyframes motion-feedback-pending{50%{opacity:.68}to{opacity:1}}
+@keyframes motion-feedback-success{from{opacity:.72;transform:translateY(var(--motion-distance-feedback))}to{opacity:1;transform:none}}
+@keyframes motion-feedback-error{50%{opacity:.82;transform:translateX(calc(var(--motion-distance-feedback) * -1))}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.motion-dialog-backdrop,.motion-dialog-panel,.action-feedback[data-action-feedback]{animation-duration:var(--motion-duration-transition);animation-iteration-count:1}.motion-dialog-panel{animation-name:motion-backdrop-in}.action-feedback[data-action-feedback="pending"]{animation-name:motion-feedback-pending}.action-feedback[data-action-feedback="success"],.action-feedback[data-action-feedback="error"]{animation-name:motion-backdrop-in}}
+
 /* Synthetic is an operating surface: market selection, current state, then the
    chart and order controls. The quote-method explanation lives in Help. */
 .synthetic-pilot .synthetic-market-header {

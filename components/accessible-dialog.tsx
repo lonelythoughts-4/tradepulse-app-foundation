@@ -143,7 +143,7 @@ export function AccessibleDialog({
   return createPortal(
     <div
       ref={backdropRef}
-      className="modal-backdrop"
+      className="modal-backdrop motion-dialog-backdrop"
       onPointerDown={(event) => { backdropPress.current = event.target === event.currentTarget; }}
       onClick={(event) => {
         if (backdropPress.current && event.target === event.currentTarget && dismissible) onClose();
@@ -152,7 +152,7 @@ export function AccessibleDialog({
     >
       <div
         ref={panelRef}
-        className={`gradient-panel confirm-modal ${className}`}
+        className={`gradient-panel confirm-modal motion-dialog-panel ${className}`}
         role="dialog"
         aria-modal="true"
         aria-label={labelledBy ? undefined : label}

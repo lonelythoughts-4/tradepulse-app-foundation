@@ -3,6 +3,7 @@
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
+import { ActionFeedback } from "../ui/action-feedback";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
 import { ChevronRight, GradientPanel, PaymentMark, Plus, StateIcon, StateSwapIcon, X, Zap, money } from "./shared-ui";
@@ -566,7 +567,7 @@ ealed Return entry amount" /></div></label>
             <h2>Your result is ready</h2>
             <p>The reveal window has closed. Your result stayed sealed until this reveal.</p>
             <div className="fact-block"><span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
-            <button className="primary-action" disabled={isActionPending("flashback:reveal")} aria-busy={isActionPending("flashback:reveal")} onClick={() => void revealFlashback()}>{isActionPending("flashback:reveal") ? "Revealing…" : "Reveal result"} <StateIcon name="check" /></button>
+          <button className="primary-action" disabled={isActionPending("flashback:reveal")} aria-busy={isActionPending("flashback:reveal")} onClick={() => void revealFlashback()}><ActionFeedback state={isActionPending("flashback:reveal") ? "pending" : "idle"}>{isActionPending("flashback:reveal") ? "Revealing…" : "Reveal result"}</ActionFeedback> <StateIcon name="check" /></button>
           </GradientPanel>
         </>}
         {flashback?.state === "revealed" && !flashbackNewSession && <>
