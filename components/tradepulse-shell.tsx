@@ -5060,12 +5060,28 @@ type MarketCandle = {
 };
 
 function makeCandles(points: MarketPoint[]): MarketCandle[] {
-  const valid = points.filter((point) => Number.isFinite(Number(point.price)) && Number(point.price) > 0);
+  const valid = points
+    .filter((point) => Number.isFinite(Number(point.price)) && Number(point.price) > 0)
+    .map((point, index) => ({ ...point, timestamp: Number(point.timestamp) || index }))
+    .sort((left, right) => Number(left.timestamp) - Number(right.timestamp));
   if (valid.length < 2) return [];
-  const size = Math.max(1, Math.ceil(valid.length / Math.min(42, Math.max(12, Math.ceil(valid.length / 2)))));
+
+  // Snapshot polling and the one-second stream can overlap. Retain the most
+  // recent value for each timestamp before creating fixed-time candles, so a
+  // repeated response cannot become a duplicate visual bar.
+  const uniqueByTimestamp = new Map<number, MarketPoint>();
+  for (const point of valid) uniqueByTimestamp.set(Number(point.timestamp), point);
+  const series = [...uniqueByTimestamp.values()];
+  const firstTimestamp = Number(series[0]?.timestamp || 0);
+  const lastTimestamp = Number(series.at(-1)?.timestamp || firstTimestamp);
+  const hasClock = lastTimestamp > firstTimestamp;
+  const bucketSeconds = hasClock ? Math.max(1, Math.ceil((lastTimestamp - firstTimestamp + 1) / 42)) : 1;
   const candles: MarketCandle[] = [];
-  for (let index = 0; index < valid.length; index += size) {
-    const bucket = valid.slice(index, index + size);
+  for (let index = 0; index < series.length;) {
+    const bucketStart = hasClock ? Math.floor((Number(series[index].timestamp) - firstTimestamp) / bucketSeconds) : index;
+    let end = index + 1;
+    while (end < series.length && (hasClock ? Math.floor((Number(series[end].timestamp) - firstTimestamp) / bucketSeconds) : end) === bucketStart) end += 1;
+    const bucket = series.slice(index, end);
     const prices = bucket.map((point) => Number(point.price));
     candles.push({
       open: prices[0],
@@ -5074,6 +5090,7 @@ function makeCandles(points: MarketPoint[]): MarketCandle[] {
       low: Math.min(...prices),
       timestamp: bucket.at(-1)?.timestamp,
     });
+    index = end;
   }
   return candles;
 }
@@ -5264,10 +5281,12 @@ function MarketChart({
             const rising = candle.close >= candle.open;
             const color = rising ? accent : "#f87171";
             const top = Math.min(y(candle.open), y(candle.close));
-            const height = Math.max(1.5, Math.abs(y(candle.open) - y(candle.close)));
+            const bodyHeight = Math.abs(y(candle.open) - y(candle.close));
             return <g key={`${candle.timestamp || index}-${candle.close}`}>
               <path d={`M${center} ${y(candle.high)}V${y(candle.low)}`} stroke={color} strokeWidth="1.15" />
-              <rect x={center - bodyWidth / 2} y={top} width={bodyWidth} height={height} fill={rising ? `${color}B3` : color} stroke={color} strokeWidth="0.8" />
+              {bodyHeight < 0.8
+                ? <path d={`M${center - bodyWidth / 2} ${y(candle.close)}H${center + bodyWidth / 2}`} stroke={color} strokeWidth="1" />
+                : <rect x={center - bodyWidth / 2} y={top} width={bodyWidth} height={bodyHeight} fill={rising ? `${color}B3` : color} stroke={color} strokeWidth="0.8" />}
             </g>;
           })}
         </svg>
