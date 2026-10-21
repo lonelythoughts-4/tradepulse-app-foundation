@@ -6439,15 +6439,7 @@ function LiveTradePulse() {
   const [broadcastText, setBroadcastText] = useState("");
   const [broadcastConfirm, setBroadcastConfirm] = useState("");
   const [securityCode, setSecurityCode] = useState("");
-  const [syntheticMarket, setSyntheticMarket] = useState<"SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100">(
-    "SYN-25",
-  );
-  // The extracted workspace is the only live Synthetic owner.  The legacy
-  // state remains temporarily below as dead compatibility code until its
-  // next isolated deletion; it must not keep polling in the background.
-  const extractedSyntheticWorkspace = true;
   const [demoReviewOpen, setDemoReviewOpen] = useState(false);
-  const syntheticMarketRef = useRef(syntheticMarket);
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
     "mainnet",
   );
@@ -6475,130 +6467,11 @@ function LiveTradePulse() {
   const [recoveryAsset, setRecoveryAsset] = useState("USDT");
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
-  const [syntheticAmount, setSyntheticAmount] = useState("20");
-  const [syntheticAutoAmount, setSyntheticAutoAmount] = useState("");
-  const [syntheticAutoAllocation, setSyntheticAutoAllocation] = useState("");
-  const [syntheticQuoteHelpOpen, setSyntheticQuoteHelpOpen] = useState(false);
-  const [syntheticReview, setSyntheticReview] = useState<{
-    kind: "long" | "short" | "auto" | "approve";
-    path: string;
-    payload: Record<string, unknown>;
-    market: string;
-    direction: string;
-    amount: number;
-    environment: "mainnet" | "testnet" | "demo";
-    fee: number;
-    expiresAt?: number;
-    signalId?: string;
-  } | null>(null);
-  const [syntheticReviewError, setSyntheticReviewError] = useState("");
-  const [syntheticReviewPending, setSyntheticReviewPending] = useState(false);
-  const syntheticReviewSubmitting = useRef(false);
-  const [signalResults, setSignalResults] = useState<Record<string, string>>({});
-  const [signalLoadError, setSignalLoadError] = useState("");
-  const [syntheticLoadError, setSyntheticLoadError] = useState("");
-  const [syntheticReloadRevision, setSyntheticReloadRevision] = useState(0);
-  const [signalNow, setSignalNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (tab !== "Synthetic") return;
-    const timer = window.setInterval(() => setSignalNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [tab]);
-  const [autoAcknowledged, setAutoAcknowledged] = useState(false);
-  const [syntheticFundingSource, setSyntheticFundingSource] = useState<"wallet" | "demo" | "credit">("wallet");
-  useEffect(() => {
-    setSyntheticReview(null);
-    setSyntheticReviewError("");
-  }, [tab, webEnvironment, syntheticMarket]);
-  useEffect(() => {
-    const poolActive = Boolean(data?.demo && (data.demo.pool_state === "active" || data.demo.state === "active"));
-    const creditAvailable = Number(data?.demo?.credit_available_usd || 0) > 0;
-    if (syntheticFundingSource === "demo" && !poolActive) {
-      setSyntheticFundingSource("wallet");
-    } else if (syntheticFundingSource === "credit" && !creditAvailable) {
-      setSyntheticFundingSource("wallet");
-    }
-  }, [data?.demo?.state, data?.demo?.pool_state, data?.demo?.credit_available_usd, syntheticFundingSource]);
-  type SyntheticSnapshot = {
-    market: string;
-    latest: { price?: number; reference?: number; bid?: number; ask?: number };
-    ticks: Array<{ price?: number; reference?: number; timestamp?: number; created_at?: number }>;
-    account?: {
-      available_usd: number;
-      locked_usd: number;
-      realised_pnl_usd: number;
-    };
-    positions: Array<{
-      id: string;
-      market: string;
-      direction: string;
-      margin_usd: number;
-      status: string;
-      entry_price?: number;
-      realized_pnl_usd?: number;
-      clearing_type?: string;
-      spread_charged_usd?: number;
-      tier_fee_usd?: number;
-      signal_id?: string;
-      environment?: string;
-    }>;
-    live_disclosure_accepted?: boolean;
-    execution_mode?: "MANUAL" | "AUTO";
-    execution?: { auto_allocation_usd?: number; manual_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number };
-    auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>;
-    settings?: Record<string, string>;
-    allocation?: { allocated_usd: number; reserved_usd: number; available_usd: number; state: string; auto_allocation_usd?: number; manual_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number };
-    demo?: { active: boolean; state?: string; available_usd: number; locked_usd: number; realised_pnl_usd: number; credit_available_usd?: number; credit_locked_usd?: number; credit_active?: boolean };
-  };
-  const syntheticRevision = useRef(0);
-  const synthetic = useDeskSelector(
-    deskStore,
-    (state: DeskState) => state.resources.synthetic as SyntheticSnapshot | null,
-  );
-  const updateSynthetic = useCallback((update: SyntheticSnapshot | null | ((current: SyntheticSnapshot | null) => SyntheticSnapshot | null)) => {
-    const current = deskStore.getState().resources.synthetic as SyntheticSnapshot | null;
-    const next = typeof update === "function"
-      ? (update as (current: SyntheticSnapshot | null) => SyntheticSnapshot | null)(current)
-      : update;
-    deskStore.applyResource("synthetic", next, ++syntheticRevision.current);
-  }, [deskStore]);
-  useEffect(() => {
-    if (!synthetic) return;
-    setSyntheticAutoAmount((value) => value || String(Number(synthetic.execution?.auto_margin_usd || 20)));
-    setSyntheticAutoAllocation((value) => value || String(Number(synthetic.execution?.auto_allocation_usd || 0)));
-  }, [synthetic]);
-  const confirmedAutoMargin = Number(synthetic?.execution?.auto_margin_usd || 0);
-  const confirmedAutoAllocation = Number(synthetic?.execution?.auto_allocation_usd || 0);
-  const autoSettingsChanged = synthetic?.execution_mode === "AUTO" && (
-    Math.round(Number(syntheticAutoAmount) * 100) !== Math.round(confirmedAutoMargin * 100)
-    || Math.round(Number(syntheticAutoAllocation) * 100) !== Math.round(confirmedAutoAllocation * 100)
-  );
-  const [syntheticSignals, setSyntheticSignals] = useState<Array<{
-    id: string;
-    market: string;
-    direction: string;
-    reference_price: number;
-    expires_at: number;
-  }>>([]);
   const [admin, setAdmin] = useState<LiveTradePulseAdmin | null>(null);
   // Keep the pending action identity so a top-up, order, approval, or close
   // cannot make an unrelated control render the wrong loading label.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
-  const executionModeSubmitting = useRef(false);
-  const executionModeRevision = useRef(0);
-  const confirmedExecutionMode = useRef<{ revision: number; mode: "MANUAL" | "AUTO" } | null>(null);
   const isActionPending = (key: string) => Boolean(pendingActions[key]);
-  const executionModePending = isActionPending("execution:manual") || isActionPending("execution:auto");
-  const acceptSyntheticSnapshot = (snapshot: NonNullable<typeof synthetic>, modeRevision: number) => {
-    // A read started before/during a mode change must not undo its confirmed state.
-    updateSynthetic((current) => {
-      const confirmed = confirmedExecutionMode.current;
-      const mode = confirmed && confirmed.revision >= modeRevision ? confirmed.mode : current?.execution_mode;
-      return mode && (executionModeSubmitting.current || modeRevision !== executionModeRevision.current)
-        ? { ...snapshot, execution_mode: mode }
-        : snapshot;
-    });
-  };
   const headers = (targetEnvironment = webEnvironment) => ({
     "X-Telegram-Init-Data": telegramInitData(),
     "X-TradePulse-Environment": targetEnvironment,
@@ -6630,8 +6503,6 @@ function LiveTradePulse() {
           // its Telegram proof or browser handoff has expired. The reconnect
           // surface is the only safe recovery path; retrying market reads
           // cannot recreate an authenticated session.
-          updateSynthetic(null);
-          setSyntheticSignals([]);
           setNotice("Your secure desk session ended. Reconnect with Telegram to continue.");
           updateDashboard(null);
         }
@@ -6679,8 +6550,6 @@ function LiveTradePulse() {
         // Never let an earlier account's in-memory projections flash while a
         // new Telegram identity becomes active in the same browser tab.
         setAdmin(null);
-        updateSynthetic(null);
-        setSyntheticSignals([]);
         setPendingActions({});
         setWebEnvironment("mainnet");
       }
@@ -6910,32 +6779,6 @@ function LiveTradePulse() {
         };
       });
     }
-    if (response.position && typeof response.position === "object") {
-      const position = response.position as { id?: string };
-      updateSynthetic((current) =>
-        current
-          ? {
-              ...current,
-              positions: [
-                position as (typeof current.positions)[number],
-                ...current.positions.filter((item) => item.id !== position.id),
-              ],
-            }
-          : current,
-      );
-    }
-    if (path === "/v1/synthetic/disclosure" && response.accepted) {
-      updateSynthetic((current) =>
-        current ? { ...current, live_disclosure_accepted: true } : current,
-      );
-    }
-    if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) {
-      updateSynthetic((current) =>
-        current
-          ? { ...current, execution_mode: response.execution_mode as "MANUAL" | "AUTO", execution: { ...current.execution, ...response } }
-          : current,
-      );
-    }
     if (path === "/v1/demo/start" && response.trial && typeof response.trial === "object") {
       updateDashboard((current) =>
         current ? { ...current, demo: response.trial as LiveDashboard["demo"] } : current,
@@ -6958,55 +6801,23 @@ function LiveTradePulse() {
     }
   };
   const act = async (path: string, payload: Record<string, unknown>, onError?: (message: string) => void): Promise<boolean> => {
-    const changesExecutionMode = path === "/v1/synthetic/settings/execution-mode";
-    if (changesExecutionMode && executionModeSubmitting.current) return false;
-    const syntheticPosition = path.match(/^\/v1\/synthetic\/positions\/([^/]+)\/close$/);
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
-    const actionKey = path.includes("/synthetic/orders")
-      ? `synthetic-order:${String(payload.market || syntheticMarket)}:${String(payload.direction || "order")}`
-      : path.includes("/synthetic/signals/")
-        ? `signal:${path.split("/")[4]}:approve`
-        : syntheticPosition
-          ? `synthetic-position:${syntheticPosition[1]}:close`
-          : botAction
-            ? `bot:${botAction[1]}:${String(payload.action || "action")}`
-            : path.includes("execution-mode")
-              ? `execution:${String(payload.execution_mode || "execution-mode").toLowerCase()}`
-              : path.includes("disclosure")
-                ? "disclosure"
-                : path === "/v1/demo/start"
-                  ? "demo:start"
-                  : path;
+    const actionKey = botAction
+      ? `bot:${botAction[1]}:${String(payload.action || "action")}`
+      : path === "/v1/demo/start"
+        ? "demo:start"
+        : path;
     if (isActionPending(actionKey)) return false;
-    if (changesExecutionMode) {
-      executionModeSubmitting.current = true;
-      executionModeRevision.current += 1;
-    }
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (changesExecutionMode && (response.execution_mode === "MANUAL" || response.execution_mode === "AUTO")) {
-        confirmedExecutionMode.current = { revision: executionModeRevision.current, mode: response.execution_mode };
-      }
       applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
       if (path === "/v1/demo/start") {
-        // Starting the demo creates the visible Memecoin projection. Refresh
-        // the actual dashboard rather than fabricating a local bot card.
         void load().catch(() => undefined);
-      }
-      // The visible product/position is updated locally. Avoid reloading the
-      // entire desk after a single click, which can interrupt unrelated work.
-      if (tab === "Synthetic") {
-        const modeRevision = executionModeRevision.current;
-        void request(`/v1/synthetic/${syntheticMarket}`)
-          .then((snapshot) => {
-            if (snapshot?.market === syntheticMarketRef.current) acceptSyntheticSnapshot(snapshot, modeRevision);
-          })
-          .catch(() => undefined);
       }
       return true;
     } catch (error) {
@@ -7017,10 +6828,6 @@ function LiveTradePulse() {
       onError?.(message);
       return false;
     } finally {
-      if (changesExecutionMode) {
-        executionModeSubmitting.current = false;
-        executionModeRevision.current += 1;
-      }
       setPendingActions((current) => {
         const next = { ...current };
         delete next[actionKey];
@@ -7028,111 +6835,6 @@ function LiveTradePulse() {
       });
     }
   };
-  const openSyntheticReview = (kind: "long" | "short" | "auto" | "approve", signal?: { id: string; market: string; direction: string; expires_at: number }) => {
-    if (!synthetic || !data || syntheticReviewSubmitting.current || webEnvironment !== "mainnet") return;
-    const margin = Number(kind === "auto" ? syntheticAutoAmount : syntheticAmount);
-    const autoAllocation = Number(syntheticAutoAllocation);
-    const market = signal?.market || syntheticMarket;
-    const direction = signal?.direction || kind;
-    const mode = kind === "auto" ? "AUTO" : synthetic.execution_mode || "MANUAL";
-    const usingPool = syntheticFundingSource === "demo" && Boolean(synthetic.demo?.active);
-    const usingCredit = syntheticFundingSource === "credit" && Number(synthetic.demo?.credit_available_usd || 0) > 0;
-    if (kind === "auto" && !synthetic.live_disclosure_accepted) {
-      setSyntheticReviewError("");
-      setNotice("Review and accept the live-risk acknowledgement before enabling Auto.");
-      return;
-    }
-    if (!Number.isFinite(margin) || margin < 20) {
-      setNotice("Set an order size of at least $20.00.");
-      return;
-    }
-    if (kind === "auto" && (!Number.isFinite(autoAllocation) || autoAllocation < margin)) {
-      setNotice("Auto capacity must cover at least one Auto order.");
-      return;
-    }
-    const availableCapacity = Number(synthetic.allocation?.manual_available_usd || synthetic.allocation?.available_usd || 0);
-    if (kind !== "auto" && syntheticFundingSource === "wallet" && margin > availableCapacity) {
-      setNotice(`Manual capacity has ${money(availableCapacity)} available. Reduce the order size or change the allocation split.`);
-      return;
-    }
-    if (kind === "auto" && (usingPool || usingCredit)) {
-      setSyntheticReviewError("");
-      setNotice("Auto uses wallet allocation only. Select Wallet for automatic execution; virtual funds and trading credit require a manual review.");
-      return;
-    }
-    const executionEnvironment: "mainnet" | "demo" = usingPool ? "demo" : "mainnet";
-    const requestFundingSource = usingPool ? "demo" : usingCredit ? "credit" : "mainnet";
-    const path = kind === "auto" ? "/v1/synthetic/settings/execution-mode"
-      : signal ? `/v1/synthetic/signals/${signal.id}/approve` : "/v1/synthetic/orders";
-    const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: margin, auto_allocation_usd: autoAllocation }
-      : signal ? { amount: margin, funding_source: requestFundingSource, idempotency_key: `signal:${requestFundingSource}:${data.user.id}:${signal.id}` }
-      : { market, direction, amount: margin, mode: mode.toLowerCase(), funding_source: requestFundingSource, idempotency_key: `web:${requestFundingSource}:${market}:${direction}:${Date.now()}` };
-    setAutoAcknowledged(false);
-    setSyntheticReviewError("");
-    setSyntheticReview({ kind, path, payload, market, direction, amount: margin,
-      environment: executionEnvironment, expiresAt: signal?.expires_at, signalId: signal?.id,
-      fee: margin * Number(synthetic.settings?.[`fee_bps_${data.user.tier.toLowerCase()}`] || 20) / 10000,
-    });
-  };
-  const confirmSyntheticReview = async () => {
-    if (!syntheticReview || syntheticReviewSubmitting.current) return;
-    if (webEnvironment !== "mainnet" || !["mainnet", "demo"].includes(syntheticReview.environment) ||
-      (syntheticReview.expiresAt && syntheticReview.expiresAt * 1000 <= Date.now())) {
-      setSyntheticReviewError("This review expired or the environment changed. Go back and review again.");
-      return;
-    }
-    if (!Number.isFinite(syntheticReview.amount) || syntheticReview.amount <= 0 ||
-      (syntheticReview.kind === "auto" && !autoAcknowledged)) return;
-    syntheticReviewSubmitting.current = true;
-    setSyntheticReviewPending(true);
-    setSyntheticReviewError("");
-    try {
-      let failedMessage = "";
-      const submitted = await act(syntheticReview.path, syntheticReview.payload, (message) => {
-        failedMessage = message;
-        setSyntheticReviewError(message);
-      });
-      if (submitted) {
-        if (syntheticReview.signalId) {
-          setSignalResults((current) => ({ ...current, [syntheticReview.signalId!]: "Submitted" }));
-        }
-        setSyntheticReview(null);
-      } else if (syntheticReview.signalId && /signal.*(?:expired|no longer)/i.test(failedMessage)) {
-        // Signals intentionally cannot execute at a stale price. Do not keep
-        // the person inside a failed confirmation after the feed moved on.
-        setSyntheticReview(null);
-        setSyntheticReloadRevision((value) => value + 1);
-        setNotice("That signal is no longer current. A fresh signal will appear when available.");
-      }
-    } finally {
-      syntheticReviewSubmitting.current = false;
-      setSyntheticReviewPending(false);
-    }
-  };
-  const syntheticSpreadRate = synthetic?.latest
-    ? (() => {
-        const reference = Number(synthetic.latest.reference ?? synthetic.latest.price);
-        const bid = Number(synthetic.latest.bid);
-        const ask = Number(synthetic.latest.ask);
-        return reference > 0 && bid > 0 && ask > 0 ? (ask - bid) / reference : null;
-      })()
-    : null;
-  const estimatedSyntheticSpread = syntheticSpreadRate === null
-    ? null
-    : (Number(syntheticAmount) || 0) * syntheticSpreadRate;
-  const latestAutoActivity = synthetic?.auto_activity?.[0];
-  const autoActivitySummary = latestAutoActivity
-    ? latestAutoActivity.event_type === "auto_signal_rejected"
-      ? "No order opened"
-      : latestAutoActivity.event_type === "position_opened"
-        ? "Order opened"
-        : "Auto activity recorded"
-    : "No Auto activity yet";
-  const autoActivityDetail = latestAutoActivity
-    ? [latestAutoActivity.market, latestAutoActivity.reason, `Updated ${new Date(latestAutoActivity.timestamp * 1000).toLocaleTimeString()}`]
-      .filter(Boolean)
-      .join(" · ")
-    : "Eligible signals open only when the wallet allocation and quote checks pass.";
   if (loading)
     return (
       <main className="boot-screen" aria-busy="true">
@@ -7176,13 +6878,6 @@ function LiveTradePulse() {
   if (!data.user.onboarding_complete)
     return <ActivationJourney data={data} request={request} onComplete={load} onNotice={setNotice} />;
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
-  const chartPoints = (synthetic?.ticks || [])
-    .slice(-80)
-    .map((tick) => ({
-      price: Number(tick.reference ?? tick.price),
-      timestamp: tick.timestamp ?? tick.created_at,
-    }))
-    .filter((tick) => Number.isFinite(tick.price) && tick.price > 0);
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
   const unreadNoticeCount = noticeCenter.unread;
