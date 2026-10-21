@@ -646,3 +646,27 @@ html,body{overflow-x:clip}
 
 /* Final cascade point: shared components consume these established tokens. */
 :root { --primary: var(--tp-accent); --foreground: var(--tp-ink); --card: var(--tp-surface); --muted: var(--tp-surface-raised); --border: rgba(244, 239, 227, .14); }
+
+/* The compact dock shares the desk palette. Layout changes below 861px; the
+   product identity must not. This is deliberately the final mobile cascade,
+   after legacy dock declarations that otherwise restore indigo. */
+@media (max-width:860px){
+  .bottom-nav,
+  .main-content:has(> .side-nav)>.side-nav{
+    background:#090c0d!important;
+    border-color:rgba(244,239,227,.12);
+  }
+  .bottom-item.active,
+  .main-content:has(> .side-nav)>.side-nav .nav-item.active{
+    color:var(--tp-accent);
+  }
+  .bottom-item.active .bottom-icon i,
+  .main-content:has(> .side-nav)>.side-nav .nav-item.active{
+    background:var(--tp-accent-wash);
+  }
+  .bottom-item.active .custom-nav-icon,
+  .bottom-item.active .custom-nav-icon path,
+  .bottom-item.active .custom-nav-icon circle{
+    color:var(--tp-accent);
+  }
+}
