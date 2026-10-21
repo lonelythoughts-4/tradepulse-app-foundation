@@ -4,6 +4,7 @@ import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { ActionFeedback } from "../ui/action-feedback";
+import { formatSettlementExitReason } from "../../lib/settlement-label";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
 import { ChevronRight, GradientPanel, PaymentMark, Plus, StateIcon, StateSwapIcon, X, Zap, money } from "./shared-ui";
@@ -1176,7 +1177,7 @@ ealed Return entry amount" /></div></label>
                   <strong className={latestSettlement ? (latestSettlementPnl >= 0 ? "up" : "down") : hasSettledPnl && settledPnl < 0 ? "down" : "up"}>
                     {isSynthetic ? latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions" : hasSettledPnl ? `${settledPnl >= 0 ? "+" : "−"}${money(Math.abs(settledPnl))}` : "No settled positions"}
                   </strong>
-                  {latestSettlement && <small>{activityExitLabel(settlementReason)}</small>}
+                  {latestSettlement && <small>{formatSettlementExitReason(settlementReason)}</small>}
                 </div>
               </div>
               <div className="fleet-bot-actions">
