@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatMarketChartTime } from "../../lib/market-chart-time";
 import { StateIcon } from "./shared-ui";
 
 export type MarketPoint = { price: number; timestamp?: number };
@@ -84,12 +85,6 @@ export function formatMarketPrice(value: number) {
   if (Math.abs(value) >= 1000) return value.toFixed(2);
   if (Math.abs(value) >= 1) return value.toFixed(4);
   return value.toFixed(6);
-}
-
-function formatChartTime(timestamp: number | undefined, index: number, total: number) {
-  if (!timestamp) return index === total - 1 ? "NOW" : `T-${total - index - 1}`;
-  const millis = timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
-  return new Date(millis).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export function MarketChart({
@@ -255,7 +250,7 @@ export function MarketChart({
         </svg>
       </div>
       <div className="market-time-axis">
-        {visibleTimes.map((index) => <span key={index}>{formatChartTime(candles[index]?.timestamp, index, candles.length)}</span>)}
+        {visibleTimes.map((index) => <span key={index}>{formatMarketChartTime(candles[index]?.timestamp, index, candles.length, candles[0]?.timestamp, candles.at(-1)?.timestamp)}</span>)}
       </div>
       <div className="filter-chips" role="group" aria-label="Chart view controls">
         <button type="button" onClick={() => setZoom((current) => clampZoom(current * 1.18))} disabled={zoom >= 8} aria-label="Zoom in chart" title="Zoom in (+)"><StateIcon name="plus" size={14} /></button>
@@ -267,5 +262,4 @@ export function MarketChart({
     </div>
   );
 }
-
 

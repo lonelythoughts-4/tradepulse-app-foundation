@@ -15,6 +15,7 @@ import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
+import { formatMarketChartTime } from "../lib/market-chart-time";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -5093,12 +5094,6 @@ function formatMarketPrice(value: number) {
   return value.toFixed(6);
 }
 
-function formatChartTime(timestamp: number | undefined, index: number, total: number) {
-  if (!timestamp) return index === total - 1 ? "NOW" : `T-${total - index - 1}`;
-  const millis = timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
-  return new Date(millis).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 function MarketChart({
   points,
   ohlcCandles,
@@ -5262,7 +5257,7 @@ function MarketChart({
         </svg>
       </div>
       <div className="market-time-axis">
-        {visibleTimes.map((index) => <span key={index}>{formatChartTime(candles[index]?.timestamp, index, candles.length)}</span>)}
+        {visibleTimes.map((index) => <span key={index}>{formatMarketChartTime(candles[index]?.timestamp, index, candles.length, candles[0]?.timestamp, candles.at(-1)?.timestamp)}</span>)}
       </div>
       <div className="filter-chips" role="group" aria-label="Chart view controls">
         <button type="button" onClick={() => setZoom((current) => clampZoom(current * 1.18))} disabled={zoom >= 8} aria-label="Zoom in chart" title="Zoom in (+)"><StateIcon name="plus" size={14} /></button>
