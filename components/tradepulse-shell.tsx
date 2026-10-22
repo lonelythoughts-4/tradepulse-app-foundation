@@ -5051,11 +5051,11 @@ export function activityTone(kind: string, status: string, amount?: number) {
   return "complete";
 }
 
-type MarketPoint = SyntheticTick;
+type MarketPoint = { market?: string; sequence?: number; price: number; timestamp?: number };
 type MarketCandle = SyntheticCandle;
 
 function makeCandles(points: MarketPoint[]): MarketCandle[] {
-  return makeSyntheticCandles(points);
+  return makeSyntheticCandles(points as SyntheticTick[]);
 }
 
 function chartCandles(points: MarketPoint[], supplied?: MarketCandle[]) {
