@@ -14,7 +14,7 @@ import { AccountWorkspace } from "./workspaces/account-workspace";
 import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
-import { makeSyntheticCandles, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
+import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -6433,7 +6433,7 @@ function LiveTradePulse() {
       string,
       {
         market: string;
-        points: Array<{ price: number; timestamp?: number }>;
+        points: SyntheticTick[];
         positions: Array<{
           id: string;
           market: string;
@@ -6644,10 +6644,12 @@ function LiveTradePulse() {
             product: "synthetic",
             value: {
               market: snapshot.market || "SYN-25",
-              points: (snapshot.ticks || []).map((tick: { price?: number; reference?: number; timestamp?: number; created_at?: number }) => ({
+              points: reconcileSyntheticTicks((snapshot.ticks || []).map((tick: { market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }) => ({
+                market: String(tick.market || snapshot.market || "SYN-25"),
+                sequence: Number(tick.sequence),
                 price: Number(tick.reference ?? tick.price),
                 timestamp: tick.timestamp ?? tick.created_at,
-              })),
+              })), String(snapshot.market || "SYN-25")),
               positions: snapshot.positions || [],
               activity: [],
               updated_at: Date.now(),
@@ -6692,21 +6694,23 @@ function LiveTradePulse() {
           reference?: number;
           price?: number;
           timestamp?: number;
+          sequence?: number;
         };
         const price = Number(latest.reference ?? latest.price);
-        if (!Number.isFinite(price) || price <= 0) return;
+        const sequence = Number(latest.sequence);
+        if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(sequence)) return;
         const timestamp = latest.timestamp;
         setCharts((current) => {
           const existing = current.synthetic;
-          const last = existing?.points.at(-1);
-          if (last && last.timestamp === timestamp && last.price === price) {
-            return current;
-          }
-          const points = [...(existing?.points || []), { price, timestamp }].slice(-240);
+          const market = existing?.market || "SYN-25";
+          const points = reconcileSyntheticTicks([
+            ...(existing?.points || []),
+            { market, sequence, price, timestamp },
+          ], market).slice(-240);
           return {
             ...current,
             synthetic: {
-              market: existing?.market || "SYN-25",
+              market,
               points,
               positions: stream.positions || existing?.positions || [],
               activity: existing?.activity || [],
