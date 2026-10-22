@@ -14,6 +14,7 @@ import { AccountWorkspace } from "./workspaces/account-workspace";
 import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
+import { makeSyntheticCandles, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -5050,49 +5051,11 @@ export function activityTone(kind: string, status: string, amount?: number) {
   return "complete";
 }
 
-type MarketPoint = { price: number; timestamp?: number };
-type MarketCandle = {
-  open: number;
-  close: number;
-  high: number;
-  low: number;
-  timestamp?: number;
-};
+type MarketPoint = SyntheticTick;
+type MarketCandle = SyntheticCandle;
 
 function makeCandles(points: MarketPoint[]): MarketCandle[] {
-  const valid = points
-    .filter((point) => Number.isFinite(Number(point.price)) && Number(point.price) > 0)
-    .map((point, index) => ({ ...point, timestamp: Number(point.timestamp) || index }))
-    .sort((left, right) => Number(left.timestamp) - Number(right.timestamp));
-  if (valid.length < 2) return [];
-
-  // Snapshot polling and the one-second stream can overlap. Retain the most
-  // recent value for each timestamp before creating fixed-time candles, so a
-  // repeated response cannot become a duplicate visual bar.
-  const uniqueByTimestamp = new Map<number, MarketPoint>();
-  for (const point of valid) uniqueByTimestamp.set(Number(point.timestamp), point);
-  const series = [...uniqueByTimestamp.values()];
-  const firstTimestamp = Number(series[0]?.timestamp || 0);
-  const lastTimestamp = Number(series.at(-1)?.timestamp || firstTimestamp);
-  const hasClock = lastTimestamp > firstTimestamp;
-  const bucketSeconds = hasClock ? Math.max(1, Math.ceil((lastTimestamp - firstTimestamp + 1) / 42)) : 1;
-  const candles: MarketCandle[] = [];
-  for (let index = 0; index < series.length;) {
-    const bucketStart = hasClock ? Math.floor((Number(series[index].timestamp) - firstTimestamp) / bucketSeconds) : index;
-    let end = index + 1;
-    while (end < series.length && (hasClock ? Math.floor((Number(series[end].timestamp) - firstTimestamp) / bucketSeconds) : end) === bucketStart) end += 1;
-    const bucket = series.slice(index, end);
-    const prices = bucket.map((point) => Number(point.price));
-    candles.push({
-      open: prices[0],
-      close: prices.at(-1) || prices[0],
-      high: Math.max(...prices),
-      low: Math.min(...prices),
-      timestamp: bucket.at(-1)?.timestamp,
-    });
-    index = end;
-  }
-  return candles;
+  return makeSyntheticCandles(points);
 }
 
 function chartCandles(points: MarketPoint[], supplied?: MarketCandle[]) {

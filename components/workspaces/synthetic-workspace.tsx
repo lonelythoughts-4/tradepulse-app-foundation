@@ -6,16 +6,17 @@ import { ActionFeedback } from "../ui/action-feedback";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { ActionKey, DeskState } from "../../lib/desk-types";
 import type { LiveDashboard } from "../tradepulse-shell";
+import { reconcileSyntheticTicks, type SyntheticTick } from "../../lib/synthetic-ticks";
 import { useResourcePoller } from "./use-resource-poller";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
-type Snapshot = { market: string; latest: { price?: number; reference?: number }; ticks: Array<{ price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; signal_id?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number }; demo?: { active: boolean; state?: string; available_usd: number; credit_available_usd?: number } };
+type Snapshot = { market: string; latest: { price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; signal_id?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number }; demo?: { active: boolean; state?: string; available_usd: number; credit_available_usd?: number } };
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet") => Promise<Record<string, any>>;
 type Review = { kind: "long" | "short" | "auto" | "approve"; path: string; payload: Record<string, unknown>; amount: number; market: string; direction: string; fee: number; signal?: Signal };
 
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: SyntheticTick[]; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const selectSnapshot = (state: DeskState) => state.resources.synthetic as Snapshot | null;
@@ -73,7 +74,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   }, [environment, market, request]);
   useEffect(() => {
     let cancelled = false; let inFlight = false;
-    const refresh = async () => { if (cancelled || inFlight) return; inFlight = true; try { const stream = await request("/v1/synthetic/stream?market=" + market, {}, environment); const latest = stream.latest as Snapshot["latest"] & { timestamp?: number }; const price = Number(latest?.reference ?? latest?.price); if (!cancelled && Number.isFinite(price) && price > 0) update((current) => current && current.market === market ? { ...current, latest, ticks: [...current.ticks, { ...latest, reference: price }].slice(-240), positions: stream.positions || current.positions } : current); } catch { /* snapshot poll recovers */ } finally { inFlight = false; } };
+    const refresh = async () => { if (cancelled || inFlight) return; inFlight = true; try { const stream = await request("/v1/synthetic/stream?market=" + market, {}, environment); const latest = stream.latest as Snapshot["latest"] & { timestamp?: number }; const price = Number(latest?.reference ?? latest?.price); if (!cancelled && Number.isFinite(price) && price > 0 && Number.isInteger(Number(latest?.sequence))) update((current) => current && current.market === market ? { ...current, latest, ticks: reconcileSyntheticTicks([...current.ticks.map((tick) => ({ market: tick.market || market, sequence: Number(tick.sequence), price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })), { market, sequence: Number(latest.sequence), price, timestamp: latest.timestamp ?? latest.created_at }], market).map((tick) => ({ ...tick, reference: tick.price })).slice(-240), positions: stream.positions || current.positions } : current); } catch { /* snapshot poll recovers */ } finally { inFlight = false; } };
     void refresh(); const timer = window.setInterval(refresh, 1000); return () => { cancelled = true; window.clearInterval(timer); };
   }, [environment, market, request, update]);
   const actionKey = (path: string, payload: Record<string, unknown>) => {
@@ -125,7 +126,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     reviewSubmitting.current = true; setReviewPending(true); setReviewError("");
     try { const submitted = await act(review.path, review.payload); if (submitted && review.signal) setSignalResults((current) => ({ ...current, [review.signal!.id]: "Submitted" })); if (submitted) setReview(null); } catch (error) { const message = error instanceof Error ? error.message : "Action failed."; setReviewError(message); if (review.signal && /signal.*(?:expired|no longer)/i.test(message)) { setReview(null); onNotice("That signal is no longer current. A fresh signal will appear when available."); } } finally { reviewSubmitting.current = false; setReviewPending(false); }
   };
-  const points = (snapshot?.ticks || []).slice(-80).map((tick) => ({ price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })).filter((tick) => Number.isFinite(tick.price) && tick.price > 0);
+  const points = reconcileSyntheticTicks((snapshot?.ticks || []).map((tick) => ({ market: tick.market || market, sequence: Number(tick.sequence), price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })), market).slice(-80);
   const manualKey = "execution:manual";
   const autoKey = "execution:auto";
   const latestAuto = snapshot?.auto_activity?.[0];
