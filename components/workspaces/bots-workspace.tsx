@@ -1141,7 +1141,16 @@ ealed Return entry amount" /></div></label>
             const hasSettledPnl = isSynthetic
               ? Boolean(latestSyntheticSettlement)
               : data.engine.some((run) => Number(run.bot_id) === Number(bot.id));
-            const settlementMarket = latestSyntheticSettlement?.market || latestMemecoinSettlement?.symbol;
+            const rawSettlementMarket = latestSyntheticSettlement?.market || latestMemecoinSettlement?.symbol || "";
+            // Contract and mint identifiers are audit data, not primary customer
+            // copy. The API supplies approved aliases for both the qualified id
+            // and raw address; retain a short neutral fallback during a cold
+            // catalogue refresh instead of leaking an opaque identifier.
+            const settlementMarket = isSynthetic
+              ? rawSettlementMarket
+              : data.memecoin?.market_labels?.[rawSettlementMarket]
+                || data.memecoin?.market_labels?.[rawSettlementMarket.toLowerCase()]
+                || "Memecoin";
             const settlementDirection = latestSyntheticSettlement?.direction || latestMemecoinSettlement?.direction;
             const settlementReason = latestSyntheticSettlement?.close_reason || latestMemecoinSettlement?.close_reason;
             return (
