@@ -52,6 +52,14 @@ export function manualContractPreferences(type: ManualContractType, maximumLossP
   };
 }
 
+export function manualSyntheticOrderActionKey(market: string, direction: string, type: unknown, maximumLossPercent: unknown, manualStopLossPercent: unknown): string {
+  // This key is evaluated during rendering, while a trader may still be
+  // editing an incomplete open-ended draft. It identifies the selected
+  // product only; request validation remains in manualContractPreferences.
+  const contractType = normaliseManualContractType(type) === "open_ended" ? "open_ended" : "fixed_duration";
+  return `synthetic-order:${market}:${direction}:${contractType}`;
+}
+
 export function contractTypeLabel(type: unknown): string {
   return normaliseManualContractType(type) === "open_ended" ? "Open-ended" : "Fixed duration";
 }

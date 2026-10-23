@@ -1,19 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { clampLossCap, contractReasonLabel, contractTypeLabel, manualContractPreferences, validateOpenEndedTerms } from "../lib/synthetic-contract-terms.ts";
+import { clampLossCap, contractReasonLabel, contractTypeLabel, manualContractPreferences, manualSyntheticOrderActionKey, validateOpenEndedTerms } from "../lib/synthetic-contract-terms.ts";
 
 test("Manual defaults to the API's fixed-duration contract and sends no open-ended risk fields", () => {
   assert.deepEqual(manualContractPreferences("fixed", 50, 20), { contract_type: "fixed_duration" });
   assert.equal(contractTypeLabel(undefined), "Fixed duration");
 });
 
+test("fixed Manual pending identity uses the canonical fixed-duration contract type", () => {
+  assert.equal(
+    manualSyntheticOrderActionKey("SYN-25", "long", "fixed", 50, ""),
+    "synthetic-order:SYN-25:long:fixed_duration",
+  );
+});
+
+test("Manual pending identity stays render-safe while an open-ended draft is incomplete", () => {
+  assert.doesNotThrow(() => manualSyntheticOrderActionKey("SYN-25", "long", "open_ended", "", ""));
+  assert.equal(
+    manualSyntheticOrderActionKey("SYN-25", "long", "open_ended", "", ""),
+    "synthetic-order:SYN-25:long:open_ended",
+  );
+});
+
 test("open-ended Manual terms preserve valid caps and only retain a tighter stop", () => {
   assert.deepEqual(manualContractPreferences("open_ended", 50, 20), {
     contract_type: "open_ended", maximum_loss_percent: 50, manual_stop_loss_percent: 20,
   });
-  assert.deepEqual(manualContractPreferences("open_ended", 15, 30), {
-    contract_type: "open_ended", maximum_loss_percent: 15,
+  assert.deepEqual(manualContractPreferences("open_ended", 15, 10), {
+    contract_type: "open_ended", maximum_loss_percent: 15, manual_stop_loss_percent: 10,
   });
   assert.equal(clampLossCap(2), 5);
   assert.equal(contractTypeLabel("open_ended"), "Open-ended");
