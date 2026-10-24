@@ -16,7 +16,7 @@ type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
 type Snapshot = { market: string; latest: { price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number }; demo?: { active: boolean; state?: string; available_usd: number; credit_available_usd?: number } };
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots">;
-type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet") => Promise<Record<string, any>>;
+type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
 type Review = { kind: "long" | "short" | "auto" | "approve"; path: string; payload: Record<string, unknown>; amount: number; market: string; direction: string; fee: number; signal?: Signal; manualContract?: ManualContractType; maximumLossPercent?: number; manualStopLossPercent?: number };
 
 export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
@@ -115,10 +115,16 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const act = async (path: string, payload: Record<string, unknown>) => {
     const key = actionKey(path, payload); if (pendingFor(key)) return false;
     const changesExecutionMode = path === "/v1/synthetic/settings/execution-mode";
+    // These actions are attached to the engine's durable 30-second execution
+    // window. Keep the browser attached long enough to receive that outcome
+    // instead of aborting at the generic 15-second desk timeout.
+    const durableAction = path === "/v1/synthetic/orders"
+      || path.includes("/v1/synthetic/signals/")
+      || /^\/v1\/synthetic\/positions\/[^/]+\/close$/.test(path);
     if (changesExecutionMode && executionSubmitting.current) return false;
     if (changesExecutionMode) { executionSubmitting.current = true; executionRevision.current += 1; }
     try {
-      const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }));
+      const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }, environment, durableAction ? 40_000 : undefined));
       if (changesExecutionMode && (response.execution_mode === "MANUAL" || response.execution_mode === "AUTO")) confirmedMode.current = { revision: executionRevision.current, mode: response.execution_mode };
       if (response.position) update((current) => current ? { ...current, positions: [response.position, ...current.positions.filter((item) => item.id !== response.position.id)] } : current);
       if (path === "/v1/synthetic/disclosure" && response.accepted) update((current) => current ? { ...current, live_disclosure_accepted: true } : current);
