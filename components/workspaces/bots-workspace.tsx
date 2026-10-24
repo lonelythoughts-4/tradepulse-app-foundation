@@ -265,25 +265,14 @@ export function BotsWorkspace({
   };
   const memecoinMarketLabel = (symbol: string) => {
     const catalogueName = memecoinCatalog.find((asset) => asset.symbol === symbol)?.name;
-    if (catalogueName) return catalogueName;
-    return symbol.length > 16 ? `${symbol.slice(0, 6)}…${symbol.slice(-4)}` : symbol;
+    return catalogueName || "Unlisted market";
   };
   const memecoinPositionIdentity = (symbol: string) => {
     const catalogueAsset = memecoinCatalog.find((asset) => asset.symbol === symbol);
-    const [chain, tokenAddress] = symbol.split(":", 2);
-    const chainLabel = catalogueAsset?.chain_label || ({
-      solana: "Solana",
-      base: "Base",
-      bsc: "BNB Chain",
-      ethereum: "Ethereum",
-    } as Record<string, string>)[chain.toLowerCase()];
-    const shortenedAddress = tokenAddress && tokenAddress.length > 14
-      ? `${tokenAddress.slice(0, 6)}…${tokenAddress.slice(-6)}`
-      : tokenAddress;
     return {
-      chainLabel,
-      label: catalogueAsset?.name || (chainLabel && shortenedAddress ? `${chainLabel} · ${shortenedAddress}` : memecoinMarketLabel(symbol)),
-      title: catalogueAsset?.name ? `${catalogueAsset.name} · ${symbol}` : symbol,
+      chainLabel: catalogueAsset?.chain_label,
+      label: catalogueAsset?.name || "Unlisted market",
+      title: catalogueAsset?.name || "Unlisted market",
     };
   };
   const memecoinInsightLabel = (symbol: string) => {
