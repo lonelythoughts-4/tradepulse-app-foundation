@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { GradientPanel, Send, ShieldCheck, X } from "./shared-ui";
+import { fundingFeedback, type FundingOutcome } from "../../lib/admin-funding-feedback";
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -161,6 +162,7 @@ export function AdminWorkspace({
   } | null>(null);
   const [pendingAccountActions, setPendingAccountActions] = useState<Record<"fund" | "onboarding" | "pilot", boolean>>({ fund: false, onboarding: false, pilot: false });
   const accountActionSubmitting = useRef<Record<"fund" | "onboarding" | "pilot", boolean>>({ fund: false, onboarding: false, pilot: false });
+  const [fundingOutcome, setFundingOutcome] = useState<FundingOutcome>(null);
   const [autouserFile, setAutouserFile] = useState<File | null>(null);
   const [autouserMinimum, setAutouserMinimum] = useState("");
   const [autouserMaximum, setAutouserMaximum] = useState("");
@@ -274,6 +276,7 @@ export function AdminWorkspace({
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
+  const fundingState = fundingFeedback(pendingAccountActions.fund, fundingOutcome);
   const broadcastNeedsTarget = broadcastScope !== "all";
   const validBroadcastTarget = broadcastScope === "user"
     ? (/^\d+$/.test(broadcastTarget) || /^@[A-Za-z0-9_]{5,32}$/.test(broadcastTarget))
@@ -328,6 +331,26 @@ export function AdminWorkspace({
     } finally {
       accountActionSubmitting.current[action] = false;
       setPendingAccountActions((current) => ({ ...current, [action]: false }));
+    }
+  };
+  const fundUser = async () => {
+    if (accountActionSubmitting.current.fund) return;
+    accountActionSubmitting.current.fund = true;
+    setPendingAccountActions((current) => ({ ...current, fund: true }));
+    try {
+      const response = await request("/v1/admin/fund", {
+        method: "POST",
+        body: JSON.stringify({ user_id: Number(target), amount: Number(amount), reason }),
+      });
+      const outcome: FundingOutcome = response.applied ? "applied" : "already-recorded";
+      setFundingOutcome(outcome);
+      scheduleReconcile();
+      onNotice(response.message || (outcome === "applied" ? "Funding applied." : "An equivalent funding action was already recorded."));
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Funding could not be recorded.");
+    } finally {
+      accountActionSubmitting.current.fund = false;
+      setPendingAccountActions((current) => ({ ...current, fund: false }));
     }
   };
   const saveSyntheticConfig = async (settings: Record<string, string>) => {
@@ -803,7 +826,7 @@ export function AdminWorkspace({
             id={`${fundingFieldId}-user`}
             value={target}
             aria-label="Telegram user ID"
-            onChange={(e) => setTarget(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => { setTarget(e.target.value.replace(/\D/g, "")); setFundingOutcome(null); }}
             placeholder="Telegram user ID"
             inputMode="numeric"
           />
@@ -812,7 +835,7 @@ export function AdminWorkspace({
             id={`${fundingFieldId}-amount`}
             value={amount}
             aria-label="Credit amount in USD"
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => { setAmount(e.target.value); setFundingOutcome(null); }}
             placeholder="Credit amount / USD"
             inputMode="decimal"
           />
@@ -821,7 +844,7 @@ export function AdminWorkspace({
             id={`${fundingFieldId}-reason`}
             value={reason}
             aria-label="Funding reason"
-            onChange={(e) => setReason(e.target.value)}
+            onChange={(e) => { setReason(e.target.value); setFundingOutcome(null); }}
             placeholder="Funding reason"
           />
           <p className="security-feedback" role="status">
@@ -829,23 +852,16 @@ export function AdminWorkspace({
               ? "Enter a numeric Telegram user ID to enable onboarding reset."
               : !validFunding
                 ? "Funding also needs a positive USD amount and a clear reason."
-                : "Funding will be recorded in the selected admin workspace."}
+                : fundingState.status}
           </p>
           <div className="admin-actions">
             <button
               className="small-action"
               disabled={!validFunding || pendingAccountActions.fund}
               aria-busy={pendingAccountActions.fund}
-              onClick={() =>
-                void runAccountAction(
-                  "fund",
-                  "/v1/admin/fund",
-                  { user_id: Number(target), amount: Number(amount), reason },
-                  "User funded.",
-                )
-              }
+              onClick={() => void fundUser()}
             >
-              {pendingAccountActions.fund ? "Funding…" : "Fund user"}
+              {fundingState.buttonLabel}
             </button>
             <button
               className="danger-action"
