@@ -4507,10 +4507,38 @@ function AdminRoom() {
   );
 }
 
+type LanguageCode = "en" | "ru" | "hi" | "es" | "it" | "zh" | "ja" | "ro";
+
+const activationLanguages: Array<{ code: LanguageCode; label: string; flag: string }> = [
+  { code: "en", label: "English", flag: "locale-en.svg" }, { code: "ru", label: "Русский", flag: "locale-ru.svg" },
+  { code: "hi", label: "हिन्दी", flag: "locale-hi.svg" }, { code: "es", label: "Español", flag: "locale-es.svg" },
+  { code: "it", label: "Italiano", flag: "locale-it.svg" }, { code: "zh", label: "简体中文", flag: "locale-zh.svg" },
+  { code: "ja", label: "日本語", flag: "locale-ja.svg" }, { code: "ro", label: "Română", flag: "locale-ro.svg" },
+];
+
+const activationCopy: Record<LanguageCode, { language: string; title: string; intro: string; terms: string; body: string; accept: string; opening: string }> = {
+  en: { language: "Choose language", title: "Confirm your access", intro: "Review the terms and risk notice before opening your desk.", terms: "Terms & risk notice", body: "You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.", accept: "Accept terms and open desk", opening: "Opening desk…" },
+  ru: { language: "Выберите язык", title: "Подтвердите доступ", intro: "Ознакомьтесь с условиями и рисками перед открытием кабинета.", terms: "Условия и уведомление о рисках", body: "Вы отвечаете за сеть, адрес и сумму, которые отправляете. Депозиты зачисляются только после подтверждения в сети. Боты, виртуальная демо-версия и анализ рынка не гарантируют исполнение или прибыль.", accept: "Принять условия и открыть кабинет", opening: "Открываем кабинет…" },
+  hi: { language: "भाषा चुनें", title: "अपनी पहुंच की पुष्टि करें", intro: "अपना डेस्क खोलने से पहले नियम और जोखिम सूचना देखें।", terms: "नियम और जोखिम सूचना", body: "आपके द्वारा भेजे गए नेटवर्क, पते और राशि की जिम्मेदारी आपकी है। जमा राशि केवल ऑन-चेन पुष्टि के बाद जमा होती है। बॉट, वर्चुअल डेमो और मार्केट विश्लेषण निष्पादन या लाभ की गारंटी नहीं देते।", accept: "नियम स्वीकार करें और डेस्क खोलें", opening: "डेस्क खोला जा रहा है…" },
+  es: { language: "Elige idioma", title: "Confirma tu acceso", intro: "Revisa los términos y el aviso de riesgo antes de abrir tu escritorio.", terms: "Términos y aviso de riesgo", body: "Eres responsable de la red, dirección y cantidad que envíes. Los depósitos requieren confirmación en cadena. Los controles del bot, los resultados de demo virtuales y el análisis de mercado no garantizan ejecución ni ganancias.", accept: "Aceptar términos y abrir escritorio", opening: "Abriendo escritorio…" },
+  it: { language: "Scegli lingua", title: "Conferma l'accesso", intro: "Rivedi i termini e l'avviso sui rischi prima di aprire il desk.", terms: "Termini e avviso sui rischi", body: "Sei responsabile della rete, dell'indirizzo e dell'importo inviati. I depositi richiedono conferma on-chain. I controlli dei bot, i risultati demo virtuali e l'analisi di mercato non garantiscono esecuzione o profitto.", accept: "Accetta i termini e apri il desk", opening: "Apertura desk…" },
+  zh: { language: "选择语言", title: "确认访问权限", intro: "打开交易台前，请阅读条款和风险提示。", terms: "条款与风险提示", body: "您对提交的网络、地址和金额负责。存款需要链上确认。机器人控制、虚拟演示结果和市场分析不保证执行或盈利。", accept: "接受条款并打开交易台", opening: "正在打开交易台…" },
+  ja: { language: "言語を選択", title: "アクセスを確認", intro: "デスクを開く前に、利用規約とリスク通知をご確認ください。", terms: "利用規約とリスク通知", body: "送信するネットワーク、アドレス、金額はお客様の責任です。入金にはオンチェーン確認が必要です。ボット操作、仮想デモ結果、市場分析は約定や利益を保証しません。", accept: "規約に同意してデスクを開く", opening: "デスクを開いています…" },
+  ro: { language: "Alege limba", title: "Confirmă accesul", intro: "Examinează termenii și informarea privind riscurile înainte de a deschide biroul.", terms: "Termeni și informare privind riscurile", body: "Sunteți responsabil pentru rețea, adresă și suma trimisă. Depozitele necesită confirmare on-chain. Controalele botului, rezultatele demo virtuale și analiza de piață nu garantează execuția sau profitul.", accept: "Acceptă termenii și deschide biroul", opening: "Se deschide biroul…" },
+};
+
+function ActivationLanguageFlag({ language }: { language: LanguageCode }) {
+  const item = activationLanguages.find((candidate) => candidate.code === language) || activationLanguages[0];
+  return <img className="language-flag" src={`/icons/${item.flag}`} alt="" aria-hidden="true" />;
+}
+
 function ActivationJourney({ data, request, onAccepted, onComplete, onNotice }: { data: LiveDashboard; request: (path: string, options?: RequestInit) => Promise<any>; onAccepted: () => void; onComplete: () => Promise<void>; onNotice: (message: string) => void }) {
   const [step, setStep] = useState(Math.min(4, Math.max(0, data.user.onboarding?.step || 0)));
   const [checking, setChecking] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const initialLanguage = activationLanguages.some((item) => item.code === data.user.language_code) ? data.user.language_code as LanguageCode : "en";
+  const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
+  const [languageSaving, setLanguageSaving] = useState(false);
   const [state, setState] = useState<string>(data.user.onboarding?.channel.verified ? "verified" : "");
   const channel = data.user.onboarding?.channel;
   const pages = [
@@ -4525,7 +4553,16 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice }: 
     return <main className="activation-shell"><section className="activation-stage" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation {step + 1} of 5</p><h1 id="activation-title">{page[0]}</h1><p>{page[1]}</p><div className="activation-actions"><button className="primary-action" onClick={() => advance(step + 1)}>Continue</button>{step > 0 && <button className="text-action" onClick={() => setStep(step - 1)}>Back</button>}</div></section></main>;
   }
   const gateReady = Boolean(channel?.enabled && channel.configured);
+  const copy = activationCopy[language];
   const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable"); } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : "Telegram membership could not be checked."); } finally { setChecking(false); } };
+  const chooseLanguage = async (next: LanguageCode) => {
+    if (next === language || languageSaving) return;
+    setLanguageSaving(true);
+    try {
+      await request("/v1/account/language", { method: "POST", body: JSON.stringify({ language_code: next }) });
+      setLanguage(next);
+    } catch (error) { onNotice(error instanceof Error ? error.message : "Could not save your language preference."); } finally { setLanguageSaving(false); }
+  };
   const accept = async () => {
     if (accepting) return;
     setAccepting(true);
@@ -4538,7 +4575,7 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice }: 
     } finally { setAccepting(false); }
   };
   const verified = Boolean(channel?.verified || state === "verified");
-  return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation 5 of 5</p><h1 id="activation-title">Confirm your access</h1><p>Review the terms and risk notice before opening your desk. {gateReady ? "Join the dedicated onboarding channel, then ask TradePulse to recheck your Telegram membership." : "Channel verification is not active, so this step will not block your access."}</p>{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">Join onboarding channel</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? "Checking Telegram…" : "I joined · recheck"}</button>{state === "not_joined" || state === "restricted" ? <small>Telegram has not confirmed an active membership yet. Join the channel, then recheck.</small> : null}{state === "unavailable" ? <small>Telegram verification is temporarily unavailable. Try again shortly or contact support.</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>Terms &amp; risk notice</strong><br />You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.</p><button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>{accepting ? "Opening desk…" : "Accept terms and open desk"}</button></div>}</section></main>;
+  return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation 5 of 5</p><h1 id="activation-title">{copy.title}</h1><p>{copy.intro} {gateReady ? "Join the dedicated onboarding channel, then ask TradePulse to recheck your Telegram membership." : "Channel verification is not active, so this step will not block your access."}</p><fieldset className="activation-languages" aria-label="Choose language"><legend>{copy.language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} disabled={languageSaving} onClick={() => void chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">Join onboarding channel</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? "Checking Telegram…" : "I joined · recheck"}</button>{state === "not_joined" || state === "restricted" ? <small>Telegram has not confirmed an active membership yet. Join the channel, then recheck.</small> : null}{state === "unavailable" ? <small>Telegram verification is temporarily unavailable. Try again shortly or contact support.</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>{copy.terms}</strong><br />{copy.body}</p><button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>{accepting ? copy.opening : copy.accept}</button></div>}</section></main>;
 }
 
 export type LiveDashboard = {
@@ -4547,6 +4584,7 @@ export type LiveDashboard = {
     first_name?: string;
     username?: string;
     tier: string;
+    language_code?: LanguageCode;
     fee_credit_usd: number;
     avatar_id?: AvatarId | null;
     identity?: { locked_at?: number | null; reveal?: string | null; change_count?: number; change_fee_usd?: number };
