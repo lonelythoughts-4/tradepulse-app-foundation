@@ -40,6 +40,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [signals, setSignals] = useState<Signal[]>([]);
   const [signalResults, setSignalResults] = useState<Record<string, string>>({});
   const [signalError, setSignalError] = useState("");
+  const signalPollInFlight = useRef(false);
   const [loadError, setLoadError] = useState("");
   const [now, setNow] = useState(Date.now());
   const [helpOpen, setHelpOpen] = useState(false);
@@ -75,8 +76,22 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   }, 5000, true);
   useEffect(() => {
     let cancelled = false;
-    const refresh = async () => { try { const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10"); if (!cancelled && market === marketRef.current) { const next = (result.signals || []) as Signal[]; setSignals(next); setSignalResults((current) => Object.fromEntries(Object.entries(current).filter(([id]) => next.some((signal) => signal.id === id)))); setSignalError(""); } } catch { if (!cancelled) setSignalError("Signal updates unavailable. Reconnecting…"); } };
-    void refresh(); const timer = window.setInterval(refresh, 1000); return () => { cancelled = true; window.clearInterval(timer); };
+    const refresh = async () => {
+      if (cancelled || signalPollInFlight.current) return;
+      signalPollInFlight.current = true;
+      try {
+        const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10");
+        if (!cancelled && market === marketRef.current) {
+          const next = (result.signals || []) as Signal[];
+          setSignals(next);
+          setSignalResults((current) => Object.fromEntries(Object.entries(current).filter(([id]) => next.some((signal) => signal.id === id))));
+          setSignalError("");
+        }
+      } catch {
+        if (!cancelled) setSignalError("Signal updates unavailable. Reconnecting…");
+      } finally { signalPollInFlight.current = false; }
+    };
+    void refresh(); const timer = window.setInterval(refresh, 2000); return () => { cancelled = true; window.clearInterval(timer); };
   }, [environment, market, request]);
   useEffect(() => {
     let cancelled = false; let inFlight = false;
