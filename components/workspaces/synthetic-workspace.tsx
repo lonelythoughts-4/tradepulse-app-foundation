@@ -48,6 +48,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [reviewError, setReviewError] = useState("");
   const reviewSubmitting = useRef<string | null>(null);
   const [autoAcknowledged, setAutoAcknowledged] = useState(false);
+  const [executionTransition, setExecutionTransition] = useState<"MANUAL" | "AUTO" | null>(null);
   const executionSubmitting = useRef(false);
   const executionRevision = useRef(0);
   const confirmedMode = useRef<{ revision: number; mode: "MANUAL" | "AUTO" } | null>(null);
@@ -122,17 +123,17 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       || path.includes("/v1/synthetic/signals/")
       || /^\/v1\/synthetic\/positions\/[^/]+\/close$/.test(path);
     if (changesExecutionMode && executionSubmitting.current) return false;
-    if (changesExecutionMode) { executionSubmitting.current = true; executionRevision.current += 1; }
+    if (changesExecutionMode) { executionSubmitting.current = true; executionRevision.current += 1; setExecutionTransition(payload.execution_mode === "AUTO" ? "AUTO" : "MANUAL"); }
     try {
       const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }, environment, durableAction ? 40_000 : undefined));
       if (changesExecutionMode && (response.execution_mode === "MANUAL" || response.execution_mode === "AUTO")) confirmedMode.current = { revision: executionRevision.current, mode: response.execution_mode };
       if (response.position) update((current) => current ? { ...current, positions: [response.position, ...current.positions.filter((item) => item.id !== response.position.id)] } : current);
       if (path === "/v1/synthetic/disclosure" && response.accepted) update((current) => current ? { ...current, live_disclosure_accepted: true } : current);
-      if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) update((current) => current ? { ...current, execution_mode: response.execution_mode, execution: { ...current.execution, ...response } } : current);
+      if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) { update((current) => current ? { ...current, execution_mode: response.execution_mode, execution: { ...current.execution, ...response } } : current); setExecutionTransition(null); }
       const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
       if (bot && payload.action === "topup") onDashboardPatch((current) => current ? { ...current, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet, bots: current.bots.map((item) => item.id === bot[1] ? { ...item, ...(response.bot || {}) } : item) } : current);
       onNotice(response.message || "Saved successfully."); return true;
-    } catch (error) { const message = error instanceof Error ? error.message : "Action failed."; onNotice(message); throw error; }
+    } catch (error) { if (changesExecutionMode) setExecutionTransition(null); const message = error instanceof Error ? error.message : "Action failed."; onNotice(message); throw error; }
     finally { if (changesExecutionMode) { executionSubmitting.current = false; executionRevision.current += 1; } }
   };
   const openReview = (kind: Review["kind"], signal?: Signal) => {
@@ -183,7 +184,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         <div><span className="eyebrow">LAST TICK</span><strong>{Number(snapshot.latest?.reference || 0).toFixed(5)}</strong></div>
         <div><span className="eyebrow">UNASSIGNED</span><strong>{money(account.wallet.available)}</strong></div>
         <div><span className="eyebrow">ALLOCATION</span><strong>{money(account.bots.find((bot) => bot.product === "synthetic")?.capital_usd || 0)}</strong></div>
-        <div><span className="eyebrow">EXECUTION</span><strong>{snapshot.execution_mode || "MANUAL"}</strong></div>
+        <div><span className="eyebrow">EXECUTION</span><strong>{executionTransition ? "SWITCHING" : snapshot.execution_mode || "MANUAL"}</strong></div>
       </div>
       {environment === "mainnet" ? <>
         {!snapshot.live_disclosure_accepted && <div className="announcements"><span className="eyebrow">LIVE-RISK ACKNOWLEDGEMENT</span><strong>Required before wallet-funded Synthetic trading or Auto.</strong><p>Each order reserves wallet funds at 1:1 margin; price movement can result in loss of the full reserved amount; spread and tier fees apply. Auto may place wallet-funded orders using the amount you approve.</p><button className="primary-action" disabled={pendingFor("disclosure:accept")} onClick={() => void act("/v1/synthetic/disclosure", {}).catch(() => undefined)}>{pendingFor("disclosure:accept") ? "Saving…" : "Review & accept"}</button></div>}
@@ -202,11 +203,11 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           </div>
           {manualContract === "open_ended" && <div className="synthetic-contract-risk"><label className="amount-field">Maximum loss cap ({MINIMUM_OPEN_ENDED_LOSS_CAP}%–{MAXIMUM_OPEN_ENDED_LOSS_CAP}%)<input value={maximumLossPercent} onChange={(event) => setMaximumLossPercent(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Open-ended maximum loss cap percentage" aria-invalid={Boolean(openEndedTerms && !openEndedTerms.valid)} /></label><label className="amount-field">Optional tighter stop (at least {MINIMUM_OPEN_ENDED_LOSS_CAP}%)<input value={manualStopLossPercent} onChange={(event) => setManualStopLossPercent(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Open-ended optional tighter stop percentage" placeholder="No additional stop" aria-invalid={Boolean(openEndedTerms && !openEndedTerms.valid)} /></label><small>Protection is capped at the percentage shown. A tighter stop must be between {MINIMUM_OPEN_ENDED_LOSS_CAP}% and the cap.</small>{openEndedTerms && !openEndedTerms.valid && <p role="alert">{openEndedTerms.error}</p>}</div>}
         </section>
-        <div className="button-row" role="group" aria-label="Execution mode"><button className={snapshot.execution_mode === "MANUAL" ? "small-action active" : "small-action"} disabled={pendingFor(manualKey)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" }).catch(() => undefined)}>{pendingFor(manualKey) ? "Saving…" : "Manual review"}</button><span className={"status-chip " + (snapshot.execution_mode === "AUTO" ? "running" : "paused")}><i />Auto {snapshot.execution_mode === "AUTO" ? "on" : "off"}</span></div>
+        <div className="button-row" role="group" aria-label="Execution mode"><button className={snapshot.execution_mode === "MANUAL" ? "small-action active" : "small-action"} disabled={pendingFor(manualKey) || Boolean(executionTransition)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" }).catch(() => undefined)}>{executionTransition === "MANUAL" ? "Switching…" : pendingFor(manualKey) ? "Saving…" : "Manual review"}</button><span className={"status-chip " + (executionTransition === "AUTO" || snapshot.execution_mode === "AUTO" ? "running" : "paused")} aria-live="polite"><i />{executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Returning to manual…" : "Auto " + (snapshot.execution_mode === "AUTO" ? "on" : "off")}</span></div>
         <label className="amount-field">Auto amount per order<input value={autoAmount} onChange={(event) => setAutoAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic order size" /></label>
         <label className="amount-field">Set aside for Auto<input value={autoAllocation} onChange={(event) => setAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" /></label>
         <p>Auto: {money(Number(snapshot.execution?.auto_available_usd || 0))} reserved · Manual: {money(Number(snapshot.execution?.manual_available_usd || snapshot.allocation?.available_usd || 0))} available</p>
-        <button className="primary-action" disabled={!snapshot.live_disclosure_accepted || pendingFor(autoKey) || Number(autoAmount) < 20 || Number(autoAllocation) < Number(autoAmount)} onClick={() => openReview("auto")}>{snapshot.execution_mode === "AUTO" ? "Review Auto changes" : "Review & enable Auto"}</button>
+        <button className="primary-action" disabled={!snapshot.live_disclosure_accepted || pendingFor(autoKey) || Boolean(executionTransition) || Number(autoAmount) < 20 || Number(autoAllocation) < Number(autoAmount)} onClick={() => openReview("auto")}>{executionTransition === "AUTO" ? "Enabling Auto…" : snapshot.execution_mode === "AUTO" ? "Review Auto changes" : "Review & enable Auto"}</button>
         {Number(autoAllocation) < Number(autoAmount) && <p role="status">Set aside at least {money(Math.max(20, Number(autoAmount) || 20))} for Auto to enable review. Manual capacity stays separate.</p>}
         {snapshot.execution_mode === "AUTO" && <><p>Automatic uses the confirmed per-order margin within its assigned capacity.</p><div className="activity-row" role="status" aria-live="polite"><div className="activity-info"><strong>{autoActivityTitle}</strong><small>{autoActivityDetail}</small></div></div></>}
         <div className="button-row" role="group" aria-label="Manual orders"><button className="small-action" disabled={!snapshot.live_disclosure_accepted || manualOrderPending("long")} onClick={() => openReview("long")}>{manualOrderPending("long") ? "Submitting…" : "Review Long"}</button><button className="small-action" disabled={!snapshot.live_disclosure_accepted || manualOrderPending("short")} onClick={() => openReview("short")}>{manualOrderPending("short") ? "Submitting…" : "Review Short"}</button></div>
