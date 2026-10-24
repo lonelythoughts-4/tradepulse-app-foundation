@@ -67,6 +67,7 @@ export function BotsWorkspace({
   const [flashbackAmount, setFlashbackAmount] = useState(20);
   const [flashbackReview, setFlashbackReview] = useState(false);
   const [flashbackNewSession, setFlashbackNewSession] = useState(false);
+  const [selectedFlashbackId, setSelectedFlashbackId] = useState<string | null>(null);
   const [flashbackType, setFlashbackType] = useState<"sealed" | "direction" | null>(null);
   const [flashbackDirectionMarket, setFlashbackDirectionMarket] = useState("");
   const [flashbackDirectionChoice, setFlashbackDirectionChoice] = useState<"up" | "down" | null>(null);
@@ -113,9 +114,15 @@ export function BotsWorkspace({
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
-  const flashback = data.flashback || null;
-  const flashbackSessions = data.flashback_sessions || (flashback ? [flashback] : []);
+  const latestFlashback = data.flashback || null;
+  const flashbackSessions = data.flashback_sessions || (latestFlashback ? [latestFlashback] : []);
   const activeFlashbacks = flashbackSessions.filter((session) => session.state === "sealed" || session.state === "ready_to_reveal");
+  const flashback = flashbackSessions.find((session) => session.id === selectedFlashbackId) || flashbackSessions[0] || null;
+  const flashbackSessionIds = flashbackSessions.map((session) => session.id).join("|");
+  const flashbackSessionChoices = [
+    ...activeFlashbacks,
+    ...(flashback && !activeFlashbacks.some((session) => session.id === flashback.id) ? [flashback] : []),
+  ];
   const flashbackAvailable = String(data.environment || "").toLowerCase() === "mainnet";
   const flashbackRules = data.flashback_rules;
   const flashbackDirection = data.flashback_direction;
@@ -136,6 +143,11 @@ export function BotsWorkspace({
     ] as const;
   };
   const sealedReturn = flashback?.product_version === "sealed-return-v2";
+  useEffect(() => {
+    setSelectedFlashbackId((current) => flashbackSessions.some((session) => session.id === current)
+      ? current
+      : flashbackSessions[0]?.id || null);
+  }, [flashbackSessionIds]);
   useEffect(() => {
     const clientNow = Date.now();
     const serverSeconds = Number(data.server_time);
@@ -322,7 +334,7 @@ export function BotsWorkspace({
     if (path === "/v1/memecoin/orders") return `memecoin-order:${String(payload.bot_id || "new")}`;
     if (path === "/v1/flashback/start") return "flashback:start";
     if (path === "/v1/flashback/direction/start") return "flashback:direction:start";
-    if (path === "/v1/flashback/reveal") return "flashback:reveal";
+    if (path === "/v1/flashback/reveal") return `flashback:reveal:${String(payload.session_id || "current")}`;
     if (path === "/v1/bots") return "bot:create";
     return path;
   };
@@ -479,7 +491,8 @@ export function BotsWorkspace({
     }
   };
   const revealFlashback = async () => {
-    await run("/v1/flashback/reveal", {});
+    if (!flashback?.id) return;
+    await run("/v1/flashback/reveal", { session_id: flashback.id });
     // `run` applies the settled session before it resolves, so no dashboard
     // reload is needed to leave the sealed state.
   };
@@ -498,6 +511,22 @@ export function BotsWorkspace({
             </span>
           </div>
         </GradientPanel>
+        {flashbackSessionChoices.length > 1 && <GradientPanel className="compound-panel">
+          <h2>Choose a contract</h2>
+          <p>Each contract has its own entry, settlement clock, and result. Select one to view or reveal its exact outcome.</p>
+          <div className="segment-control flashback-session-selector" role="radiogroup" aria-label="Flashback contract" onKeyDown={handleBotChoiceKeyDown}>
+            {flashbackSessionChoices.map((session) => {
+              const isSelected = session.id === flashback?.id;
+              const kind = session.product_version === "market-direction-v1" ? "Direction" : "Sealed Return";
+              const status = session.state === "ready_to_reveal"
+                ? "Result ready"
+                : session.state === "sealed"
+                  ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s left`
+                  : "Settled";
+              return <button type="button" role="radio" aria-checked={isSelected} tabIndex={isSelected ? 0 : -1} className={isSelected ? "active" : ""} key={session.id} onClick={() => { setSelectedFlashbackId(session.id); setFlashbackNewSession(false); }}>{kind} · {money(Number(session.allocation_usd || 0))} · {status}</button>;
+            })}
+          </div>
+        </GradientPanel>}
         <GradientPanel className="compound-panel">
           <h2>Active contracts</h2>
           <p>One Sealed Return and one Flashback Direction may run together. Each settles on its own 30-second contract clock.</p>
@@ -568,7 +597,7 @@ ealed Return entry amount" /></div></label>
             <h2>Your result is ready</h2>
             <p>The reveal window has closed. Your result stayed sealed until this reveal.</p>
             <div className="fact-block"><span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
-          <button className="primary-action" disabled={isActionPending("flashback:reveal")} aria-busy={isActionPending("flashback:reveal")} onClick={() => void revealFlashback()}><ActionFeedback state={isActionPending("flashback:reveal") ? "pending" : "idle"}>{isActionPending("flashback:reveal") ? "Revealing…" : "Reveal result"}</ActionFeedback> <StateIcon name="check" /></button>
+          <button className="primary-action" disabled={isActionPending(`flashback:reveal:${flashback.id}`)} aria-busy={isActionPending(`flashback:reveal:${flashback.id}`)} onClick={() => void revealFlashback()}><ActionFeedback state={isActionPending(`flashback:reveal:${flashback.id}`) ? "pending" : "idle"}>{isActionPending(`flashback:reveal:${flashback.id}`) ? "Revealing…" : "Reveal result"}</ActionFeedback> <StateIcon name="check" /></button>
           </GradientPanel>
         </>}
         {flashback?.state === "revealed" && !flashbackNewSession && <>
