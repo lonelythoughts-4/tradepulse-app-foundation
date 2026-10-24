@@ -6189,17 +6189,8 @@ function LiveWalletScreen({
           </div>
         </div>
         <GradientPanel className="ledger-card">
-          {[...data.engine, ...data.ledger].length ? (
-            [
-              ...data.engine.map((entry) => ({
-                kind: entry.status,
-                asset: "Engine",
-                amount_usd: entry.net_realized,
-                status: entry.status,
-                created_at: entry.created_at,
-              })),
-              ...data.ledger,
-            ]
+          {data.ledger.length ? (
+            [...data.ledger]
               .sort((a, b) => b.created_at - a.created_at)
               .map((entry, index) => {
                 const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
