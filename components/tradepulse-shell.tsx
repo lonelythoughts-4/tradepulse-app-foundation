@@ -4510,6 +4510,7 @@ function AdminRoom() {
 function ActivationJourney({ data, request, onComplete, onNotice }: { data: LiveDashboard; request: (path: string, options?: RequestInit) => Promise<any>; onComplete: () => Promise<void>; onNotice: (message: string) => void }) {
   const [step, setStep] = useState(Math.min(4, Math.max(0, data.user.onboarding?.step || 0)));
   const [checking, setChecking] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const [state, setState] = useState<string>(data.user.onboarding?.channel.verified ? "verified" : "");
   const channel = data.user.onboarding?.channel;
   const pages = [
@@ -4525,9 +4526,18 @@ function ActivationJourney({ data, request, onComplete, onNotice }: { data: Live
   }
   const gateReady = Boolean(channel?.enabled && channel.configured);
   const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable"); } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : "Telegram membership could not be checked."); } finally { setChecking(false); } };
-  const accept = async () => { try { await request("/v1/onboarding/accept", { method: "POST", body: "{}" }); await onComplete(); } catch (error) { onNotice(error instanceof Error ? error.message : "Could not save your terms acceptance."); } };
+  const accept = async () => {
+    if (accepting) return;
+    setAccepting(true);
+    try {
+      await request("/v1/onboarding/accept", { method: "POST", body: "{}" });
+      await onComplete();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not save your terms acceptance.");
+    } finally { setAccepting(false); }
+  };
   const verified = Boolean(channel?.verified || state === "verified");
-  return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation 5 of 5</p><h1 id="activation-title">Confirm your access</h1><p>Review the terms and risk notice before opening your desk. {gateReady ? "Join the dedicated onboarding channel, then ask TradePulse to recheck your Telegram membership." : "Channel verification is not active, so this step will not block your access."}</p>{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">Join onboarding channel</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? "Checking Telegram…" : "I joined · recheck"}</button>{state === "not_joined" || state === "restricted" ? <small>Telegram has not confirmed an active membership yet. Join the channel, then recheck.</small> : null}{state === "unavailable" ? <small>Telegram verification is temporarily unavailable. Try again shortly or contact support.</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>Terms &amp; risk notice</strong><br />You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.</p><button className="primary-action" onClick={accept}>Accept terms and open desk</button></div>}</section></main>;
+  return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><div className="activation-mark"><PulseMark /></div><p className="activation-progress">Activation 5 of 5</p><h1 id="activation-title">Confirm your access</h1><p>Review the terms and risk notice before opening your desk. {gateReady ? "Join the dedicated onboarding channel, then ask TradePulse to recheck your Telegram membership." : "Channel verification is not active, so this step will not block your access."}</p>{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">Join onboarding channel</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? "Checking Telegram…" : "I joined · recheck"}</button>{state === "not_joined" || state === "restricted" ? <small>Telegram has not confirmed an active membership yet. Join the channel, then recheck.</small> : null}{state === "unavailable" ? <small>Telegram verification is temporarily unavailable. Try again shortly or contact support.</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>Terms &amp; risk notice</strong><br />You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.</p><button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>{accepting ? "Opening desk…" : "Accept terms and open desk"}</button></div>}</section></main>;
 }
 
 export type LiveDashboard = {
