@@ -4507,7 +4507,7 @@ function AdminRoom() {
   );
 }
 
-function ActivationJourney({ data, request, onComplete, onNotice }: { data: LiveDashboard; request: (path: string, options?: RequestInit) => Promise<any>; onComplete: () => Promise<void>; onNotice: (message: string) => void }) {
+function ActivationJourney({ data, request, onAccepted, onComplete, onNotice }: { data: LiveDashboard; request: (path: string, options?: RequestInit) => Promise<any>; onAccepted: () => void; onComplete: () => Promise<void>; onNotice: (message: string) => void }) {
   const [step, setStep] = useState(Math.min(4, Math.max(0, data.user.onboarding?.step || 0)));
   const [checking, setChecking] = useState(false);
   const [accepting, setAccepting] = useState(false);
@@ -4531,7 +4531,8 @@ function ActivationJourney({ data, request, onComplete, onNotice }: { data: Live
     setAccepting(true);
     try {
       await request("/v1/onboarding/accept", { method: "POST", body: "{}" });
-      await onComplete();
+      onAccepted();
+      void onComplete();
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Could not save your terms acceptance.");
     } finally { setAccepting(false); }
@@ -6868,7 +6869,7 @@ function LiveTradePulse() {
       </main>
     );
   if (!data.user.onboarding_complete)
-    return <ActivationJourney data={data} request={request} onComplete={load} onNotice={setNotice} />;
+    return <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} />;
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
