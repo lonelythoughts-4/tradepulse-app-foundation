@@ -917,6 +917,12 @@ ealed Return entry amount" /></div></label>
                   ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh launches on supported networks only after a same-network DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
               </p>
+              {awaitingAuthorization && <div className="activity-row" role="status">
+                <div className="activity-info">
+                  <strong>Automatic entries cannot start yet.</strong>
+                  <small>Choose the strategy controls, turn Automatic entries on if you want it, then authorize this bot. It will review only fresh eligible market signals after authorization.</small>
+                </div>
+              </div>}
             <span className="eyebrow">STRATEGY BASKET</span>
             <div className="segment-control" role="group" aria-label="Strategy basket">
               {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
@@ -941,7 +947,7 @@ ealed Return entry amount" /></div></label>
                 disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0}
                 onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
               >
-                {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? "Authorize Memecoin Bot Beta" : "Save strategy controls"} <StateIcon name="check" />
+                {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize Memecoin Bot Beta") : "Save strategy controls"} <StateIcon name="check" />
               </button>
             </GradientPanel>
           )}
