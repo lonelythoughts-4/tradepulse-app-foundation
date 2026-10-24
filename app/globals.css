@@ -576,6 +576,8 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
   .mobile-more-menu svg { width:18px; height:18px; }
 }
 
+.account-language-options{margin-top:18px}.account-language-options .language-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
