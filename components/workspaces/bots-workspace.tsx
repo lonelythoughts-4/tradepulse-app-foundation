@@ -331,13 +331,17 @@ export function BotsWorkspace({
   const run = async (path: string, payload: Record<string, unknown>) => {
     const actionKey = actionKeyFor(path, payload);
     if (isActionPending(actionKey)) return false;
+    // Authorization persists a funded risk disclosure and the customer's
+    // strategy controls in one transaction. Give that durable result enough
+    // time to return instead of surfacing a browser abort as a refusal.
+    const durableAction = path === `/v1/bots/${selected.id}/actions` && payload.action === "authorize";
     setReviewError("");
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(path, {
         method: "POST",
         body: JSON.stringify(payload),
-      });
+      }, undefined, durableAction ? 40_000 : undefined);
       onNotice(response.message || "Saved successfully.");
       // The parent owns the desk snapshot. Apply an authoritative response
       // there rather than reaching across component scope; only responses
