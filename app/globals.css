@@ -673,3 +673,6 @@ html,body{overflow-x:clip}
     color:var(--tp-accent);
   }
 }
+
+/* Flashback can expose two independently timed contracts at once. */
+.flashback-session-selector{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
