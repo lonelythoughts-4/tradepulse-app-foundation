@@ -6530,6 +6530,7 @@ function LiveTradePulse() {
           // cannot recreate an authenticated session.
           setNotice("Your secure desk session ended. Reconnect with Telegram to continue.");
           updateDashboard(null);
+          throw new Error("Your secure desk session ended. Reconnect with Telegram to continue.");
         }
         const reference = typeof body.request_id === "string"
           ? body.request_id
