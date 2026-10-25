@@ -5087,7 +5087,7 @@ function AuthEntryPage({ notice }: { notice: string }) {
     </header>
     <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title">
       <div className="telegram-entry-copy">
-        <h1 id="telegram-entry-title">A desk for every moment that matters.</h1>
+        <h1 id="telegram-entry-title">A desk for every market moment.</h1>
         <p className="telegram-entry-lede">{notice || (insideTelegram ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button." : "Bring your Telegram account into a focused trading desk: live market context, explicit controls, and an activity trail that stays understandable.")}</p>
         {!insideTelegram && <BrowserBotHandoff />}
         <p className="telegram-entry-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</p>
