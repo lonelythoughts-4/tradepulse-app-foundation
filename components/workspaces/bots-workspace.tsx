@@ -16,6 +16,22 @@ function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
   return <GradientPanel className="empty-bots"><img src="/illustrations/empty-bots.png" alt="Empty wallet scene with a butterfly" className="illustration-empty-bots pointer-events-none select-none" draggable={false} decoding="async" loading="eager" /><p>No bots are running yet.</p><button className="empty-bots-action" onClick={onLaunch}>Launch your first bot <ChevronRight size={14} /></button></GradientPanel>;
 }
 
+const memecoinNames: Record<string, string> = {
+  DOGE: "Dogecoin", SHIB: "Shiba Inu", PEPE: "Pepe", WIF: "dogwifhat", BONK: "Bonk",
+};
+const memecoinLogos: Record<string, string> = {
+  DOGE: "/icons/crypto/doge.svg", SHIB: "/icons/crypto/shib.svg", PEPE: "/icons/crypto/pepe.svg",
+};
+
+function MemecoinMark({ symbol, compact = false }: { symbol: string; compact?: boolean }) {
+  const normalized = symbol.toUpperCase();
+  const size = compact ? 16 : 18;
+  const source = memecoinLogos[normalized];
+  return source
+    ? <img className="memecoin-mark" src={source} alt="" aria-hidden="true" width={size} height={size} />
+    : <span className="memecoin-mark memecoin-mark-fallback" aria-hidden="true" style={{ width: size, height: size }}>{normalized.slice(0, 1)}</span>;
+}
+
 function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
   event.preventDefault();
@@ -271,14 +287,14 @@ export function BotsWorkspace({
   };
   const memecoinMarketLabel = (symbol: string) => {
     const catalogueName = memecoinCatalog.find((asset) => asset.symbol === symbol)?.name;
-    return catalogueName || "Unlisted market";
+    return catalogueName || memecoinNames[symbol.toUpperCase()] || symbol;
   };
   const memecoinPositionIdentity = (symbol: string) => {
     const catalogueAsset = memecoinCatalog.find((asset) => asset.symbol === symbol);
     return {
       chainLabel: catalogueAsset?.chain_label,
-      label: catalogueAsset?.name || "Unlisted market",
-      title: catalogueAsset?.name || "Unlisted market",
+      label: catalogueAsset?.name || memecoinNames[symbol.toUpperCase()] || symbol,
+      title: catalogueAsset?.name || memecoinNames[symbol.toUpperCase()] || symbol,
     };
   };
   const memecoinInsightLabel = (symbol: string) => {
@@ -820,7 +836,7 @@ ealed Return entry amount" /></div></label>
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
             <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
               {memecoinAssets.map((symbol) => (
-                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} title={memecoinInsightLabel(symbol)} aria-label={`${memecoinMarketLabel(symbol)}. ${memecoinInsightLabel(symbol)}`} onClick={() => setMemecoinMarket(symbol)}>{memecoinMarketLabel(symbol)}</button>
+                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} title={memecoinInsightLabel(symbol)} aria-label={`${memecoinMarketLabel(symbol)}. ${memecoinInsightLabel(symbol)}`} onClick={() => setMemecoinMarket(symbol)}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{memecoinMarketLabel(symbol)}</span></button>
               ))}
             </div>
             <MarketChart points={memecoinSnapshot.points || []} ohlcCandles={memecoinSnapshot.candles} market={`${memecoinMarketLabel(memecoinMarket)} / USDT`} />
@@ -936,7 +952,7 @@ ealed Return entry amount" /></div></label>
             <span className="eyebrow">STRATEGY BASKET</span>
             <div className="segment-control" role="group" aria-label="Strategy basket">
               {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
-                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}>{symbol}</button>
+                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{symbol}</span></button>
               ))}
             </div>
             <button type="button" className="small-action" onClick={() => void openBasketPicker()}>
@@ -1084,7 +1100,7 @@ ealed Return entry amount" /></div></label>
               {memecoinAssets.length > 0 && <>
                 <span className="eyebrow">SELECTED</span>
                 <div className="segment-control" role="list" aria-label="Selected strategy markets">
-                  {memecoinAssets.map((symbol) => <button type="button" role="listitem" key={symbol} className="active" disabled={memecoinAssets.length === 1} onClick={() => setMemecoinAssets((current) => current.filter((item) => item !== symbol))}>{memecoinMarketLabel(symbol)} <X /></button>)}
+                  {memecoinAssets.map((symbol) => <button type="button" role="listitem" key={symbol} className="active" disabled={memecoinAssets.length === 1} onClick={() => setMemecoinAssets((current) => current.filter((item) => item !== symbol))}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} compact />{memecoinMarketLabel(symbol)}</span> <X /></button>)}
                 </div>
               </>}
               {basketPickerLoading && <div className="activity-row" role="status"><div className="activity-info"><strong>Loading eligible markets</strong><small>Checking the current executable catalogue.</small></div></div>}
@@ -1096,7 +1112,7 @@ ealed Return entry amount" /></div></label>
                     const chosen = memecoinAssets.includes(asset.symbol);
                     const category = asset.category || "market";
                     return <div className="activity-row" key={asset.symbol}>
-                      <div className="activity-info"><strong>{asset.chain_label && <PaymentMark asset={asset.chain_label} compact />} {asset.name || memecoinMarketLabel(asset.symbol)}</strong><small>{asset.chain_label ? `${asset.chain_label} · ` : ""}{asset.symbol} · {category}{asset.venue ? ` · ${asset.venue}` : ""}</small></div>
+                      <div className="activity-info"><strong><MemecoinMark symbol={asset.symbol} compact /> {asset.name || memecoinMarketLabel(asset.symbol)}</strong><small>{asset.chain_label ? `${asset.chain_label} · ` : ""}{asset.symbol} · {category}{asset.venue ? ` · ${asset.venue}` : ""}</small></div>
                       <button type="button" className={chosen ? "small-action active" : "small-action"} disabled={chosen && memecoinAssets.length === 1} aria-pressed={chosen} onClick={() => setMemecoinAssets((current) => chosen ? current.filter((item) => item !== asset.symbol) : [...current, asset.symbol])}>{chosen ? "Selected" : "Add"}</button>
                     </div>;
                   })}
