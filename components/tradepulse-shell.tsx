@@ -5045,14 +5045,14 @@ function BrowserBotHandoff() {
             setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
           }}
         >
-          Open TradePulse in Telegram <ChevronRight />
+          Continue with Telegram <ChevronRight />
         </a>
       ) : (
         <button className="primary-action" type="button" disabled>
           {state === "waiting" ? "Confirming in Telegram…" : "Preparing secure link…"} <ChevronRight />
         </button>
       )}
-      {message && <small role="status">{message}</small>}
+      {message && <small role="status" aria-live="polite">{message}</small>}
       {state === "error" && (
         <button className="small-action" type="button" onClick={retry}>
           Create a new secure link
@@ -6880,28 +6880,30 @@ function LiveTradePulse() {
     );
   if (!data)
     return (
-      <main className="onboarding-screen">
-        <img
-          src="/illustrations/session-door-clean.png"
-          alt="Secure Telegram session required"
-          className="onboarding-hero"
-        />
-        <div className="onboarding-copy">
-          <h1>
+      <main className="telegram-connect-screen">
+        <section className="telegram-connect-panel" aria-labelledby="telegram-connect-title">
+          <div className="telegram-connect-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
+          <img
+            src="/illustrations/session-door-clean.png"
+            alt="An open door representing a secure Telegram connection"
+            className="telegram-connect-art"
+          />
+          <div className="telegram-connect-copy">
+          <h1 id="telegram-connect-title">
             {openedInsideTelegram()
               ? "Telegram session unavailable."
-              : "Open TradePulse with Telegram."}
+              : "Connect your Telegram."}
           </h1>
           <p>
             {notice ||
               (openedInsideTelegram()
                 ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button."
-                : "Review your wallet, bot, and market controls from one Telegram-confirmed TradePulse desk.")}
+                : "Open the TradePulse bot, approve this browser, and return here automatically.")}
           </p>
           <BrowserBotHandoff />
-          <small>To connect this browser, TradePulse will not ask for your Telegram password, wallet recovery phrase, or any one-time code. Your withdrawal security code is used only to confirm a withdrawal.</small>
-          <small>Trading and digital assets carry risk. TradePulse does not promise returns or provide financial advice.</small>
-        </div>
+          <small className="telegram-connect-safety">TradePulse will never ask for your Telegram password, recovery phrase, or one-time code to connect this browser.</small>
+          </div>
+        </section>
       </main>
     );
   if (!data.user.onboarding_complete)
