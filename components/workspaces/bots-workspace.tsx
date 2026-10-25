@@ -149,7 +149,7 @@ export function BotsWorkspace({
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
   const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
     source: "wallet" | "demo" | "credit";
@@ -874,7 +874,7 @@ ealed Return entry amount" /></div></label>
                 <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} title={memecoinInsightLabel(symbol)} aria-label={`${memecoinMarketLabel(symbol)}. ${memecoinInsightLabel(symbol)}`} onClick={() => setMemecoinMarket(symbol)}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{memecoinMarketLabel(symbol)}</span></button>
               ))}
             </div>
-            <MarketChart points={memecoinSnapshot.points || []} ohlcCandles={memecoinSnapshot.candles} market={`${memecoinMarketLabel(memecoinMarket)} / USDT`} />
+            <MarketChart points={memecoinSnapshot.points || []} ohlcCandles={memecoinSnapshot.candles} market={`${memecoinMarketLabel(memecoinMarket)} / USDT`} sourceLabel={memecoinSnapshot.latest?.source === "kraken" || memecoinSnapshot.latest?.source === "kraken_rest" ? "Kraken 1-minute" : "1-minute"} />
             {(memecoinSnapshot.positions || []).length > 0 && (
               <div className="support-ticket-list">
                 {(memecoinSnapshot.positions || []).slice(0, 5).map((position) => {

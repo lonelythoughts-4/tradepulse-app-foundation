@@ -91,11 +91,13 @@ export function MarketChart({
   points,
   ohlcCandles,
   market,
+  sourceLabel,
   accent = "#34d399",
 }: {
   points: MarketPoint[];
   ohlcCandles?: MarketCandle[];
   market: string;
+  sourceLabel?: string;
   accent?: string;
 }) {
   const [zoom, setZoom] = useState(1);
@@ -228,7 +230,7 @@ export function MarketChart({
       style={{ touchAction: "none" }}
     >
       <div className={`market-chart-status ${isShowingLastVerified ? "market-chart-status-stale" : ""}`} role="status">
-        {isShowingLastVerified ? "Feed reconnecting · showing last verified 1-minute candles" : "Verified 1-minute candles"}
+        {isShowingLastVerified ? `Feed reconnecting · showing last verified ${sourceLabel || "1-minute"} candles` : `Verified ${sourceLabel || "1-minute"} candles`}
       </div>
       <div className="market-chart-main">
         <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
