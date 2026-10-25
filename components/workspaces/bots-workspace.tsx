@@ -117,6 +117,9 @@ export function BotsWorkspace({
   const latestFlashback = data.flashback || null;
   const flashbackSessions = data.flashback_sessions || (latestFlashback ? [latestFlashback] : []);
   const activeFlashbacks = flashbackSessions.filter((session) => session.state === "sealed" || session.state === "ready_to_reveal");
+  // The selected contract is a reading choice. Its state must never pause the
+  // clock for another contract that is still live.
+  const activeCountdownSession = activeFlashbacks.find((session) => session.state === "sealed") || null;
   const flashback = flashbackSessions.find((session) => session.id === selectedFlashbackId) || flashbackSessions[0] || null;
   const flashbackSessionIds = flashbackSessions.map((session) => session.id).join("|");
   const flashbackSessionChoices = [
@@ -159,7 +162,7 @@ export function BotsWorkspace({
     setFlashbackNow(clientNow);
   }, [data.server_time]);
   useEffect(() => {
-    if (view !== "flashback" || flashback?.state !== "sealed") return;
+    if (view !== "flashback" || !activeCountdownSession) return;
     const tick = () => setFlashbackNow(Date.now());
     const refreshSession = async () => {
       try {
@@ -175,12 +178,13 @@ export function BotsWorkspace({
     // Direction needs a legible live reference while its 30-second clock is
     // running. The reference is display-only; settlement still fetches and
     // records its own quote at expiry.
-    const refresh = window.setInterval(() => void refreshSession(), directionContract ? 3_000 : 15_000);
+    const refreshInterval = activeCountdownSession?.product_version === "market-direction-v1" ? 3_000 : 15_000;
+    const refresh = window.setInterval(() => void refreshSession(), refreshInterval);
     return () => {
       window.clearInterval(countdown);
       window.clearInterval(refresh);
     };
-  }, [directionContract, flashback?.expires_at, flashback?.state, onActionResult, request, view]);
+  }, [activeCountdownSession?.expires_at, activeCountdownSession?.id, activeCountdownSession?.product_version, onActionResult, request, view]);
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
     const assets = Array.isArray(response.assets)
