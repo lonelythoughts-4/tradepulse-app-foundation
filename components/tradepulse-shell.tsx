@@ -4747,6 +4747,13 @@ export type LiveDashboard = {
     fee_usd?: number;
     user_net_usd?: number;
     nonce?: string;
+    live_reference?: {
+      price?: number;
+      source?: string;
+      quoted_at?: number;
+      move_percent?: number;
+      call_status?: "ahead" | "behind" | "flat" | "unavailable";
+    };
   } | null;
   flashback_sessions?: NonNullable<LiveDashboard["flashback"]>[];
 };

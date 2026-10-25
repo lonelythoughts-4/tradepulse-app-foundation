@@ -128,6 +128,7 @@ export function BotsWorkspace({
   const flashbackDirection = data.flashback_direction;
   const directionMarkets = flashbackDirection?.markets || [];
   const directionContract = flashback?.product_version === "market-direction-v1";
+  const liveDirectionReference = directionContract ? flashback?.live_reference : undefined;
   const directionMultiplier = (amount: number) => Number(flashbackDirection?.schedule?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd))?.multiplier || 0);
   const flashbackReturnTable = (amount: number) => {
     const band = flashbackRules?.bands?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd));
@@ -171,12 +172,15 @@ export function BotsWorkspace({
     };
     tick();
     const countdown = window.setInterval(tick, 1_000);
-    const refresh = window.setInterval(() => void refreshSession(), 15_000);
+    // Direction needs a legible live reference while its 30-second clock is
+    // running. The reference is display-only; settlement still fetches and
+    // records its own quote at expiry.
+    const refresh = window.setInterval(() => void refreshSession(), directionContract ? 3_000 : 15_000);
     return () => {
       window.clearInterval(countdown);
       window.clearInterval(refresh);
     };
-  }, [flashback?.expires_at, flashback?.state, onActionResult, request, view]);
+  }, [directionContract, flashback?.expires_at, flashback?.state, onActionResult, request, view]);
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
     const assets = Array.isArray(response.assets)
@@ -567,7 +571,7 @@ ealed Return entry amount" /></div></label>
         </>}
         {flashback?.state === "sealed" && directionContract && <>
           <div className="detail-stats"><GradientPanel><span>MARKET / CALL</span><strong>{flashback.market}/USD · {String(flashback.direction || "").toUpperCase()}</strong></GradientPanel><GradientPanel><span>SETTLES IN</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></GradientPanel><GradientPanel><span>ENTRY</span><strong>{money(Number(flashback.allocation_usd || 0))}</strong></GradientPanel></div>
-          <GradientPanel className="compound-panel"><h2>Direction is active</h2><p>The entry reference was captured at confirmation. Settlement is automatic at expiry; this call cannot be changed or ended early.</p><div className="fact-block"><span>ENTRY PRICE <b>{Number(flashback.entry_price || 0).toFixed(8)}</b></span><span>PUBLISHED RETURN <b>{Number((flashback.payout_table as Record<string, unknown>)?.multiplier || 0).toFixed(2)}×</b></span><span>PRICE SOURCE <b>{flashback.entry_source || "KRAKEN"}</b></span></div></GradientPanel>
+          <GradientPanel className="compound-panel"><h2>Direction is active</h2><p>The entry reference was captured at confirmation. This live reference helps you follow the move; it is not the settlement quote, which is captured automatically at expiry.</p><div className="fact-block"><span>ENTRY PRICE <b>{formatMarketPrice(Number(flashback.entry_price || 0))}</b></span><span>CURRENT REFERENCE <b>{liveDirectionReference?.price !== undefined ? formatMarketPrice(Number(liveDirectionReference.price)) : "REFRESHING"}</b></span><span>MOVE <b className={liveDirectionReference?.move_percent === undefined ? undefined : liveDirectionReference.move_percent > 0 ? "up" : liveDirectionReference.move_percent < 0 ? "down" : undefined}>{liveDirectionReference?.move_percent === undefined ? "—" : `${liveDirectionReference.move_percent > 0 ? "+" : ""}${liveDirectionReference.move_percent.toFixed(3)}%`}</b></span><span>YOUR CALL <b className={liveDirectionReference?.call_status === "ahead" ? "up" : liveDirectionReference?.call_status === "behind" ? "down" : undefined}>{liveDirectionReference?.call_status === "ahead" ? "AHEAD" : liveDirectionReference?.call_status === "behind" ? "BEHIND" : liveDirectionReference?.call_status === "flat" ? "LEVEL" : "REFRESHING"}</b></span><span>PUBLISHED RETURN <b>{Number((flashback.payout_table as Record<string, unknown>)?.multiplier || 0).toFixed(2)}×</b></span><span>PRICE SOURCE <b>{liveDirectionReference?.source || flashback.entry_source || "KRAKEN"}</b></span></div></GradientPanel>
         </>}
         {flashback?.state === "sealed" && !directionContract && <>
           <div className="detail-stats">
