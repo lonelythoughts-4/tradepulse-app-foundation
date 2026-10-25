@@ -6905,6 +6905,15 @@ function LiveTradePulse() {
           <small className="telegram-connect-safety">TradePulse will never ask for your Telegram password, recovery phrase, or one-time code to connect this browser.</small>
           </div>
         </section>
+        <section className="telegram-connect-overview" aria-labelledby="telegram-overview-title">
+          <h2 id="telegram-overview-title">One desk for the decisions that matter.</h2>
+          <p>TradePulse connects your Telegram account to a single operating desk, so you can review state before you act.</p>
+          <dl>
+            <div><dt>Wallet controls</dt><dd>Review balances, deposits, withdrawals, and activity from one protected account view.</dd></div>
+            <div><dt>Trading products</dt><dd>Operate Memecoin and Synthetic strategies separately, with their own controls and safeguards.</dd></div>
+            <div><dt>Flashback contracts</dt><dd>Review Sealed Return and Direction outcomes on their own settlement clocks.</dd></div>
+          </dl>
+        </section>
       </main>
     );
   if (!data.user.onboarding_complete)
