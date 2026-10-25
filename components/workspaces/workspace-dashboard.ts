@@ -30,6 +30,7 @@ export type WorkspaceDashboard = {
     product: string;
     state: string;
     capital_usd: number;
+    hwm_usd?: number;
     compound_percent: number;
     demo_trial?: number;
     demo_credit_only?: boolean;
@@ -178,4 +179,3 @@ export type WorkspaceDashboard = {
   } | null;
   flashback_sessions?: NonNullable<WorkspaceDashboard["flashback"]>[];
 };
-

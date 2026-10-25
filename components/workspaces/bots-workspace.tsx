@@ -869,7 +869,7 @@ ealed Return entry amount" /></div></label>
           </GradientPanel>
           <GradientPanel>
             <span>{isDemoBot ? "DEMO P&L" : isDemoCreditOnlyBot ? "EXECUTION" : "HIGH-WATER MARK"}</span>
-            <strong>{isDemoBot ? money(Number(data.demo?.pool_realised_pnl_usd || 0)) : isDemoCreditOnlyBot ? "Manual only" : money(data.wallet.hwm)}</strong>
+            <strong>{isDemoBot ? money(Number(data.demo?.pool_realised_pnl_usd || 0)) : isDemoCreditOnlyBot ? "Manual only" : money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
           </GradientPanel>
         </div>
         {selected.product === "memecoin" && (
