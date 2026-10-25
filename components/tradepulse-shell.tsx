@@ -6912,6 +6912,7 @@ function LiveTradePulse() {
             <div><dt>Wallet controls</dt><dd>Review balances, deposits, withdrawals, and activity from one protected account view.</dd></div>
             <div><dt>Trading products</dt><dd>Operate Memecoin and Synthetic strategies separately, with their own controls and safeguards.</dd></div>
             <div><dt>Flashback contracts</dt><dd>Review Sealed Return and Direction outcomes on their own settlement clocks.</dd></div>
+            <div><dt>Invite and earn</dt><dd>Share your TradePulse invite link and track eligible referral earnings in your account.</dd></div>
           </dl>
         </section>
       </main>
