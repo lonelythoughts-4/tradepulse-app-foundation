@@ -5061,23 +5061,53 @@ function BrowserBotHandoff() {
     </div>
   );
 }
-const AUTH_EXPERIENCE_SLIDES = [
-  { title: "Memecoin", detail: "Live market view", label: "Memecoin", path: "M8 136 C42 131 48 103 76 110 S111 75 137 92 S171 52 200 78 S245 46 272 59 S317 27 350 39", tone: "mint" },
-  { title: "Synthetic", detail: "Signal safeguards", label: "Synthetic", path: "M8 122 C31 78 60 97 80 74 S119 112 145 83 S172 118 206 79 S237 93 270 52 S312 66 350 23", tone: "gold" },
-  { title: "Flashback", detail: "Thirty-second contracts", label: "Flashback", path: "M8 129 C34 138 50 87 79 101 S108 62 136 86 S169 92 198 69 S233 106 262 79 S319 97 350 45", tone: "coral" },
+const AUTH_DESK_VIEWS = [
+  { label: "Memecoin", heading: "Live market context", state: "Market quote verified", accent: "mint", path: "M12 182 C38 165 52 175 70 139 S110 151 132 106 S164 136 193 88 S232 116 254 69 S291 85 319 40 S357 54 390 21" },
+  { label: "Synthetic", heading: "Signals with safeguards", state: "Review queue ready", accent: "gold", path: "M12 174 C40 108 63 156 89 126 S119 162 149 112 S181 146 210 94 S246 126 275 72 S312 95 340 46 S369 54 390 25" },
+  { label: "Flashback", heading: "A clear contract clock", state: "Settlement view armed", accent: "coral", path: "M12 166 C39 175 58 111 85 132 S115 93 142 111 S175 101 202 78 S237 113 266 83 S305 102 336 61 S368 75 390 34" },
 ] as const;
+
 function AuthEntryPage({ notice }: { notice: string }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [slide, setSlide] = useState(0);
+  const [view, setView] = useState(0);
   const insideTelegram = openedInsideTelegram();
-  useEffect(() => { const timer = window.setInterval(() => setSlide((current) => (current + 1) % AUTH_EXPERIENCE_SLIDES.length), 6500); return () => window.clearInterval(timer); }, []);
-  const activeSlide = AUTH_EXPERIENCE_SLIDES[slide];
-  const moveSlide = (direction: -1 | 1) => setSlide((current) => (current + direction + AUTH_EXPERIENCE_SLIDES.length) % AUTH_EXPERIENCE_SLIDES.length);
+  const activeView = AUTH_DESK_VIEWS[view];
+  useEffect(() => {
+    const timer = window.setInterval(() => setView((current) => (current + 1) % AUTH_DESK_VIEWS.length), 7000);
+    return () => window.clearInterval(timer);
+  }, []);
   return <main className={`telegram-entry telegram-entry--${theme}`}>
-    <header className="telegram-entry-nav"><div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><button className="telegram-theme-toggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v2.1M12 18.1v2.1M20.2 12h-2.1M5.9 12H3.8M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5M17.8 17.8l-1.5-1.5M7.7 7.7 6.2 6.2M15.9 12a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0Z" /></svg><span>{theme === "dark" ? "Light" : "Dark"}</span></button></header>
-    <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title"><div className="telegram-entry-copy"><h1 id="telegram-entry-title">See the whole move before you make it.</h1><p className="telegram-entry-lede">{notice || (insideTelegram ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button." : "TradePulse connects your Telegram account to a desk built for review, control, and considered action.")}</p>{!insideTelegram && <BrowserBotHandoff />}<p className="telegram-entry-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</p></div>
-      <aside className={`telegram-entry-preview telegram-entry-preview--${activeSlide.tone}`} aria-label="Illustrative TradePulse desk preview"><div className="telegram-preview-bar"><div className="telegram-preview-mark"><PulseMark /> <span>TradePulse desk</span></div><span>Product preview</span></div><div className="telegram-preview-tabs" role="tablist" aria-label="Product previews">{AUTH_EXPERIENCE_SLIDES.map((item, index) => <button key={item.label} role="tab" type="button" aria-selected={index === slide} className={index === slide ? "active" : ""} onClick={() => setSlide(index)}>{item.label}</button>)}</div><div className="telegram-preview-body" aria-live="polite"><div className="telegram-preview-copy"><span>{activeSlide.detail}</span><h2>{activeSlide.title}</h2><p>Review the moving parts in one focused product workspace.</p></div><div className="telegram-preview-metrics"><div><small>Market state</small><strong>Verified</strong></div><div><small>Safeguards</small><strong>Active</strong></div></div><svg className="telegram-preview-chart" viewBox="0 0 358 156" role="img" aria-label={`Illustrative ${activeSlide.title} chart preview`}><path d="M8 22H350M8 63H350M8 104H350M8 145H350" className="telegram-preview-grid"/><path d={activeSlide.path} className="telegram-preview-line"/><circle cx="350" cy={activeSlide.path.includes("350 23") ? "23" : activeSlide.path.includes("350 45") ? "45" : "39"} r="4" className="telegram-preview-point"/></svg><div className="telegram-preview-activity"><span>Account activity</span><div><i />Price check verified <b>Now</b></div><div><i />Controls reconciled <b>Ready</b></div></div></div><div className="telegram-preview-footer"><span>Illustrative product view</span><div className="telegram-flow-arrows"><button type="button" onClick={() => moveSlide(-1)} aria-label="Previous product"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg></button><button type="button" onClick={() => moveSlide(1)} aria-label="Next product"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" /></svg></button></div></div></aside></section>
-    <section className="telegram-entry-steps" aria-labelledby="telegram-entry-steps-title"><div><h2 id="telegram-entry-steps-title">From Telegram to your desk in three steps.</h2></div><ol><li><span>01</span><strong>Open the secure link</strong><p>Start in Telegram, where your account already lives.</p></li><li><span>02</span><strong>Confirm this browser</strong><p>Approve the exact browser you want to use.</p></li><li><span>03</span><strong>Return to TradePulse</strong><p>Your protected desk opens here automatically.</p></li></ol></section>
+    <header className="telegram-entry-nav">
+      <div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
+      <div className="telegram-entry-nav-actions"><span className="telegram-entry-status"><i /> Telegram-secured access</span><button className="telegram-theme-toggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v2.1M12 18.1v2.1M20.2 12h-2.1M5.9 12H3.8M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5M17.8 17.8l-1.5-1.5M7.7 7.7 6.2 6.2M15.9 12a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0Z" /></svg><span>{theme === "dark" ? "Light" : "Dark"}</span></button></div>
+    </header>
+    <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title">
+      <div className="telegram-entry-copy">
+        <p className="telegram-entry-overline">A calmer way to stay in the market</p>
+        <h1 id="telegram-entry-title">A desk for every moment that matters.</h1>
+        <p className="telegram-entry-lede">{notice || (insideTelegram ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button." : "Bring your Telegram account into a focused trading desk: live market context, explicit controls, and an activity trail that stays understandable.")}</p>
+        {!insideTelegram && <BrowserBotHandoff />}
+        <p className="telegram-entry-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</p>
+      </div>
+      <aside className={`telegram-desk telegram-desk--${activeView.accent}`} aria-label="Illustrative TradePulse desk preview">
+        <div className="telegram-desk-topbar"><div className="telegram-preview-mark"><PulseMark size={20} /><span>TradePulse</span></div><span>Illustrative desk</span><div className="telegram-desk-avatar" aria-hidden="true" /></div>
+        <div className="telegram-desk-frame">
+          <nav className="telegram-desk-rail" aria-label="Desk preview areas"><button type="button" aria-label="Overview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></svg></button><button type="button" className="active" aria-label="Market view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5 9 11l3.2 3.1L20 6.5M15 6.5h5v5" /></svg></button><button type="button" aria-label="Activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" /></svg></button></nav>
+          <div className="telegram-desk-workspace">
+            <div className="telegram-desk-title"><div><span>{activeView.label}</span><h2>{activeView.heading}</h2></div><button type="button" className="telegram-desk-live"><i /> {activeView.state}</button></div>
+            <div className="telegram-desk-tabs" role="tablist" aria-label="Product preview areas">{AUTH_DESK_VIEWS.map((item, index) => <button key={item.label} role="tab" type="button" aria-selected={index === view} className={index === view ? "active" : ""} onClick={() => setView(index)}>{item.label}</button>)}</div>
+            <div className="telegram-desk-chart" aria-live="polite"><div className="telegram-desk-chart-header"><span>Market view</span><span>Realtime preview</span></div><svg viewBox="0 0 402 210" role="img" aria-label={`Illustrative ${activeView.label} market chart`}><path d="M12 22H390M12 72H390M12 122H390M12 172H390" className="telegram-desk-grid"/><path d={activeView.path} className="telegram-desk-line"/><path d={`${activeView.path} L390 196 L12 196 Z`} className="telegram-desk-area"/><circle cx="390" cy={activeView.path.includes("390 21") ? "21" : activeView.path.includes("390 25") ? "25" : "34"} r="4" className="telegram-desk-point"/></svg><div className="telegram-desk-axis"><span>Earlier</span><span>Now</span></div></div>
+            <div className="telegram-desk-events"><div><i /><span>Price check reconciled</span><b>Just now</b></div><div><i /><span>Protection settings available</span><b>Ready</b></div></div>
+          </div>
+        </div>
+        <div className="telegram-desk-bottom"><span>Preview only — no customer account data</span><span>Explore with intent</span></div>
+      </aside>
+    </section>
+    <section className="telegram-entry-story" aria-label="TradePulse experience">
+      <article><span className="telegram-story-mark" aria-hidden="true" /><h2>Live context without the noise.</h2><p>Keep price movement, confirmations, and activity in one place instead of jumping between messages and disconnected tabs.</p></article>
+      <article><span className="telegram-story-mark" aria-hidden="true" /><h2>Controls say exactly what they do.</h2><p>Review the action first. Clear states and a visible record make every handoff easier to follow.</p></article>
+      <article><span className="telegram-story-mark" aria-hidden="true" /><h2>Telegram remains the key.</h2><p>Your Telegram account starts the session; this browser is confirmed only for the desk you choose to open.</p></article>
+    </section>
   </main>;
 }
 export function money(value: number) {
