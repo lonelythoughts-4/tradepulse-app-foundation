@@ -4939,12 +4939,16 @@ function BrowserBotHandoff() {
         setMessage("Open TradePulse in Telegram, confirm this browser, then return here automatically. This secure link expires in five minutes.");
       } catch (error) {
         if (cancelled) return;
+        if (attempt < 3) {
+          setState("preparing");
+          setMessage("Refreshing your secure Telegram link…");
+          timer.current = window.setTimeout(() => {
+            if (!cancelled) setAttempt((current) => current + 1);
+          }, 2_500);
+          return;
+        }
         setState("error");
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Could not prepare a secure Telegram connection.",
-        );
+        setMessage("We could not refresh the secure Telegram link yet.");
       }
     };
     void prepare();
@@ -4963,8 +4967,9 @@ function BrowserBotHandoff() {
       if (Date.now() >= deadline) {
         timer.current = null;
         terminal = true;
-        setState("error");
-        setMessage("That secure browser link expired before it was confirmed.");
+        setState("preparing");
+        setMessage("Refreshing your secure Telegram link…");
+        window.setTimeout(() => setAttempt((current) => current + 1), 300);
         inFlight = false;
         return;
       }
@@ -4991,12 +4996,11 @@ function BrowserBotHandoff() {
         terminal = true;
         window.location.replace("/");
       } catch (error) {
-        if (error instanceof Error) {
-          terminal = true;
-          timer.current = null;
-          setState("error");
-          setMessage(error.message);
-        }
+        terminal = true;
+        timer.current = null;
+        setState("preparing");
+        setMessage("Refreshing your secure Telegram link…");
+        window.setTimeout(() => setAttempt((current) => current + 1), 1_500);
       } finally {
         inFlight = false;
         if (!terminal && timer.current === null && Date.now() < deadline) {
@@ -5052,7 +5056,7 @@ function BrowserBotHandoff() {
           {state === "waiting" ? "Confirming in Telegram…" : "Preparing secure link…"} <ChevronRight />
         </button>
       )}
-      {message && <small role="status" aria-live="polite">{message}</small>}
+      {message && <small role="status" aria-live="polite">{state === "ready" ? "Open Telegram, then this page will finish automatically." : message}</small>}
       {state === "error" && (
         <button className="small-action" type="button" onClick={retry}>
           Create a new secure link
@@ -5083,7 +5087,6 @@ function AuthEntryPage({ notice }: { notice: string }) {
     </header>
     <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title">
       <div className="telegram-entry-copy">
-        <p className="telegram-entry-overline">A calmer way to stay in the market</p>
         <h1 id="telegram-entry-title">A desk for every moment that matters.</h1>
         <p className="telegram-entry-lede">{notice || (insideTelegram ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button." : "Bring your Telegram account into a focused trading desk: live market context, explicit controls, and an activity trail that stays understandable.")}</p>
         {!insideTelegram && <BrowserBotHandoff />}
@@ -5103,11 +5106,16 @@ function AuthEntryPage({ notice }: { notice: string }) {
         <div className="telegram-desk-bottom"><span>Preview only — no customer account data</span><span>Explore with intent</span></div>
       </aside>
     </section>
-    <section className="telegram-entry-story" aria-label="TradePulse experience">
-      <article><span className="telegram-story-mark" aria-hidden="true" /><h2>Live context without the noise.</h2><p>Keep price movement, confirmations, and activity in one place instead of jumping between messages and disconnected tabs.</p></article>
-      <article><span className="telegram-story-mark" aria-hidden="true" /><h2>Controls say exactly what they do.</h2><p>Review the action first. Clear states and a visible record make every handoff easier to follow.</p></article>
-      <article><span className="telegram-story-mark" aria-hidden="true" /><h2>Telegram remains the key.</h2><p>Your Telegram account starts the session; this browser is confirmed only for the desk you choose to open.</p></article>
+    <section className="telegram-entry-intro" aria-labelledby="entry-intro-title">
+      <h2 id="entry-intro-title">The market, your decisions, and the result should tell the same story.</h2><div><span>See the context before a decision.</span><span>Understand the control before it changes state.</span><span>Return to a record that explains what happened.</span></div>
     </section>
+    <section className="telegram-product-rows" aria-label="TradePulse products">
+      <article className="telegram-product-row telegram-product-row--market"><div className="telegram-product-copy"><h2>Memecoin Market — watch the movement. Keep the decision yours.</h2><p>A live market workspace keeps quotes, controls, and position context close together without turning the screen into a stream of alerts.</p><ul><li>Market context that stays visible</li><li>Explicit protection controls</li><li>Readable activity when a position changes</li></ul></div><div className="telegram-product-visual" aria-label="Illustrative live market interface"><div className="telegram-market-toolbar"><b>Market view</b><span><i /> Quote verified</span></div><div className="telegram-market-price"><strong>Selected market</strong><span>Live price context</span></div><svg viewBox="0 0 470 230" role="img" aria-label="Illustrative rising market chart"><path d="M12 32H458M12 85H458M12 138H458M12 191H458"/><path d="M13 184 C38 170 54 129 79 142 S113 112 137 124 S165 82 190 99 S222 140 249 105 S279 62 305 74 S336 49 360 64 S394 31 421 48 S443 24 458 33"/><circle cx="458" cy="33" r="5"/></svg><div className="telegram-market-foot"><span>Earlier</span><span>Current market context</span></div></div></article>
+      <article className="telegram-product-row telegram-product-row--signal"><div className="telegram-product-visual telegram-signal-visual" aria-label="Illustrative signal review interface"><div className="telegram-signal-top"><span>Signal review</span><b>Protection ready</b></div><div className="telegram-signal-score"><span>Signal context</span><strong>Review before action</strong><i /></div><div className="telegram-signal-list"><div><span>Source checked</span><b>Complete</b></div><div><span>Risk controls</span><b>Ready</b></div><div><span>Decision window</span><b>Open</b></div></div></div><div className="telegram-product-copy"><h2>Synthetic — let the signal earn a review.</h2><p>Synthetic keeps proposed actions in a deliberate review flow. You see what is being considered, the safeguards around it, and the next real choice.</p><ul><li>Signal and source checks in one view</li><li>Manual review or controlled automation</li><li>Independent status for each action</li></ul></div></article>
+      <article className="telegram-product-row telegram-product-row--contract"><div className="telegram-product-copy"><h2>Flashback — a contract clock that never leaves you guessing.</h2><p>Each Direction or Sealed Return contract carries its own entry, remaining time, and final outcome—so one session does not blur into another.</p><ul><li>Clear entry and expiry context</li><li>One visible result for each settlement</li><li>Activity that does not duplicate financial events</li></ul></div><div className="telegram-product-visual telegram-contract-visual" aria-label="Illustrative contract clock interface"><div className="telegram-contract-head"><span>Direction</span><b>Contract active</b></div><div className="telegram-contract-clock"><strong>00:30</strong><span>Contract window</span></div><div className="telegram-contract-scale"><i /><i /><i /><i /><i /></div><div className="telegram-contract-foot"><span>Entry recorded</span><span>Result at expiry</span></div></div></article>
+    </section>
+    <section className="telegram-entry-connection" aria-labelledby="entry-connection-title"><div><h2 id="entry-connection-title">Telegram opens the door. The desk remembers the way back.</h2></div><ol><li><strong>Start in Telegram</strong><p>Your Telegram account begins the connection.</p></li><li><strong>Confirm this browser</strong><p>The secure link applies to this browser only.</p></li><li><strong>Return to your desk</strong><p>Confirmation brings you back automatically.</p></li></ol></section>
+    <footer className="telegram-entry-footer"><div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><p>Trading involves risk. TradePulse presents controls and market context; it does not promise a result.</p><div><span>Telegram-confirmed access</span><span>© {new Date().getFullYear()} TradePulse</span></div></footer>
   </main>;
 }
 export function money(value: number) {
