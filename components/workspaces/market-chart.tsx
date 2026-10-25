@@ -21,7 +21,13 @@ function makeCandles(points: MarketPoint[]): MarketCandle[] {
       timestamp: Number(point.timestamp) || index,
     }))
     .sort((left, right) => Number(left.timestamp) - Number(right.timestamp));
-  if (valid.length < 2) return [];
+  // Render a first verified tick immediately as a flat provisional candle;
+  // waiting for the second tick should not look like a failed feed.
+  if (valid.length === 1) {
+    const price = Number(valid[0].price);
+    return [{ open: price, close: price, high: price, low: price, timestamp: valid[0].timestamp }];
+  }
+  if (valid.length < 1) return [];
 
   // Snapshot polling and the one-second stream can overlap. Retain the most
   // recent value for each timestamp before creating fixed-time candles, so a
@@ -157,6 +163,7 @@ export function MarketChart({
   // an empty panel. The retained series is explicitly labelled as stale below.
   const sourceCandles = freshCandles.length ? freshCandles : retainedCandles;
   const isShowingLastVerified = !freshCandles.length && retainedCandles.length > 0;
+  const isWarming = freshCandles.length === 1;
   const baseVisibleCount = Math.min(24, sourceCandles.length);
   const visibleCount = Math.max(12, Math.min(sourceCandles.length, Math.round(baseVisibleCount / zoom)));
   const maxOffset = Math.max(0, sourceCandles.length - visibleCount);
@@ -230,7 +237,7 @@ export function MarketChart({
       style={{ touchAction: "none" }}
     >
       <div className={`market-chart-status ${isShowingLastVerified ? "market-chart-status-stale" : ""}`} role="status">
-        {isShowingLastVerified ? `Feed reconnecting · showing last verified ${sourceLabel || "1-minute"} candles` : `Verified ${sourceLabel || "1-minute"} candles`}
+        {isShowingLastVerified ? `Feed reconnecting · showing last verified ${sourceLabel || "1-minute"} candles` : isWarming ? "Verified live tick · building 1-minute candle" : `Verified ${sourceLabel || "1-minute"} candles`}
       </div>
       <div className="market-chart-main">
         <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>

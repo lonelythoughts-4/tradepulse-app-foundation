@@ -355,7 +355,10 @@ export function BotsWorkspace({
     const refresh = () => {
       void request(`/v1/memecoin/snapshot?bot_id=${selected.id}&symbol=${memecoinMarket}`)
         .then((snapshot) => { if (!cancelled) setMemecoinSnapshot(snapshot || {}); })
-        .catch(() => { if (!cancelled) setMemecoinSnapshot({}); });
+        .catch(() => {
+          // Keep the last verified candles and marks visible during a short
+          // reconnect; clearing the projection made a healthy feed look empty.
+        });
     };
     refresh();
     // This endpoint includes chart history, positions and events. Polling the
