@@ -546,12 +546,6 @@ export function BotsWorkspace({
       setFlashbackNow(Date.now());
     }
   };
-  const revealFlashback = async () => {
-    if (!flashback?.id) return;
-    await run("/v1/flashback/reveal", { session_id: flashback.id });
-    // `run` applies the settled session before it resolves, so no dashboard
-    // reload is needed to leave the sealed state.
-  };
   if (view === "flashback")
     return (
       <div className="bot-detail">
@@ -640,7 +634,7 @@ ealed Return entry amount" /></div></label>
           </div>
           <GradientPanel className="compound-panel">
             <h2>{sealedReturn ? "Return is sealed" : "Earlier session"}</h2>
-            <p>{sealedReturn ? "The return table and entry are committed. The future external entropy source is used only after the reveal window ends, and the session cannot be revealed early." : "This session was created before the current sealed-return product. It will complete at its scheduled reveal time; early settlement is no longer available."}</p>
+            <p>{sealedReturn ? "The return table and entry are committed. The future external entropy source is used only after the reveal window ends, and TradePulse reveals the result automatically at expiry." : "This session was created before the current sealed-return product. It will complete at its scheduled reveal time; early settlement is no longer available."}</p>
             {sealedReturn ? <div className="fact-block">
               <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               <span>MAX RETURN <b>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</b></span>
@@ -650,10 +644,9 @@ ealed Return entry amount" /></div></label>
         </>}
         {flashback?.state === "ready_to_reveal" && <>
           <GradientPanel className="compound-panel">
-            <h2>Your result is ready</h2>
-            <p>The reveal window has closed. Your result stayed sealed until this reveal.</p>
+            <h2>Finalising your result</h2>
+            <p>The reveal window has closed. TradePulse is automatically applying the committed result.</p>
             <div className="fact-block"><span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
-          <button className="primary-action" disabled={isActionPending(`flashback:reveal:${flashback.id}`)} aria-busy={isActionPending(`flashback:reveal:${flashback.id}`)} onClick={() => void revealFlashback()}><ActionFeedback state={isActionPending(`flashback:reveal:${flashback.id}`) ? "pending" : "idle"}>{isActionPending(`flashback:reveal:${flashback.id}`) ? "Revealing…" : "Reveal result"}</ActionFeedback> <StateIcon name="check" /></button>
           </GradientPanel>
         </>}
         {flashback?.state === "revealed" && !flashbackNewSession && <>
