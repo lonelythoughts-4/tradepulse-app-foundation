@@ -100,6 +100,7 @@ export function MarketChart({
 }) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState(0);
+  const lastVerified = useRef<{ market: string; candles: MarketCandle[] } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const priceSvgRef = useRef<SVGSVGElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -147,8 +148,14 @@ export function MarketChart({
   const onPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
     if (pointers.current.has(event.pointerId)) clearGesture();
   };
-  const sourceCandles = chartCandles(points, ohlcCandles);
-  const baseVisibleCount = Math.min(42, sourceCandles.length);
+  const freshCandles = chartCandles(points, ohlcCandles);
+  if (freshCandles.length) lastVerified.current = { market, candles: freshCandles };
+  const retainedCandles = lastVerified.current?.market === market ? lastVerified.current.candles : [];
+  // A temporary polling failure must not replace confirmed market history with
+  // an empty panel. The retained series is explicitly labelled as stale below.
+  const sourceCandles = freshCandles.length ? freshCandles : retainedCandles;
+  const isShowingLastVerified = !freshCandles.length && retainedCandles.length > 0;
+  const baseVisibleCount = Math.min(24, sourceCandles.length);
   const visibleCount = Math.max(12, Math.min(sourceCandles.length, Math.round(baseVisibleCount / zoom)));
   const maxOffset = Math.max(0, sourceCandles.length - visibleCount);
   const pan = (direction: number) => setOffset((current) => Math.max(0, Math.min(maxOffset, current + direction * Math.max(1, Math.round(visibleCount / 5)))));
@@ -186,7 +193,7 @@ export function MarketChart({
   }, [hasCandles]);
   useEffect(() => setOffset((current) => Math.min(current, maxOffset)), [maxOffset]);
   if (!hasCandles) {
-    return <div className="market-chart market-chart-empty" role="status">Waiting for live market ticks</div>;
+    return <div className="market-chart market-chart-empty" role="status">Waiting for the first verified market tick</div>;
   }
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));
@@ -220,6 +227,9 @@ export function MarketChart({
       onLostPointerCapture={onPointerEnd}
       style={{ touchAction: "none" }}
     >
+      <div className={`market-chart-status ${isShowingLastVerified ? "market-chart-status-stale" : ""}`} role="status">
+        {isShowingLastVerified ? "Feed reconnecting · showing last verified 1-minute candles" : "Verified 1-minute candles"}
+      </div>
       <div className="market-chart-main">
         <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
           {priceLabels.map((label, index) => {
@@ -262,4 +272,3 @@ export function MarketChart({
     </div>
   );
 }
-

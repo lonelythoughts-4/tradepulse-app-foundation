@@ -328,14 +328,15 @@ export function BotsWorkspace({
   };
   const memecoinMarketLabel = (symbol: string) => {
     const catalogueName = memecoinCatalog.find((asset) => asset.symbol === symbol)?.name;
-    return catalogueName || memecoinNames[symbol.toUpperCase()] || symbol;
+    return catalogueName || memecoinNames[symbol.toUpperCase()] || "Memecoin market";
   };
   const memecoinPositionIdentity = (symbol: string) => {
     const catalogueAsset = memecoinCatalog.find((asset) => asset.symbol === symbol);
+    const approvedName = catalogueAsset?.name || memecoinNames[symbol.toUpperCase()];
     return {
       chainLabel: catalogueAsset?.chain_label,
-      label: catalogueAsset?.name || memecoinNames[symbol.toUpperCase()] || symbol,
-      title: catalogueAsset?.name || memecoinNames[symbol.toUpperCase()] || symbol,
+      label: approvedName || "Memecoin market",
+      title: approvedName || "Market label is being verified",
     };
   };
   const memecoinInsightLabel = (symbol: string) => {
