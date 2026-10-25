@@ -41,6 +41,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [signalResults, setSignalResults] = useState<Record<string, string>>({});
   const [signalError, setSignalError] = useState("");
   const signalPollInFlight = useRef(false);
+  const signalPollFailures = useRef(0);
   const [loadError, setLoadError] = useState("");
   const [now, setNow] = useState(Date.now());
   const [helpOpen, setHelpOpen] = useState(false);
@@ -86,10 +87,17 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           const next = (result.signals || []) as Signal[];
           setSignals(next);
           setSignalResults((current) => Object.fromEntries(Object.entries(current).filter(([id]) => next.some((signal) => signal.id === id))));
+          signalPollFailures.current = 0;
           setSignalError("");
         }
       } catch {
-        if (!cancelled) setSignalError("Signal updates unavailable. Reconnecting…");
+        if (!cancelled) {
+          signalPollFailures.current += 1;
+          // A single slow upstream read is not a customer-visible outage.
+          // Keep the last verified signals on screen and only surface the
+          // reconnect state after a short, consecutive failure window.
+          if (signalPollFailures.current >= 3) setSignalError("Signal updates are delayed. Reconnecting…");
+        }
       } finally { signalPollInFlight.current = false; }
     };
     void refresh(); const timer = window.setInterval(refresh, 2000); return () => { cancelled = true; window.clearInterval(timer); };
@@ -124,6 +132,8 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       || /^\/v1\/synthetic\/positions\/[^/]+\/close$/.test(path);
     if (changesExecutionMode && executionSubmitting.current) return false;
     if (changesExecutionMode) { executionSubmitting.current = true; executionRevision.current += 1; setExecutionTransition(payload.execution_mode === "AUTO" ? "AUTO" : "MANUAL"); }
+    const actionLabel = path.includes("/signals/") ? "Submitting signal approval…" : /^\/v1\/synthetic\/positions\/[^/]+\/close$/.test(path) ? "Submitting close request…" : changesExecutionMode ? "Saving execution mode…" : null;
+    if (actionLabel) onNotice(actionLabel);
     try {
       const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }, environment, durableAction ? 40_000 : undefined));
       if (changesExecutionMode && (response.execution_mode === "MANUAL" || response.execution_mode === "AUTO")) confirmedMode.current = { revision: executionRevision.current, mode: response.execution_mode };
