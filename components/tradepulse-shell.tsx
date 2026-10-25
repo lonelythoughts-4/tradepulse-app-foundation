@@ -5049,14 +5049,14 @@ function BrowserBotHandoff() {
             setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
           }}
         >
-          Continue with Telegram <ChevronRight />
+          Continue with Telegram
         </a>
       ) : (
         <button className="primary-action" type="button" disabled>
           {state === "waiting" ? "Confirming in Telegram…" : "Preparing secure link…"} <ChevronRight />
         </button>
       )}
-      {message && <small role="status" aria-live="polite">{state === "ready" ? "Open Telegram, then this page will finish automatically." : message}</small>}
+      {message && state !== "ready" && <small role="status" aria-live="polite">{message}</small>}
       {state === "error" && (
         <button className="small-action" type="button" onClick={retry}>
           Create a new secure link
@@ -5071,10 +5071,9 @@ const AUTH_DESK_VIEWS = [
   { label: "Flashback", heading: "Flashback contract", state: "Settles at the end", accent: "coral", path: "M12 166 C39 175 58 111 85 132 S115 93 142 111 S175 101 202 78 S237 113 266 83 S305 102 336 61 S368 75 390 34" },
 ] as const;
 
-function AuthEntryPage({ notice }: { notice: string }) {
+function AuthEntryPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [view, setView] = useState(0);
-  const insideTelegram = openedInsideTelegram();
   const activeView = AUTH_DESK_VIEWS[view];
   useEffect(() => {
     const timer = window.setInterval(() => setView((current) => (current + 1) % AUTH_DESK_VIEWS.length), 7000);
@@ -5088,9 +5087,7 @@ function AuthEntryPage({ notice }: { notice: string }) {
     <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title">
       <div className="telegram-entry-copy">
         <h1 id="telegram-entry-title">A desk for every market moment.</h1>
-        <p className="telegram-entry-lede">{notice || (insideTelegram ? "Close this Mini App, go back to TradePulse in Telegram, then open the desk again from the menu." : "Check the market, choose what to do, and see what happens next.")}</p>
-        {!insideTelegram && <BrowserBotHandoff />}
-        <p className="telegram-entry-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</p>
+        <BrowserBotHandoff />
       </div>
       <aside className={`telegram-desk telegram-desk--${activeView.accent}`} aria-label="Illustrative TradePulse desk preview">
         <div className="telegram-desk-topbar"><div className="telegram-preview-mark"><PulseMark size={20} /><span>TradePulse</span></div><span>Preview</span><div className="telegram-desk-avatar" aria-hidden="true" /></div>
@@ -5103,7 +5100,6 @@ function AuthEntryPage({ notice }: { notice: string }) {
             <div className="telegram-desk-events"><div><i /><span>Market data checked</span><b>Now</b></div><div><i /><span>Controls ready</span><b>Ready</b></div></div>
           </div>
         </div>
-        <div className="telegram-desk-bottom"><span>Example screen. No account data.</span><span>TradePulse</span></div>
       </aside>
     </section>
     <section className="telegram-entry-intro" aria-labelledby="entry-intro-title">
@@ -6936,7 +6932,7 @@ function LiveTradePulse() {
         </div>
       </main>
     );
-  if (!data) return <AuthEntryPage notice={notice} />;
+  if (!data) return <AuthEntryPage />;
   if (!data.user.onboarding_complete)
     return <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} />;
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
