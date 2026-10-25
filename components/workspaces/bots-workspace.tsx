@@ -21,6 +21,7 @@ const memecoinNames: Record<string, string> = {
 };
 const memecoinLogos: Record<string, string> = {
   DOGE: "/icons/crypto/doge.svg", SHIB: "/icons/crypto/shib.svg", PEPE: "/icons/crypto/pepe.svg",
+  WIF: "/icons/crypto/wif.png", BONK: "/icons/crypto/bonk.svg",
 };
 
 function MemecoinMark({ symbol, compact = false }: { symbol: string; compact?: boolean }) {
