@@ -5061,6 +5061,25 @@ function BrowserBotHandoff() {
     </div>
   );
 }
+const AUTH_EXPERIENCE_SLIDES = [
+  { title: "Know what moved.", copy: "See balances, positions, settlements, and account activity in one place before you take the next action.", label: "Account clarity" },
+  { title: "Choose the right product.", copy: "Memecoin, Synthetic, and Flashback stay distinct, so their controls and safeguards stay clear too.", label: "Focused products" },
+  { title: "Keep your circle close.", copy: "Share your invite link, then track eligible referral earnings from your own account.", label: "Referral visibility" },
+] as const;
+function AuthEntryPage({ notice }: { notice: string }) {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [slide, setSlide] = useState(0);
+  const insideTelegram = openedInsideTelegram();
+  useEffect(() => { const timer = window.setInterval(() => setSlide((current) => (current + 1) % AUTH_EXPERIENCE_SLIDES.length), 6500); return () => window.clearInterval(timer); }, []);
+  const activeSlide = AUTH_EXPERIENCE_SLIDES[slide];
+  const moveSlide = (direction: -1 | 1) => setSlide((current) => (current + direction + AUTH_EXPERIENCE_SLIDES.length) % AUTH_EXPERIENCE_SLIDES.length);
+  return <main className={`telegram-entry telegram-entry--${theme}`}>
+    <header className="telegram-entry-nav"><div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><button className="telegram-theme-toggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v2.1M12 18.1v2.1M20.2 12h-2.1M5.9 12H3.8M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5M17.8 17.8l-1.5-1.5M7.7 7.7 6.2 6.2M15.9 12a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0Z" /></svg><span>{theme === "dark" ? "Light" : "Dark"}</span></button></header>
+    <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title"><div className="telegram-entry-copy"><p className="telegram-entry-kicker">Your account, one clear desk.</p><h1 id="telegram-entry-title">Move with a clearer view of your money.</h1><p className="telegram-entry-lede">{notice || (insideTelegram ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button." : "TradePulse connects your Telegram account to a desk built for review, control, and considered action.")}</p>{!insideTelegram && <BrowserBotHandoff />}<p className="telegram-entry-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</p></div>
+      <aside className="telegram-entry-flow" aria-label="How TradePulse keeps account decisions clear"><div className="telegram-flow-topline"><span>Inside the desk</span><span>{String(slide + 1).padStart(2, "0")} / 03</span></div><div className="telegram-flow-slide" aria-live="polite"><span>{activeSlide.label}</span><h2>{activeSlide.title}</h2><p>{activeSlide.copy}</p></div><div className="telegram-flow-controls"><div className="telegram-flow-dots" aria-label="Experience slides">{AUTH_EXPERIENCE_SLIDES.map((item, index) => <button key={item.label} type="button" className={index === slide ? "active" : ""} onClick={() => setSlide(index)} aria-label={`Show ${item.label}`} aria-current={index === slide ? "true" : undefined} />)}</div><div className="telegram-flow-arrows"><button type="button" onClick={() => moveSlide(-1)} aria-label="Previous slide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg></button><button type="button" onClick={() => moveSlide(1)} aria-label="Next slide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" /></svg></button></div></div></aside></section>
+    <section className="telegram-entry-steps" aria-labelledby="telegram-entry-steps-title"><div><p className="telegram-entry-kicker">A simple connection</p><h2 id="telegram-entry-steps-title">From Telegram to your desk in three steps.</h2></div><ol><li><span>01</span><strong>Open the secure link</strong><p>Start in Telegram, where your account already lives.</p></li><li><span>02</span><strong>Confirm this browser</strong><p>Approve the exact browser you want to use.</p></li><li><span>03</span><strong>Return to TradePulse</strong><p>Your protected desk opens here automatically.</p></li></ol></section>
+  </main>;
+}
 export function money(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -6879,39 +6898,7 @@ function LiveTradePulse() {
         </div>
       </main>
     );
-  if (!data)
-    return (
-      <main className="telegram-connect-screen">
-        <header className="telegram-connect-header">
-          <div className="telegram-connect-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
-        </header>
-        <section className="telegram-connect-hero" aria-labelledby="telegram-connect-title">
-          <div className="telegram-connect-copy">
-          <h1 id="telegram-connect-title">
-            {openedInsideTelegram()
-              ? "Telegram session unavailable."
-              : "Your TradePulse desk, connected to Telegram."}
-          </h1>
-          <p>
-            {notice ||
-              (openedInsideTelegram()
-                ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button."
-                : "Review your wallet, products, and account activity from one protected desk. Telegram approves this browser and returns you here automatically.")}
-          </p>
-          <BrowserBotHandoff />
-          <small className="telegram-connect-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</small>
-          </div>
-        </section>
-        <section className="telegram-connect-benefits" aria-labelledby="telegram-benefits-title">
-          <h2 id="telegram-benefits-title">Built for the decisions that move your account.</h2>
-          <dl>
-            <div><dt>Wallet, clearly</dt><dd>Review balances, transfers, withdrawals, and financial activity in one protected account view.</dd></div>
-            <div><dt>Products, separately</dt><dd>Operate Memecoin, Synthetic, and Flashback with their own rules, controls, and settlement states.</dd></div>
-            <div><dt>Invite, transparently</dt><dd>Share your TradePulse invite link and track eligible referral earnings in your account.</dd></div>
-          </dl>
-        </section>
-      </main>
-    );
+  if (!data) return <AuthEntryPage notice={notice} />;
   if (!data.user.onboarding_complete)
     return <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} />;
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
