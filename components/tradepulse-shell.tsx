@@ -6882,37 +6882,32 @@ function LiveTradePulse() {
   if (!data)
     return (
       <main className="telegram-connect-screen">
-        <section className="telegram-connect-panel" aria-labelledby="telegram-connect-title">
+        <header className="telegram-connect-header">
           <div className="telegram-connect-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
-          <img
-            src="/illustrations/session-door-clean.png"
-            alt="An open door representing a secure Telegram connection"
-            className="telegram-connect-art"
-          />
+        </header>
+        <section className="telegram-connect-hero" aria-labelledby="telegram-connect-title">
           <div className="telegram-connect-copy">
           <h1 id="telegram-connect-title">
             {openedInsideTelegram()
               ? "Telegram session unavailable."
-              : "Connect your Telegram."}
+              : "Your TradePulse desk, connected to Telegram."}
           </h1>
           <p>
             {notice ||
               (openedInsideTelegram()
                 ? "Close this Mini App, return to TradePulse in Telegram, and open the desk again from its menu button."
-                : "Open the TradePulse bot, approve this browser, and return here automatically.")}
+                : "Review your wallet, products, and account activity from one protected desk. Telegram approves this browser and returns you here automatically.")}
           </p>
           <BrowserBotHandoff />
-          <small className="telegram-connect-safety">TradePulse will never ask for your Telegram password, recovery phrase, or one-time code to connect this browser.</small>
+          <small className="telegram-connect-safety">Telegram confirms this browser only. TradePulse will never ask for your password, recovery phrase, or one-time code.</small>
           </div>
         </section>
-        <section className="telegram-connect-overview" aria-labelledby="telegram-overview-title">
-          <h2 id="telegram-overview-title">One desk for the decisions that matter.</h2>
-          <p>TradePulse connects your Telegram account to a single operating desk, so you can review state before you act.</p>
+        <section className="telegram-connect-benefits" aria-labelledby="telegram-benefits-title">
+          <h2 id="telegram-benefits-title">Built for the decisions that move your account.</h2>
           <dl>
-            <div><dt>Wallet controls</dt><dd>Review balances, deposits, withdrawals, and activity from one protected account view.</dd></div>
-            <div><dt>Trading products</dt><dd>Operate Memecoin and Synthetic strategies separately, with their own controls and safeguards.</dd></div>
-            <div><dt>Flashback contracts</dt><dd>Review Sealed Return and Direction outcomes on their own settlement clocks.</dd></div>
-            <div><dt>Invite and earn</dt><dd>Share your TradePulse invite link and track eligible referral earnings in your account.</dd></div>
+            <div><dt>Wallet, clearly</dt><dd>Review balances, transfers, withdrawals, and financial activity in one protected account view.</dd></div>
+            <div><dt>Products, separately</dt><dd>Operate Memecoin, Synthetic, and Flashback with their own rules, controls, and settlement states.</dd></div>
+            <div><dt>Invite, transparently</dt><dd>Share your TradePulse invite link and track eligible referral earnings in your account.</dd></div>
           </dl>
         </section>
       </main>
