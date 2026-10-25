@@ -175,11 +175,9 @@ export function BotsWorkspace({
     };
     tick();
     const countdown = window.setInterval(tick, 1_000);
-    // Direction needs a legible live reference while its 30-second clock is
-    // running. The reference is display-only; settlement still fetches and
-    // records its own quote at expiry.
-    const refreshInterval = activeCountdownSession?.product_version === "market-direction-v1" ? 3_000 : 15_000;
-    const refresh = window.setInterval(() => void refreshSession(), refreshInterval);
+    // Both 30-second contracts need prompt authoritative status confirmation.
+    // Direction additionally returns its display-only live reference here.
+    const refresh = window.setInterval(() => void refreshSession(), 3_000);
     return () => {
       window.clearInterval(countdown);
       window.clearInterval(refresh);
