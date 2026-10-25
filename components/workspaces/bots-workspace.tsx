@@ -55,6 +55,24 @@ function remainingStopLabel(mark: number, stop: number, direction: string) {
   return distance <= 0.005 ? "Stop crossed" : `Stop ${distance.toFixed(2)}% away`;
 }
 
+type MemecoinEvent = { id: string; kind: string; created_at: number; payload?: Record<string, unknown> };
+type DisplayMemecoinEvent = MemecoinEvent & { reviewCount?: number };
+
+function compactMemecoinEvents(events: MemecoinEvent[]) {
+  const compacted: DisplayMemecoinEvent[] = [];
+  for (const event of events.slice(-12)) {
+    const isHold = event.kind === "strategy_decision" && event.payload?.decision === "hold";
+    const priorHoldIndex = isHold ? compacted.findIndex((item) => item.kind === "strategy_decision" && item.payload?.decision === "hold") : -1;
+    if (priorHoldIndex >= 0) {
+      const prior = compacted[priorHoldIndex];
+      compacted[priorHoldIndex] = { ...event, reviewCount: Number(prior.reviewCount || 1) + 1 };
+    } else {
+      compacted.push({ ...event, reviewCount: isHold ? 1 : undefined });
+    }
+  }
+  return compacted.slice(-4);
+}
+
 function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
   event.preventDefault();
@@ -131,7 +149,7 @@ export function BotsWorkspace({
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
   const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: Array<{ id: string; kind: string; created_at: number; payload?: Record<string, unknown> }> }>({});
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
     source: "wallet" | "demo" | "credit";
@@ -887,7 +905,7 @@ ealed Return entry amount" /></div></label>
               </div>
             )}
               {(memecoinSnapshot.events || []).length > 0 && <div className="support-ticket-list">
-              {(memecoinSnapshot.events || []).slice(-4).map((event) => {
+              {compactMemecoinEvents(memecoinSnapshot.events || []).map((event) => {
                 const reason = typeof event.payload?.reason === "string" ? event.payload.reason : "";
                 const available = reason.match(/(\$[\d,.]+) remains available/i)?.[1];
                 const isAllocationHold = event.kind === "strategy_rejected" && /insufficient memecoin allocation/i.test(reason);
@@ -902,7 +920,7 @@ ealed Return entry amount" /></div></label>
                     : event.kind === "strategy_decision" && decision === "opened"
                       ? "Automatic entry opened"
                       : event.kind === "strategy_decision" && decision === "hold"
-                        ? "No trade opened"
+                        ? event.reviewCount && event.reviewCount > 1 ? `No trade opened · ${event.reviewCount} recent checks` : "No trade opened"
                         : event.kind.replaceAll("_", " ");
                 const detail = isQuoteDelay
                   ? "No position was opened. The bot will retry at its next scheduled decision after it receives a current quote."
@@ -911,7 +929,7 @@ ealed Return entry amount" /></div></label>
                     : event.kind === "strategy_decision" && decision === "opened"
                       ? `${eventSymbol ? `${memecoinMarketLabel(eventSymbol)} entry recorded. ` : ""}Position safeguards are active.`
                       : event.kind === "strategy_decision" && decision === "hold"
-                        ? "No selected market met the strategy rules in this review."
+                        ? event.reviewCount && event.reviewCount > 1 ? "No selected market met the strategy rules in these recent checks. The next review will replace this summary." : "No selected market met the strategy rules in this review."
                         : reason || "Strategy review recorded.";
                 return <div className="activity-row" key={event.id}>
                   <div className="activity-info">
