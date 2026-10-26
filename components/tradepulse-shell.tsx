@@ -5091,15 +5091,7 @@ function AuthEntryPage() {
         </div>
       </div>
     </section>
-    <section className="telegram-dispatch" aria-labelledby="telegram-dispatch-title">
-      <header className="telegram-dispatch-heading"><span>TradePulse Dispatch</span><h2 id="telegram-dispatch-title">One desk. Three ways to make a call.</h2><p>What you see changes with the product. The record stays with you.</p></header>
-      <div className="telegram-dispatch-record">
-        <article className="telegram-dispatch-moment telegram-dispatch-moment--market"><div className="telegram-dispatch-stamp"><span>Memecoin</span><b>Market</b></div><div className="telegram-dispatch-copy"><h3>Price, protection, position.</h3><p>Keep the market and an open position in the same place.</p></div><svg viewBox="0 0 560 118" role="img" aria-label="Illustrative market trace"><path d="M0 94H560M0 58H560M0 22H560" className="telegram-dispatch-rule"/><path d="M0 96 C50 79 73 91 116 66 S185 88 230 52 S300 67 348 36 S416 53 463 28 S517 43 560 15" className="telegram-dispatch-line telegram-dispatch-line--market"/></svg></article>
-        <article className="telegram-dispatch-moment telegram-dispatch-moment--signal"><div className="telegram-dispatch-stamp"><span>Synthetic</span><b>Review</b></div><div className="telegram-dispatch-copy"><h3>Read the signal before you act.</h3><p>Manual review stays visible. Automatic mode is a choice.</p></div><div className="telegram-dispatch-lanes" aria-label="Illustrative synthetic decision sequence"><span>Signal</span><i /><span>Review</span><i /><span>Action</span></div></article>
-        <article className="telegram-dispatch-moment telegram-dispatch-moment--contract"><div className="telegram-dispatch-stamp"><span>Flashback</span><b>Settle</b></div><div className="telegram-dispatch-copy"><h3>Entry, clock, result.</h3><p>Direction and Sealed Return settle on their own contract time.</p></div><div className="telegram-dispatch-clock" aria-label="Illustrative 30-second contract clock"><strong>00:30</strong><span>Contract time</span></div></article>
-      </div>
-    </section>
-    <section className="telegram-entry-return" aria-labelledby="entry-return-title"><div><span>Telegram to desk</span><h2 id="entry-return-title">Open TradePulse there. Pick up here.</h2></div><p>Confirm this browser in Telegram and your desk returns here when it is ready.</p></section>
+    <section className="telegram-entry-home" aria-labelledby="entry-home-title"><div className="telegram-entry-home-heading"><h2 id="entry-home-title">Your desk is waiting where you left it.</h2><p>Telegram opens the door. The browser is where you can take your time.</p></div><div className="telegram-entry-home-index"><article><span>Market</span><strong>Find the workspace you were using.</strong></article><article><span>Wallet</span><strong>See balances and activity together.</strong></article><article><span>Account</span><strong>Manage the settings that belong to you.</strong></article></div></section>
     <footer className="telegram-entry-footer"><div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><p>Trading has risk. Only trade what you can afford to lose.</p><div><span>© {new Date().getFullYear()} TradePulse</span></div></footer>
   </main>;
 }
