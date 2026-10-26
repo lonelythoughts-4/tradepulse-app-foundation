@@ -5065,16 +5065,8 @@ function BrowserBotHandoff() {
     </div>
   );
 }
-const AUTH_DESK_VIEWS = [
-  { label: "Memecoin", heading: "Memecoin market", state: "Quote checked", accent: "mint", path: "M12 182 C38 165 52 175 70 139 S110 151 132 106 S164 136 193 88 S232 116 254 69 S291 85 319 40 S357 54 390 21" },
-  { label: "Synthetic", heading: "Synthetic signals", state: "Ready to review", accent: "gold", path: "M12 174 C40 108 63 156 89 126 S119 162 149 112 S181 146 210 94 S246 126 275 72 S312 95 340 46 S369 54 390 25" },
-  { label: "Flashback", heading: "Flashback contract", state: "Settles at the end", accent: "coral", path: "M12 166 C39 175 58 111 85 132 S115 93 142 111 S175 101 202 78 S237 113 266 83 S305 102 336 61 S368 75 390 34" },
-] as const;
-
 function AuthEntryPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [view, setView] = useState(0);
-  const activeView = AUTH_DESK_VIEWS[view];
   return <main className={`telegram-entry telegram-entry--${theme}`}>
     <header className="telegram-entry-nav">
       <div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
@@ -5085,17 +5077,10 @@ function AuthEntryPage() {
         <h1 id="telegram-entry-title">See the price. Make the call. Keep the record.</h1>
         <BrowserBotHandoff />
       </div>
-      <aside className={`telegram-desk telegram-desk--${activeView.accent}`} aria-label="Illustrative TradePulse desk preview">
-        <div className="telegram-desk-topbar"><div className="telegram-preview-mark"><PulseMark size={20} /><span>TradePulse</span></div><span>Preview</span><div className="telegram-desk-avatar" aria-hidden="true" /></div>
-        <div className="telegram-desk-frame">
-          <div className="telegram-desk-rail" aria-hidden="true"><span><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" /></svg></span><span className="active"><svg viewBox="0 0 24 24"><path d="M4 16.5 9 11l3.2 3.1L20 6.5M15 6.5h5v5" /></svg></span><span><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9" /></svg></span></div>
-          <div className="telegram-desk-workspace">
-            <div className="telegram-desk-title"><div><span>{activeView.label}</span><h2>{activeView.heading}</h2></div><span className="telegram-desk-live"><i /> {activeView.state}</span></div>
-            <div className="telegram-desk-tabs" role="tablist" aria-label="Product preview areas">{AUTH_DESK_VIEWS.map((item, index) => <button key={item.label} role="tab" type="button" aria-selected={index === view} className={index === view ? "active" : ""} onClick={() => setView(index)}>{item.label}</button>)}</div>
-            <div className="telegram-desk-chart"><div className="telegram-desk-chart-header"><span>Market view</span><span>Live preview</span></div><svg viewBox="0 0 402 210" role="img" aria-label={`Illustrative ${activeView.label} market chart`}><path d="M12 22H390M12 72H390M12 122H390M12 172H390" className="telegram-desk-grid"/><path d={activeView.path} className="telegram-desk-line"/><path d={`${activeView.path} L390 196 L12 196 Z`} className="telegram-desk-area"/><circle cx="390" cy={activeView.path.includes("390 21") ? "21" : activeView.path.includes("390 25") ? "25" : "34"} r="4" className="telegram-desk-point"/></svg><div className="telegram-desk-axis"><span>Earlier</span><span>Now</span></div></div>
-            <div className="telegram-desk-events"><div><i /><span>Market data checked</span><b>Now</b></div><div><i /><span>Controls ready</span><b>Ready</b></div></div>
-          </div>
-        </div>
+      <aside className="telegram-hero-record" aria-label="TradePulse desk record">
+        <div className="telegram-hero-record-head"><div className="telegram-preview-mark"><PulseMark size={20} /><span>TradePulse</span></div><span>Desk record</span></div>
+        <div className="telegram-hero-record-body"><div className="telegram-hero-record-line telegram-hero-record-line--market"><span>Market</span><strong>Price in view</strong><svg viewBox="0 0 300 62" aria-hidden="true"><path d="M0 51 C28 45 43 54 70 37 S116 46 143 23 S188 34 216 16 S263 27 300 8"/></svg></div><div className="telegram-hero-record-line telegram-hero-record-line--signal"><span>Signal</span><strong>Review before action</strong><div className="telegram-hero-record-dashes" aria-hidden="true"><i /><i /><i /><i /><i /></div></div><div className="telegram-hero-record-line telegram-hero-record-line--contract"><span>Contract</span><strong>Entry. Clock. Result.</strong><b>00:30</b></div></div>
+        <div className="telegram-hero-record-foot"><span>Telegram confirms the browser</span><span>Then your desk returns here</span></div>
       </aside>
     </section>
     <section className="telegram-entry-intro" aria-label="What the desk keeps in view">
