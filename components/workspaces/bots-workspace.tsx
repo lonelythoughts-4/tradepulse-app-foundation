@@ -204,6 +204,7 @@ export function BotsWorkspace({
     ] as const;
   };
   const sealedReturn = flashback?.product_version === "sealed-return-v2";
+  const sealedEntropyRefund = sealedReturn && flashback?.close_reason === "entropy_unavailable_refund";
   useEffect(() => {
     setSelectedFlashbackId((current) => flashbackSessions.some((session) => session.id === current)
       ? current
@@ -659,7 +660,7 @@ ealed Return entry amount" /></div></label>
             <GradientPanel className="compound-panel flashback-reveal"><h2>Flashback Direction settled</h2><div className="fact-block"><span>ENTRY PRICE <b>{Number(flashback.entry_price || 0).toFixed(8)}</b></span><span>SETTLEMENT PRICE <b>{Number(flashback.exit_price || 0).toFixed(8)}</b></span><span>OUTCOME <b>{flashback.close_reason === "tie_refund" ? "TIE · ENTRY RETURNED" : flashback.close_reason === "reference_unavailable_refund" ? "REFERENCE UNAVAILABLE · ENTRY RETURNED" : Number(flashback.user_net_usd || 0) > 0 ? "CORRECT" : "INCORRECT"}</b></span><span>RETURN <b>{Number(flashback.payout_multiplier || 0).toFixed(2)}×</b></span><span>REFERENCE <b>{flashback.exit_source || "KRAKEN"}</b></span><span>FEE <b>$0.00</b></span></div><button className="small-action" onClick={() => { setFlashbackAmount(20); setFlashbackType(null); setFlashbackDirectionChoice(null); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button></GradientPanel>
           </> : sealedReturn ? <>
             <div className="detail-stats">
-              <GradientPanel><span>OUTCOME</span><strong>{Number(flashback.payout_multiplier || 0) === 0 ? "FULL LOSS" : `${Number(flashback.payout_multiplier || 0).toFixed(2)}×`}</strong></GradientPanel>
+              <GradientPanel><span>OUTCOME</span><strong>{sealedEntropyRefund ? "ENTRY RETURNED" : Number(flashback.payout_multiplier || 0) === 0 ? "FULL LOSS" : `${Number(flashback.payout_multiplier || 0).toFixed(2)}×`}</strong></GradientPanel>
               <GradientPanel><span>RETURNED</span><strong>{money(Number(flashback.return_usd || 0))}</strong></GradientPanel>
               <GradientPanel><span>NET CHANGE</span><strong className={Number(flashback.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback.user_net_usd || 0))}</strong></GradientPanel>
             </div>
@@ -667,13 +668,13 @@ ealed Return entry amount" /></div></label>
               <h2>Flashback revealed</h2>
               <div className="fact-block">
                 <span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span>
-                <span>RETURN <b>{Number(flashback.payout_multiplier || 0).toFixed(2)}×</b></span>
+                <span>{sealedEntropyRefund ? "SETTLEMENT" : "RETURN"} <b>{sealedEntropyRefund ? "ENTRY RETURNED" : `${Number(flashback.payout_multiplier || 0).toFixed(2)}×`}</b></span>
                 <span>FEE <b>$0.00</b></span>
                 <span>ENTROPY SOURCE <b>{flashback.market || "—"}/USD · {flashback.exit_source || "—"}</b></span>
                 <span>VERIFY HASH <b>{String(flashback.entropy_hash || "").slice(0, 16)}…</b></span>
                 <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               </div>
-              <p>The revealed nonce, commitment, and external entropy hash preserve the sealed rules for this session.</p>
+              <p>{sealedEntropyRefund ? "The external entropy source did not respond during the resolution window. Your full entry was returned and no random return was selected." : "The revealed nonce, commitment, and external entropy hash preserve the sealed rules for this session."}</p>
               <button className="small-action" onClick={() => { setFlashbackAmount(20); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button>
             </GradientPanel>
           </> : <>

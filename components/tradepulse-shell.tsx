@@ -5115,6 +5115,7 @@ export function activityLabel(kind: string, status = "", amount?: number) {
   if (kind === "performance_fee") return "performance fee charged";
   if (kind === "flashback_allocation") return "Flashback entry locked";
   if (kind === "flashback_return") return "Flashback return";
+  if (kind === "flashback_refund") return "Flashback entry returned";
   if (kind === "flashback_loss") return Number(amount || 0) === 0 ? "Flashback settled" : "Flashback loss";
   if (kind === "flashback_direction_return") return "Flashback Direction return";
   if (kind === "flashback_direction_loss") return "Flashback Direction loss";
