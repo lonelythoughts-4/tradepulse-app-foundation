@@ -5067,6 +5067,13 @@ function BrowserBotHandoff() {
 }
 function AuthEntryPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [bannerSlide, setBannerSlide] = useState(0);
+  const bannerSlides = [
+    { label: "Market view", title: "Price and protection stay together.", detail: "Keep the market in view while you manage a position.", tone: "market" },
+    { label: "Signal review", title: "Every signal has a moment to be checked.", detail: "Choose a manual review or let your rules decide.", tone: "signal" },
+    { label: "Flashback", title: "Each contract keeps its own clock.", detail: "The entry, expiry, and outcome stay connected.", tone: "contract" },
+  ] as const;
+  const changeBannerSlide = (direction: -1 | 1) => setBannerSlide((current) => (current + direction + bannerSlides.length) % bannerSlides.length);
   return <main className={`telegram-entry telegram-entry--${theme}`}>
     <header className="telegram-entry-nav">
       <div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
@@ -5083,11 +5090,24 @@ function AuthEntryPage() {
         <div className="telegram-hero-record-foot"><span>Telegram confirms the browser</span><span>Then your desk returns here</span></div>
       </aside>
     </section>
-    <section className="telegram-entry-intro" aria-label="What the desk keeps in view">
-      <div className="telegram-entry-ticker" aria-label="Market in view, signals wait for review, contracts settle at expiry">
-        <div className="telegram-entry-ticker-track" aria-hidden="true">
-          <span>Market in view</span><i /><span>Signals wait for review</span><i /><span>Contracts settle at expiry</span><i />
-          <span>Market in view</span><i /><span>Signals wait for review</span><i /><span>Contracts settle at expiry</span><i />
+    <section className="telegram-entry-intro" aria-label="How TradePulse keeps a decision together">
+      <div className="telegram-entry-banner">
+        <div className="telegram-entry-banner-viewport">
+          <div className="telegram-entry-banner-track" style={{ transform: `translateX(-${bannerSlide * 100}%)` }}>
+            {bannerSlides.map((slide, index) => <article className={`telegram-entry-banner-slide telegram-entry-banner-slide--${slide.tone}`} aria-hidden={index !== bannerSlide} key={slide.label}>
+              <div><span>{slide.label}</span><strong>{slide.title}</strong><p>{slide.detail}</p></div>
+              <div className="telegram-entry-banner-graphic" aria-hidden="true">
+                {slide.tone === "market" && <svg viewBox="0 0 210 62"><path d="M2 51 C23 48 30 35 49 40 S74 53 91 30 S121 39 141 20 S174 31 208 7" /><circle cx="208" cy="7" r="4" /></svg>}
+                {slide.tone === "signal" && <div className="telegram-entry-banner-lanes"><span>Source</span><i /><span>Review</span><i /><span>Action</span></div>}
+                {slide.tone === "contract" && <div className="telegram-entry-banner-clock"><strong>00:30</strong><span>Contract window</span></div>}
+              </div>
+            </article>)}
+          </div>
+        </div>
+        <div className="telegram-entry-banner-controls">
+          <button type="button" onClick={() => changeBannerSlide(-1)} aria-label="Show previous desk feature"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg></button>
+          <span aria-live="polite">{bannerSlide + 1} / {bannerSlides.length}</span>
+          <button type="button" onClick={() => changeBannerSlide(1)} aria-label="Show next desk feature"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" /></svg></button>
         </div>
       </div>
     </section>
