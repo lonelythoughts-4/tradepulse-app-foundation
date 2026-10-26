@@ -4936,12 +4936,12 @@ function BrowserBotHandoff() {
         const handoffExpiry = Number(handoff.expires_in);
         setExpiresIn(Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300);
         setState("ready");
-        setMessage("Open TradePulse in Telegram, confirm this browser, then return here automatically. This secure link expires in five minutes.");
+        setMessage("Secure Telegram link ready. It expires in five minutes.");
       } catch (error) {
         if (cancelled) return;
         if (attempt < 3) {
           setState("preparing");
-          setMessage("Refreshing your secure Telegram link…");
+          setMessage("Creating a secure Telegram link…");
           timer.current = window.setTimeout(() => {
             if (!cancelled) setAttempt((current) => current + 1);
           }, 2_500);
@@ -4968,7 +4968,7 @@ function BrowserBotHandoff() {
         timer.current = null;
         terminal = true;
         setState("preparing");
-        setMessage("Refreshing your secure Telegram link…");
+        setMessage("Creating a secure Telegram link…");
         window.setTimeout(() => setAttempt((current) => current + 1), 300);
         inFlight = false;
         return;
@@ -4999,7 +4999,7 @@ function BrowserBotHandoff() {
         terminal = true;
         timer.current = null;
         setState("preparing");
-        setMessage("Refreshing your secure Telegram link…");
+        setMessage("Creating a secure Telegram link…");
         window.setTimeout(() => setAttempt((current) => current + 1), 1_500);
       } finally {
         inFlight = false;
@@ -5037,7 +5037,7 @@ function BrowserBotHandoff() {
     setAttempt((current) => current + 1);
   };
   return (
-    <div className="browser-handoff">
+    <div className="browser-handoff" data-state={state}>
       {state === "ready" && botUrl ? (
         <a
           className="primary-action"
@@ -5046,17 +5046,17 @@ function BrowserBotHandoff() {
           rel="noopener noreferrer"
           onClick={() => {
             setState("waiting");
-            setMessage("Confirm this browser in Telegram. This page will finish sign-in automatically.");
+            setMessage("Confirm this browser in Telegram. Your desk will open here automatically.");
           }}
         >
           Continue with Telegram
         </a>
       ) : (
-        <button className="primary-action" type="button" disabled>
-          {state === "waiting" ? "Confirming in Telegram…" : "Preparing secure link…"} <ChevronRight />
+        <button className="primary-action" type="button" disabled aria-busy="true">
+          {state === "waiting" ? "Waiting for Telegram…" : "Preparing secure link…"}
         </button>
       )}
-      {message && state !== "ready" && <small role="status" aria-live="polite">{message}</small>}
+      {message && <small role="status" aria-live="polite">{message}</small>}
       {state === "error" && (
         <button className="small-action" type="button" onClick={retry}>
           Create a new secure link
@@ -5067,52 +5067,25 @@ function BrowserBotHandoff() {
 }
 function AuthEntryPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [bannerSlide, setBannerSlide] = useState(0);
-  const bannerSlides = [
-    { label: "Market view", title: "Price and protection stay together.", detail: "Keep the market in view while you manage a position.", tone: "market" },
-    { label: "Signal review", title: "Every signal has a moment to be checked.", detail: "Choose a manual review or let your rules decide.", tone: "signal" },
-    { label: "Flashback", title: "Each contract keeps its own clock.", detail: "The entry, expiry, and outcome stay connected.", tone: "contract" },
-  ] as const;
-  const changeBannerSlide = (direction: -1 | 1) => setBannerSlide((current) => (current + direction + bannerSlides.length) % bannerSlides.length);
   return <main className={`telegram-entry telegram-entry--${theme}`}>
     <header className="telegram-entry-nav">
       <div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
       <div className="telegram-entry-nav-actions"><button className="telegram-theme-toggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v2.1M12 18.1v2.1M20.2 12h-2.1M5.9 12H3.8M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5M17.8 17.8l-1.5-1.5M7.7 7.7 6.2 6.2M15.9 12a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0Z" /></svg><span>{theme === "dark" ? "Light" : "Dark"}</span></button></div>
     </header>
-    <section className="telegram-entry-hero" aria-labelledby="telegram-entry-title">
-      <div className="telegram-entry-copy">
-        <h1 id="telegram-entry-title">See the price. Make the call. Keep the record.</h1>
+    <section className="telegram-auth-stage" aria-labelledby="telegram-entry-title">
+      <div className="telegram-auth-copy">
+        <h1 id="telegram-entry-title">Your desk is ready when you are.</h1>
+        <p>Continue with Telegram to open your private TradePulse session in this browser.</p>
         <BrowserBotHandoff />
+        <small className="telegram-auth-note">TradePulse will never ask for your password, recovery phrase, or one-time code.</small>
       </div>
-      <aside className="telegram-hero-record" aria-label="TradePulse desk record">
-        <div className="telegram-hero-record-head"><div className="telegram-preview-mark"><PulseMark size={20} /><span>TradePulse</span></div><span>Desk record</span></div>
-        <div className="telegram-hero-record-body"><div className="telegram-hero-record-line telegram-hero-record-line--market"><span>Market</span><strong>Price in view</strong><svg viewBox="0 0 300 62" aria-hidden="true"><path d="M0 51 C28 45 43 54 70 37 S116 46 143 23 S188 34 216 16 S263 27 300 8"/></svg></div><div className="telegram-hero-record-line telegram-hero-record-line--signal"><span>Signal</span><strong>Review before action</strong><div className="telegram-hero-record-dashes" aria-hidden="true"><i /><i /><i /><i /><i /></div></div><div className="telegram-hero-record-line telegram-hero-record-line--contract"><span>Contract</span><strong>Entry. Clock. Result.</strong><b>00:30</b></div></div>
-        <div className="telegram-hero-record-foot"><span>Telegram confirms the browser</span><span>Then your desk returns here</span></div>
+      <aside className="telegram-auth-side" aria-label="How Telegram browser confirmation works">
+        <div className="telegram-auth-side-rule" aria-hidden="true" />
+        <p>One confirmation.<br />Then you are back at your desk.</p>
+        <small>Telegram only confirms this browser. Your session stays here.</small>
       </aside>
     </section>
-    <section className="telegram-entry-intro" aria-label="How TradePulse keeps a decision together">
-      <div className="telegram-entry-banner">
-        <div className="telegram-entry-banner-viewport">
-          <div className="telegram-entry-banner-track" style={{ transform: `translateX(-${bannerSlide * 100}%)` }}>
-            {bannerSlides.map((slide, index) => <article className={`telegram-entry-banner-slide telegram-entry-banner-slide--${slide.tone}`} aria-hidden={index !== bannerSlide} key={slide.label}>
-              <div><span>{slide.label}</span><strong>{slide.title}</strong><p>{slide.detail}</p></div>
-              <div className="telegram-entry-banner-graphic" aria-hidden="true">
-                {slide.tone === "market" && <svg viewBox="0 0 210 62"><path d="M2 51 C23 48 30 35 49 40 S74 53 91 30 S121 39 141 20 S174 31 208 7" /><circle cx="208" cy="7" r="4" /></svg>}
-                {slide.tone === "signal" && <div className="telegram-entry-banner-lanes"><span>Source</span><i /><span>Review</span><i /><span>Action</span></div>}
-                {slide.tone === "contract" && <div className="telegram-entry-banner-clock"><strong>00:30</strong><span>Contract window</span></div>}
-              </div>
-            </article>)}
-          </div>
-        </div>
-        <div className="telegram-entry-banner-controls">
-          <button type="button" onClick={() => changeBannerSlide(-1)} aria-label="Show previous desk feature"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5-7 7 7 7" /></svg></button>
-          <span aria-live="polite">{bannerSlide + 1} / {bannerSlides.length}</span>
-          <button type="button" onClick={() => changeBannerSlide(1)} aria-label="Show next desk feature"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" /></svg></button>
-        </div>
-      </div>
-    </section>
-    <section className="telegram-entry-home" aria-labelledby="entry-home-title"><div className="telegram-entry-home-heading"><h2 id="entry-home-title">Your desk is waiting where you left it.</h2><p>Telegram opens the door. The browser is where you can take your time.</p></div><div className="telegram-entry-home-index"><article><span>Market</span><strong>Find the workspace you were using.</strong></article><article><span>Wallet</span><strong>See balances and activity together.</strong></article><article><span>Account</span><strong>Manage the settings that belong to you.</strong></article></div></section>
-    <footer className="telegram-entry-footer"><div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div><p>Trading has risk. Only trade what you can afford to lose.</p><div><span>© {new Date().getFullYear()} TradePulse</span></div></footer>
+    <footer className="telegram-auth-footer"><span>© {new Date().getFullYear()} TradePulse</span><span>Trading involves risk.</span></footer>
   </main>;
 }
 export function money(value: number) {
