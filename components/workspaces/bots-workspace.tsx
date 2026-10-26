@@ -415,9 +415,15 @@ export function BotsWorkspace({
       // there rather than reaching across component scope; only responses
       // without a usable projection are reconciled in the background. The
       // completed action should not remain stuck behind a full dashboard load.
-      if (response.bot || response.wallet || response.position || response.session) {
+      const hasAuthoritativeResult = Boolean(response.bot || response.wallet || response.position || response.session);
+      if (hasAuthoritativeResult) {
         onActionResult(path, payload, response);
-      } else {
+      }
+      // The immediate mutation result is used first, so this control never
+      // waits behind a screen-wide reload. A funded authorization also gets a
+      // quiet follow-up read: it is the durable source of truth if a proxy or
+      // an earlier desk snapshot arrives out of order.
+      if (durableAction || !hasAuthoritativeResult) {
         void reload().catch(() => undefined);
       }
       return true;
