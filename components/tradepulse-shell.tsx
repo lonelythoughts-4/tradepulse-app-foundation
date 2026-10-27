@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
+import { DeskLoading } from "./desk-loading";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
 import { createDeskStore, useDeskSelector, type DeskStore } from "../lib/desk-store";
 import type { DeskState } from "../lib/desk-types";
@@ -6910,20 +6911,7 @@ function LiveTradePulse() {
       });
     }
   };
-  if (loading)
-    return (
-      <main className="boot-screen" aria-busy="true">
-        <div className="boot-copy">
-          <strong>
-            TRADE<span>PULSE</span>
-          </strong>
-          <div className="boot-status" role="status" aria-live="polite">
-            <span className="status-dot" />
-            Checking your secure desk session…
-          </div>
-        </div>
-      </main>
-    );
+  if (loading) return <DeskLoading />;
   if (!data) return <AuthEntryPage />;
   if (!data.user.onboarding_complete)
     return <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} />;
