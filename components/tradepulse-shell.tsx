@@ -6821,6 +6821,19 @@ function LiveTradePulse() {
     };
   }, [tab, data, webEnvironment]);
   const applyActionResult = (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => {
+    if (path === "/v1/bots" && response.bot && typeof response.bot === "object") {
+      const createdBot = response.bot as LiveDashboard["bots"][number];
+      const returnedWallet = response.wallet && typeof response.wallet === "object"
+        ? response.wallet as Partial<LiveDashboard["wallet"]>
+        : null;
+      updateDashboard((current) => current ? {
+        ...current,
+        wallet: returnedWallet ? { ...current.wallet, ...returnedWallet } : current.wallet,
+        bots: current.bots.some((bot) => bot.id === createdBot.id)
+          ? current.bots.map((bot) => bot.id === createdBot.id ? { ...bot, ...createdBot } : bot)
+          : [...current.bots, createdBot],
+      } : current);
+    }
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (botAction) {
       const botId = botAction[1];

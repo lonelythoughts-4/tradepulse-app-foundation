@@ -131,6 +131,7 @@ export function BotsWorkspace({
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
   const [flashbackClockOffset, setFlashbackClockOffset] = useState(0);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
+  const [initialCompoundPercent, setInitialCompoundPercent] = useState(0);
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
   const [closedBotIds, setClosedBotIds] = useState<string[]>([]);
@@ -402,7 +403,7 @@ export function BotsWorkspace({
     // Authorization persists a funded risk disclosure and the customer's
     // strategy controls in one transaction. Give that durable result enough
     // time to return instead of surfacing a browser abort as a refusal.
-    const durableAction = path === `/v1/bots/${selected.id}/actions` && payload.action === "authorize";
+    const durableAction = path === "/v1/bots" || (path === `/v1/bots/${selected.id}/actions` && payload.action === "authorize");
     setReviewError("");
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
@@ -428,9 +429,12 @@ export function BotsWorkspace({
       }
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Action failed.";
+      const message = path === "/v1/bots" && error instanceof DOMException && error.name === "AbortError"
+        ? "TradePulse is still confirming this allocation. Check your fleet before trying again."
+        : error instanceof Error ? error.message : "Action failed.";
       setReviewError(message);
       onNotice(message);
+      if (path === "/v1/bots") void reload().catch(() => undefined);
       return false;
     } finally {
       setPendingActions((current) => {
@@ -764,6 +768,21 @@ ealed Return entry amount" /></div></label>
           Minimum allocation is $20.00. Your allocation cannot exceed your
           available balance.
         </p>
+        <fieldset className="initial-compound-choice">
+          <legend>Profit handling</legend>
+          <p>Choose where net realized profit goes after high-water-mark fees. You can change this later.</p>
+          <div className="initial-compound-options" role="radiogroup" aria-label="Initial profit handling" onKeyDown={handleBotChoiceKeyDown}>
+            {[
+              [0, "Release gains", "Net profit returns to your available balance."],
+              [50, "Split gains", "Half returns to your balance; half stays in bot capital."],
+              [100, "Recompound gains", "Net profit stays in the bot as capital."],
+            ].map(([percent, title, description]) => (
+              <button key={percent} type="button" role="radio" aria-checked={initialCompoundPercent === percent} tabIndex={initialCompoundPercent === percent ? 0 : -1} className={initialCompoundPercent === percent ? "active" : ""} onClick={() => setInitialCompoundPercent(percent as number)}>
+                <strong>{percent}% · {title}</strong><small>{description}</small>
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <button
           className="primary-action"
           disabled={
@@ -791,7 +810,7 @@ ealed Return entry amount" /></div></label>
                   </b>
                 </span>
                 <span>
-                  COMPOUNDING <b>0%</b>
+                  COMPOUNDING <b>{initialCompoundPercent}%</b>
                 </span>
                 {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
               </div>
@@ -802,7 +821,7 @@ ealed Return entry amount" /></div></label>
                 disabled={isActionPending("bot:create")}
                 aria-busy={isActionPending("bot:create")}
                 onClick={async () => {
-                  const created = await run("/v1/bots", { product, amount: Number(amount) });
+                  const created = await run("/v1/bots", { product, amount: Number(amount), compound_percent: initialCompoundPercent });
                   if (created) {
                     setReview(false);
                     setView("fleet");
