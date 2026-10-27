@@ -828,7 +828,7 @@ ealed Return entry amount" /></div></label>
                   }
                 }}
               >
-                {isActionPending("bot:create") ? "Submitting…" : "Start trade"} <Zap />
+                {isActionPending("bot:create") ? `Starting ${productLabel} bot…` : "Start trade"} <Zap />
               </button>
               <button className="ghost-action" disabled={isActionPending("bot:create")} onClick={() => setReview(false)}>
                 Go back
