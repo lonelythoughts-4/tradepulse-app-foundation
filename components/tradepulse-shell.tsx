@@ -5071,7 +5071,7 @@ const telegramAuthStyles = `
 
 function AuthEntryPage() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  return <main className={`telegram-entry telegram-entry--${theme}`}><style>{telegramAuthStyles}</style>
+  return <main className={`telegram-entry telegram-entry--${theme}`}><style>{`${telegramAuthStyles}.telegram-auth-side{display:block}`}</style>
     <header className="telegram-entry-nav">
       <div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
       <div className="telegram-entry-nav-actions"><button className="telegram-theme-toggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v2.1M12 18.1v2.1M20.2 12h-2.1M5.9 12H3.8M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5M17.8 17.8l-1.5-1.5M7.7 7.7 6.2 6.2M15.9 12a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0Z" /></svg><span>{theme === "dark" ? "Light" : "Dark"}</span></button></div>
