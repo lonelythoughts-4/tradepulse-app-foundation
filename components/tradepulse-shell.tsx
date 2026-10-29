@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
 import { DeskLoading } from "./desk-loading";
+import { TelegramAuthPage } from "./auth-entry";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
 import { createDeskStore, useDeskSelector, type DeskStore } from "../lib/desk-store";
 import type { DeskState } from "../lib/desk-types";
@@ -17,6 +18,7 @@ import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
+import { shouldApplyEnvironmentProjection } from "../lib/environment-switch.js";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -5066,45 +5068,8 @@ function BrowserBotHandoff() {
     </div>
   );
 }
-const telegramAuthStyles = `
-.telegram-entry{--entry-bg:#080c13;--entry-surface:#101722;--entry-text:#f3f0e9;--entry-muted:#aab6c8;--entry-line:rgba(173,190,215,.2);--entry-accent:#f3be4e;--entry-accent-ink:#15110a;min-height:100dvh;padding:0 clamp(20px,5vw,72px);color:var(--entry-text);background:var(--entry-bg);isolation:isolate}.telegram-entry::selection{color:var(--entry-accent-ink);background:var(--entry-accent)}.telegram-entry--light{--entry-bg:#f6f0e3;--entry-surface:#fffaf0;--entry-text:#17201f;--entry-muted:#56625f;--entry-line:rgba(23,32,31,.18);--entry-accent:#c88d17;--entry-accent-ink:#fffdf7}.telegram-entry-nav{width:min(100%,1240px);min-height:76px;margin:0 auto;border-bottom:1px solid var(--entry-line)}.telegram-entry-brand{color:var(--entry-text)}.telegram-entry-brand span span{color:var(--entry-accent)}.telegram-entry-nav-actions{gap:12px}.telegram-theme-toggle{min-height:38px;padding:0 12px;color:var(--entry-muted);border-color:var(--entry-line);border-radius:8px}.telegram-theme-toggle:hover{color:var(--entry-text);border-color:var(--entry-muted);background:transparent}.telegram-entry :is(button,a):focus-visible{outline:2px solid var(--entry-accent);outline-offset:3px}.telegram-auth-stage{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(340px,.72fr);gap:clamp(56px,9vw,148px);width:min(100%,1240px);min-height:calc(100dvh - 146px);margin:0 auto;padding:clamp(62px,10vh,132px) 0 clamp(56px,8vh,100px)}.telegram-auth-copy{display:grid;align-content:center;min-width:0}.telegram-auth-copy h1{max-width:12ch;margin:0;color:var(--entry-text);font-family:var(--font-space-grotesk),sans-serif;font-size:clamp(44px,5.1vw,76px);font-weight:600;line-height:.98;letter-spacing:-.04em;text-wrap:balance}.telegram-auth-copy>p{max-width:52ch;margin:27px 0 0;color:var(--entry-muted);font-size:17px;line-height:1.65}.telegram-auth-signal{width:min(100%,630px);margin-top:clamp(38px,6vh,62px);padding:24px 0 0;border-top:1px solid var(--entry-line)}.telegram-auth-signal svg{display:block;width:100%;height:auto;overflow:visible}.telegram-auth-signal-lane{fill:none;stroke:var(--entry-line);stroke-width:2}.telegram-auth-signal-arc{fill:none;stroke:color-mix(in srgb,var(--entry-muted) 46%,transparent);stroke-width:2;stroke-linecap:round}.telegram-auth-signal-trace{fill:none;stroke:var(--entry-accent);stroke-width:3;stroke-linecap:round;stroke-dasharray:8 14;animation:telegram-auth-route 1.3s cubic-bezier(.16,1,.3,1) both}.telegram-auth-signal-node{fill:var(--entry-surface);stroke:var(--entry-muted);stroke-width:3}.telegram-auth-signal-node--final{fill:var(--entry-accent);stroke:var(--entry-accent)}.telegram-auth-signal-flow{display:grid;grid-template-columns:auto 1fr auto 1fr auto;align-items:center;gap:11px;margin-top:-2px;color:var(--entry-muted);font-size:13px}.telegram-auth-signal-flow i{height:1px;background:var(--entry-line)}.telegram-auth-side{align-self:center;min-width:0;padding-left:clamp(30px,4vw,58px);border-inline-start:1px solid var(--entry-line)}.telegram-auth-side h2{margin:0;color:var(--entry-text);font-family:var(--font-space-grotesk),sans-serif;font-size:clamp(30px,3.1vw,42px);font-weight:600;line-height:1.05;letter-spacing:-.035em}.telegram-auth-side>p{max-width:38ch;margin:18px 0 0;color:var(--entry-muted);font-size:16px;line-height:1.55}.telegram-entry .browser-handoff{width:100%;margin-top:32px}.telegram-entry .browser-handoff .primary-action{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:52px;margin:0;border-radius:9px;color:var(--entry-accent-ink);background:var(--entry-accent);box-shadow:0 11px 24px rgba(0,0,0,.2)}.telegram-entry .browser-handoff .primary-action:hover:not(:disabled){filter:brightness(1.05);transform:translateY(-1px)}.telegram-entry .browser-handoff small{display:block;margin-top:12px;color:var(--entry-muted);font-size:13px;line-height:1.5}.telegram-entry .browser-handoff .small-action{margin-top:16px;color:var(--entry-accent);border-color:var(--entry-line);background:transparent}.telegram-auth-note{display:grid;grid-template-columns:20px minmax(0,1fr);gap:11px;margin-top:28px;padding-top:20px;border-top:1px solid var(--entry-line);color:var(--entry-muted);font-size:13px;line-height:1.55}.telegram-auth-note svg{width:18px;height:18px;fill:none;stroke:var(--entry-accent);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.telegram-auth-footer{display:flex;justify-content:space-between;width:min(100%,1240px);margin:0 auto;padding:22px 0 26px;color:var(--entry-muted);border-top:1px solid var(--entry-line);font-size:12px}.telegram-entry::-webkit-scrollbar{width:11px}.telegram-entry::-webkit-scrollbar-thumb{border:3px solid var(--entry-bg);border-radius:12px;background:var(--entry-muted)}@keyframes telegram-auth-route{from{stroke-dashoffset:88;opacity:.35}to{stroke-dashoffset:0;opacity:1}}@media (max-width:820px){.telegram-entry{padding:0 20px}.telegram-entry-nav{min-height:62px}.telegram-theme-toggle span{display:none}.telegram-theme-toggle{width:38px;justify-content:center;padding:0}.telegram-auth-stage{display:block;min-height:0;padding:54px 0 60px}.telegram-auth-copy h1{max-width:11ch;font-size:clamp(40px,11vw,54px)}.telegram-auth-copy>p{max-width:43ch;margin-top:23px;font-size:16px}.telegram-auth-signal{margin-top:38px;padding-top:18px}.telegram-auth-side{margin-top:54px;padding:34px 0 0;border-inline-start:0;border-top:1px solid var(--entry-line)}.telegram-auth-side>p{max-width:42ch}.telegram-auth-footer{gap:12px;padding:18px 0 24px;font-size:11px}}@media (max-width:390px){.telegram-entry{padding:0 16px}.telegram-auth-stage{padding-top:42px}.telegram-auth-copy h1{font-size:39px}.telegram-auth-signal-flow{font-size:12px;gap:8px}}@media (prefers-reduced-motion:reduce){.telegram-auth-signal-trace{animation:none}.telegram-entry .browser-handoff .primary-action:hover:not(:disabled){transform:none}}
-`;
-
 function AuthEntryPage() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-  return <main className={`telegram-entry telegram-entry--${theme}`}><style>{`${telegramAuthStyles}.telegram-auth-side{display:block}`}</style>
-    <header className="telegram-entry-nav">
-      <div className="telegram-entry-brand"><PulseMark /><span>TRADE<span>PULSE</span></span></div>
-      <div className="telegram-entry-nav-actions"><button className="telegram-theme-toggle" type="button" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-pressed={theme === "light"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v2.1M12 18.1v2.1M20.2 12h-2.1M5.9 12H3.8M17.8 6.2l-1.5 1.5M7.7 16.3l-1.5 1.5M17.8 17.8l-1.5-1.5M7.7 7.7 6.2 6.2M15.9 12a3.9 3.9 0 1 1-7.8 0 3.9 3.9 0 0 1 7.8 0Z" /></svg><span>{theme === "dark" ? "Light" : "Dark"}</span></button></div>
-    </header>
-    <section className="telegram-auth-stage" aria-labelledby="telegram-entry-title">
-      <section className="telegram-auth-copy">
-        <h1 id="telegram-entry-title">A private desk for every move that matters.</h1>
-        <p>TradePulse keeps your wallet, products and account activity in one place. Use Telegram to confirm this browser, then continue where you left off.</p>
-        <div className="telegram-auth-signal" aria-hidden="true">
-          <svg viewBox="0 0 640 306" preserveAspectRatio="none">
-            <path className="telegram-auth-signal-lane" d="M44 153H596" />
-            <path className="telegram-auth-signal-arc" d="M82 153a78 78 0 0 1 156 0M242 153a78 78 0 0 1 156 0M402 153a78 78 0 0 1 156 0" />
-            <path className="telegram-auth-signal-trace" d="M44 153H596" />
-            <circle className="telegram-auth-signal-node" cx="82" cy="153" r="10" />
-            <circle className="telegram-auth-signal-node" cx="320" cy="153" r="10" />
-            <circle className="telegram-auth-signal-node telegram-auth-signal-node--final" cx="558" cy="153" r="10" />
-          </svg>
-          <div className="telegram-auth-signal-flow"><span>Browser</span><i /><span>Telegram</span><i /><span>Desk</span></div>
-        </div>
-      </section>
-      <section className="telegram-auth-side" aria-labelledby="telegram-auth-heading">
-        <h2 id="telegram-auth-heading">Open your desk</h2>
-        <p>Confirm this browser with Telegram. The connection returns you here automatically.</p>
-        <BrowserBotHandoff />
-        <div className="telegram-auth-note">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19 6v5.3c0 4.3-2.8 7.7-7 9.2-4.2-1.5-7-4.9-7-9.2V6l7-2.5Z" /><path d="m9.1 11.9 1.8 1.8 4.1-4.2" /></svg>
-          <span>TradePulse will never ask for your password, recovery phrase, or one-time code.</span>
-        </div>
-      </section>
-    </section>
-    <footer className="telegram-auth-footer"><span>© {new Date().getFullYear()} TradePulse</span><span>Trading involves risk.</span></footer>
-  </main>;
+  return <TelegramAuthPage><BrowserBotHandoff /></TelegramAuthPage>;
 }
 export function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -6384,6 +6349,8 @@ function LiveTradePulse() {
   }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
   const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
+  const selectedEnvironmentRef = useRef<"mainnet" | "testnet">("mainnet");
+  const restoredEnvironmentForUserRef = useRef<number | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
@@ -6617,17 +6584,23 @@ function LiveTradePulse() {
       // during a transient database reconnect instead of mislabelling it as
       // an authentication failure at twelve seconds.
       const next = await request("/v1/dashboard", {}, targetEnvironment, 25_000);
+      if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
+        return;
+      }
       const previousUserId = authenticatedUserRef.current;
       if (previousUserId !== null && previousUserId !== next.user.id) {
         // Never let an earlier account's in-memory projections flash while a
         // new Telegram identity becomes active in the same browser tab.
         setAdmin(null);
         setPendingActions({});
+        selectedEnvironmentRef.current = "mainnet";
         setWebEnvironment("mainnet");
       }
       authenticatedUserRef.current = next.user.id;
       updateDashboard(next);
-      setWebEnvironment(next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet");
+      const resolvedEnvironment = next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet";
+      selectedEnvironmentRef.current = resolvedEnvironment;
+      setWebEnvironment(resolvedEnvironment);
     } catch (error) {
       setNotice(
         error instanceof DOMException && error.name === "AbortError"
@@ -6653,11 +6626,30 @@ function LiveTradePulse() {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    if (!data?.user.is_admin || restoredEnvironmentForUserRef.current === data.user.id) return;
+    restoredEnvironmentForUserRef.current = data.user.id;
+    const selectedAtRequest = selectedEnvironmentRef.current;
+    request("/v1/admin/environment", {}, "mainnet")
+      .then((saved) => {
+        if (!shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) return;
+        const restored = saved.environment === "testnet" ? "testnet" : "mainnet";
+        if (restored === selectedEnvironmentRef.current) return;
+        selectedEnvironmentRef.current = restored;
+        setWebEnvironment(restored);
+        void load(restored);
+      })
+      .catch(() => {
+        // The initial mainnet desk remains usable if a saved admin selection
+        // cannot be read during a transient control-plane outage.
+      });
+  }, [data?.user.id, data?.user.is_admin]);
   // Testnet is an isolated control-room workspace, never a customer desk
   // context. Leaving Admin (or losing admin access after a new Telegram
   // session) immediately returns the browser to the mainnet projection.
   useEffect(() => {
     if (!data || (tab === "Admin" && data.user.is_admin) || (webEnvironment === "mainnet" && data.environment === "mainnet")) return;
+    selectedEnvironmentRef.current = "mainnet";
     setWebEnvironment("mainnet");
     void load("mainnet");
   }, [tab, data?.user.is_admin, webEnvironment]);
@@ -6699,12 +6691,15 @@ function LiveTradePulse() {
     }
     setNotice(`${next.title} — ${next.body}`);
   }, [data, notice]);
- useEffect(() => {
+  useEffect(() => {
     if (tab !== "Admin" || !data?.user.is_admin) return;
-    request("/v1/admin/overview")
-      .then(setAdmin)
+    const selectedAtRequest = webEnvironment;
+    request("/v1/admin/overview", {}, selectedAtRequest)
+      .then((overview) => {
+        if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
+      })
       .catch((error) => setNotice(error.message));
-  }, [tab, data?.user.is_admin]);
+  }, [tab, data?.user.is_admin, webEnvironment]);
   useEffect(() => {
     if (tab !== "Dashboard" || !data) return;
     const active = [
@@ -7014,9 +7009,11 @@ function LiveTradePulse() {
         method: "POST",
         body: JSON.stringify({ environment: nextEnvironment }),
       });
+      selectedEnvironmentRef.current = nextEnvironment;
       setWebEnvironment(nextEnvironment);
       await load(nextEnvironment);
-      setAdmin(await request("/v1/admin/overview", {}, nextEnvironment));
+      const overview = await request("/v1/admin/overview", {}, nextEnvironment);
+      if (shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)) setAdmin(overview);
       setNotice(
         `Admin workspace switched to ${nextEnvironment}. Other admins and users are unaffected.`,
       );
@@ -7029,7 +7026,9 @@ function LiveTradePulse() {
     }
   };
   const refreshAdmin = async () => {
-    setAdmin(await request("/v1/admin/overview"));
+    const selectedAtRequest = selectedEnvironmentRef.current;
+    const overview = await request("/v1/admin/overview", {}, selectedAtRequest);
+    if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
   };
   const workspacePresence = getWorkspacePresencePlan(reduceMotion);
   return (
