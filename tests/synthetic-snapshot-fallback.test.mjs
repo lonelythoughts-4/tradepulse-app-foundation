@@ -11,3 +11,7 @@ test("a delayed snapshot falls back to the live stream instead of showing an out
   assert.match(source, /request\("\/v1\/synthetic\/stream\?market=" \+ market, \{\}, environment\)/);
   assert.match(source, /return \{ market, latest, ticks: \[latest\], positions: stream\.positions \|\| \[\], settings: \{\} \} as Snapshot/);
 });
+
+test("the verified live quote seeds the chart while history catches up", () => {
+  assert.match(source, /const chartTicks = snapshot\?\.ticks\?\.length \? snapshot\.ticks : snapshot\?\.latest \? \[snapshot\.latest\] : \[\];/);
+});

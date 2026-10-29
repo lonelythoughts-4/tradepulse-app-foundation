@@ -189,7 +189,8 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     reviewSubmitting.current = key; setReviewError("");
     try { const submitted = await act(review.path, review.payload); if (submitted && review.signal) setSignalResults((current) => ({ ...current, [review.signal!.id]: "Submitted" })); if (submitted) setReview(null); } catch (error) { const message = error instanceof Error ? error.message : "Action failed."; setReviewError(message); if (review.signal && /signal.*(?:expired|no longer)/i.test(message)) { setReview(null); onNotice("That signal is no longer current. A fresh signal will appear when available."); } } finally { if (reviewSubmitting.current === key) reviewSubmitting.current = null; }
   };
-  const points = reconcileSyntheticTicks((snapshot?.ticks || []).map((tick) => ({ market: tick.market || market, sequence: Number(tick.sequence), price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })), market).slice(-80);
+  const chartTicks = snapshot?.ticks?.length ? snapshot.ticks : snapshot?.latest ? [snapshot.latest] : [];
+  const points = reconcileSyntheticTicks(chartTicks.map((tick) => ({ market: tick.market || market, sequence: Number(tick.sequence), price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })), market).slice(-80);
   const manualKey = "execution:manual";
   const autoKey = "execution:auto";
   const latestAuto = snapshot?.auto_activity?.[0];
