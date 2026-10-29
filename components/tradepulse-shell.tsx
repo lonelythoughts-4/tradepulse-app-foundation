@@ -5329,6 +5329,7 @@ function MarketChart({
             return <g key={label}><path d={`M0 ${lineY}H560`} className="market-grid-line" /><text x="570" y={lineY + 3} className="market-axis-label">{formatMarketPrice(label)}</text></g>;
           })}
           {Array.from({ length: 7 }, (_, index) => <path key={index} d={`M${(chartWidth * index) / 6} 0V204`} className="market-grid-line market-grid-vertical" />)}
+          {candles.length === 1 && <path d={`M0 ${y(candles[0].close)}H${chartWidth}`} stroke={accent} strokeWidth="1.35" strokeDasharray="4 4" opacity="0.9" />}
           {candles.map((candle, index) => {
             const center = index * xStep + xStep / 2;
             const rising = candle.close >= candle.open;
