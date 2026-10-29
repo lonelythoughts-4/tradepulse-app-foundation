@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
 import { DeskLoading } from "./desk-loading";
@@ -19,6 +19,7 @@ import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
 import { shouldApplyEnvironmentProjection } from "../lib/environment-switch.js";
+import { handoffRefreshDelayMs, telegramMobileLaunchUrl } from "../lib/browser-handoff.js";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -4911,9 +4912,13 @@ function BrowserBotHandoff() {
   const [expiresIn, setExpiresIn] = useState(300);
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
+  const refreshTimer = useRef<number | null>(null);
+  const mobileFallbackTimer = useRef<number | null>(null);
   useEffect(
     () => () => {
       if (timer.current) window.clearTimeout(timer.current);
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      if (mobileFallbackTimer.current) window.clearTimeout(mobileFallbackTimer.current);
     },
     [],
   );
@@ -4937,9 +4942,17 @@ function BrowserBotHandoff() {
         setToken(handoff.token);
         setBotUrl(handoff.bot_url);
         const handoffExpiry = Number(handoff.expires_in);
-        setExpiresIn(Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300);
+        const validExpiry = Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300;
+        setExpiresIn(validExpiry);
         setState("ready");
-        setMessage("Secure Telegram link ready. It expires in five minutes.");
+        setMessage("Secure Telegram link ready. It refreshes automatically.");
+        if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = window.setTimeout(() => {
+          if (cancelled) return;
+          setState("preparing");
+          setMessage("Refreshing secure Telegram link…");
+          setAttempt((current) => current + 1);
+        }, handoffRefreshDelayMs(validExpiry));
       } catch (error) {
         if (cancelled) return;
         if (attempt < 3) {
@@ -5032,12 +5045,30 @@ function BrowserBotHandoff() {
   }, [state, token, expiresIn]);
   const retry = () => {
     if (timer.current) window.clearTimeout(timer.current);
+    if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+    if (mobileFallbackTimer.current) window.clearTimeout(mobileFallbackTimer.current);
     timer.current = null;
+    refreshTimer.current = null;
+    mobileFallbackTimer.current = null;
     setToken("");
     setBotUrl("");
     setMessage("");
     setState("preparing");
     setAttempt((current) => current + 1);
+  };
+  const openTelegram = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+    refreshTimer.current = null;
+    setState("waiting");
+    setMessage("Confirm this browser in Telegram. Your desk will open here automatically.");
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const mobileUrl = isMobile ? telegramMobileLaunchUrl(botUrl) : botUrl;
+    if (mobileUrl === botUrl) return;
+    event.preventDefault();
+    window.location.assign(mobileUrl);
+    mobileFallbackTimer.current = window.setTimeout(() => {
+      if (document.visibilityState === "visible") window.location.assign(botUrl);
+    }, 1_200);
   };
   return (
     <div className="browser-handoff" data-state={state}>
@@ -5047,10 +5078,7 @@ function BrowserBotHandoff() {
           href={botUrl}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => {
-            setState("waiting");
-            setMessage("Confirm this browser in Telegram. Your desk will open here automatically.");
-          }}
+          onClick={openTelegram}
         >
           Continue with Telegram
         </a>
