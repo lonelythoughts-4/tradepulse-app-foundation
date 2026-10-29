@@ -18,7 +18,7 @@ import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
-import { shouldApplyEnvironmentProjection } from "../lib/environment-switch.js";
+import { shouldApplyEnvironmentProjection, shouldClearEnvironmentProjection } from "../lib/environment-switch.js";
 import { handoffRefreshDelayMs, telegramMobileLaunchUrl } from "../lib/browser-handoff.js";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
@@ -6389,7 +6389,7 @@ function LiveTradePulse() {
   const [botEntryId, setBotEntryId] = useState<string | null>(null);
   const [identityPending, setIdentityPending] = useState(false);
   const [notice, setNotice] = useState("");
-  const [openNotificationsRequest, setOpenNotificationsRequest] = useState(0);
+  const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const applyHash = () => {
@@ -6591,7 +6591,7 @@ function LiveTradePulse() {
     const result = await request("/v1/account/notices");
     return result.notices || [];
   });
-  const load = async (targetEnvironment = webEnvironment) => {
+  const load = async (targetEnvironment = webEnvironment, clearPreviousProjection = false) => {
     // Every view reads the same account projection.  Reuse an in-flight read
     // for its environment instead of letting an alert, account change, or
     // deposit monitor stack several expensive dashboard requests together.
@@ -6601,7 +6601,7 @@ function LiveTradePulse() {
     // Keep the current desk mounted during background refreshes. This lets
     // optimistic toggles and button feedback render immediately instead of
     // replacing the whole surface with the boot screen after every action.
-    const showBootScreen = !data;
+    const showBootScreen = clearPreviousProjection || !data;
     if (showBootScreen) setLoading(true);
     try {
       const webApp = openedInsideTelegram() ? await waitForTelegramWebApp() : undefined;
@@ -7021,7 +7021,6 @@ function LiveTradePulse() {
       setTab("Wallet");
     } else if (utility === "current") {
       setTab("Account");
-      setOpenNotificationsRequest((value) => value + 1);
     } else if (utility === "vector") {
       setBotEntryId(null);
       setTab("Bots");
@@ -7032,20 +7031,33 @@ function LiveTradePulse() {
   const switchAdminEnvironment = async (
     nextEnvironment: "mainnet" | "testnet",
   ) => {
+    const priorEnvironment = selectedEnvironmentRef.current;
+    if (nextEnvironment === priorEnvironment) return;
+    // Invalidate old responses before the persistence request completes. This
+    // keeps a slow mainnet read from being rendered under a testnet label.
+    selectedEnvironmentRef.current = nextEnvironment;
     try {
       await request("/v1/admin/environment", {
         method: "POST",
         body: JSON.stringify({ environment: nextEnvironment }),
-      });
-      selectedEnvironmentRef.current = nextEnvironment;
+      }, "mainnet");
+      if (!shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)) return;
+      if (shouldClearEnvironmentProjection(priorEnvironment, nextEnvironment)) {
+        updateDashboard(null);
+        deskStore.applyResource("synthetic", null, Date.now());
+        setAdmin(null);
+      }
       setWebEnvironment(nextEnvironment);
-      await load(nextEnvironment);
+      await load(nextEnvironment, true);
       const overview = await request("/v1/admin/overview", {}, nextEnvironment);
       if (shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)) setAdmin(overview);
       setNotice(
         `Admin workspace switched to ${nextEnvironment}. Other admins and users are unaffected.`,
       );
     } catch (error) {
+      if (selectedEnvironmentRef.current === nextEnvironment) {
+        selectedEnvironmentRef.current = priorEnvironment;
+      }
       setNotice(
         error instanceof Error
           ? error.message
@@ -7084,7 +7096,7 @@ function LiveTradePulse() {
         <NoticeCenter center={noticeCenter} onPreferences={() => {
           noticeCenter.setOpen(false);
           setTab("Account");
-          setOpenNotificationsRequest((request) => request + 1);
+          setOpenNotificationsRequest(true);
         }} />
         {demoReviewOpen && data.demo?.state === "issued" && (
           <AccessibleDialog
@@ -7343,6 +7355,7 @@ function LiveTradePulse() {
               onAvatarClick={() => setAvatarPickerOpen(true)}
               onIdentityUtility={openIdentityUtility}
               openNotificationsRequest={openNotificationsRequest}
+              onNotificationsRequestHandled={() => setOpenNotificationsRequest(false)}
               onOpenHelp={() => setTab("Help")}
             />
           )}

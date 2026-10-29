@@ -43,7 +43,8 @@ export function AccountWorkspace({
   avatarId = "orbit",
   onAvatarClick,
   onIdentityUtility,
-  openNotificationsRequest = 0,
+  openNotificationsRequest = false,
+  onNotificationsRequestHandled,
   onOpenHelp,
 }: {
   data: AccountDashboard;
@@ -52,7 +53,8 @@ export function AccountWorkspace({
   avatarId?: AvatarId;
   onAvatarClick?: () => void;
   onIdentityUtility?: () => void;
-  openNotificationsRequest?: number;
+  openNotificationsRequest?: boolean;
+  onNotificationsRequestHandled?: () => void;
   onOpenHelp?: () => void;
 }) {
   const [modal, setModal] = useState<
@@ -94,8 +96,10 @@ export function AccountWorkspace({
     setLanguage(data.user.language_code || "en");
   }, [data.user.language_code]);
   useEffect(() => {
-    if (openNotificationsRequest > 0) setModal("notifications");
-  }, [openNotificationsRequest]);
+    if (!openNotificationsRequest) return;
+    setModal("notifications");
+    onNotificationsRequestHandled?.();
+  }, [openNotificationsRequest, onNotificationsRequestHandled]);
   const updateNotification = async (key: string, label: string, enabled: boolean) => {
     if (notificationRequestPending.current.has(key)) return;
     notificationRequestPending.current.add(key);
