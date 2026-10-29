@@ -68,7 +68,23 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   }, [fundingSource, snapshot?.demo?.active, snapshot?.demo?.credit_available_usd]);
   useResourcePoller(async () => {
     try { return await request("/v1/synthetic/" + market) as Snapshot; }
-    catch (error) { setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable."); return undefined; }
+    catch (error) {
+      // The lightweight stream has a live quote and owned positions even when
+      // the fuller history/configuration snapshot is temporarily delayed.
+      // Render that safe subset instead of replacing the entire desk with an
+      // outage screen.
+      try {
+        const stream = await request("/v1/synthetic/stream?market=" + market, {}, environment);
+        const latest = stream.latest as Snapshot["latest"];
+        const price = Number(latest?.reference ?? latest?.price);
+        if (Number.isFinite(price) && price > 0) {
+          setLoadError("");
+          return { market, latest, ticks: [latest], positions: stream.positions || [], settings: {} } as Snapshot;
+        }
+      } catch { /* The normal retry path below remains the final fallback. */ }
+      setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
+      return undefined;
+    }
   }, (next) => {
     if (next.market !== marketRef.current) return;
     const confirmed = confirmedMode.current;
