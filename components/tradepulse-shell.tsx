@@ -20,6 +20,7 @@ import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, ty
 import { formatMarketChartTime } from "../lib/market-chart-time";
 import { shouldApplyEnvironmentProjection, shouldClearEnvironmentProjection } from "../lib/environment-switch.js";
 import { handoffRefreshDelayMs, telegramMobileLaunchUrl } from "../lib/browser-handoff.js";
+import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -6849,13 +6850,9 @@ function LiveTradePulse() {
       const returnedWallet = response.wallet && typeof response.wallet === "object"
         ? response.wallet as Partial<LiveDashboard["wallet"]>
         : null;
-      updateDashboard((current) => current ? {
-        ...current,
-        wallet: returnedWallet ? { ...current.wallet, ...returnedWallet } : current.wallet,
-        bots: current.bots.some((bot) => bot.id === createdBot.id)
-          ? current.bots.map((bot) => bot.id === createdBot.id ? { ...bot, ...createdBot } : bot)
-          : [...current.bots, createdBot],
-      } : current);
+      updateDashboard((current) => current
+        ? { ...current, ...reconcileCreatedBot(current, createdBot, returnedWallet) }
+        : current);
     }
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (botAction) {
