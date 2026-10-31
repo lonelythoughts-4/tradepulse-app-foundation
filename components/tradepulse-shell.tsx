@@ -3375,7 +3375,6 @@ function AccountSection({
                     </div>
                     <button
                       className="ghost-action"
-                      disabled={actionPending}
                       onClick={() => {
                         setSavedWallets((wallets) =>
                           wallets.filter(
@@ -7071,7 +7070,7 @@ function LiveTradePulse() {
     const overview = await request("/v1/admin/overview", {}, selectedAtRequest);
     if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
   };
-  const workspacePresence = getWorkspacePresencePlan(reduceMotion);
+  const workspacePresence = getWorkspacePresencePlan(Boolean(reduceMotion));
   return (
     <div className="app-shell">
       <Sidebar

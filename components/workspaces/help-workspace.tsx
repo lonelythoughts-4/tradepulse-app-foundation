@@ -277,7 +277,7 @@ export function HelpWorkspace({
               setSupportMessage("");
               await Promise.all([
                 loadTickets(),
-                openTicket({ id: Number(result.ticket_id), topic: "Web help center", status: "open" }, false),
+                openTicket({ id: String(result.ticket_id), topic: "Web help center", status: "open" }, false),
               ]);
               onNotice(`Support ticket #${result.ticket_id} opened.`);
             } catch (error) {

@@ -17,7 +17,7 @@ type WorkspaceRouterProps = {
  */
 export function WorkspaceRouter({ route, workspaces }: WorkspaceRouterProps) {
   const reducedMotion = useReducedMotion();
-  const plan = getWorkspacePresencePlan(reducedMotion);
+  const plan = getWorkspacePresencePlan(Boolean(reducedMotion));
 
   return (
     <AnimatePresence mode="wait" initial={false}>

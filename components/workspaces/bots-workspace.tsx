@@ -101,7 +101,7 @@ export function BotsWorkspace({
   initialBotId = null,
 }: {
   data: WorkspaceDashboard;
-  request: (path: string, options?: RequestInit) => Promise<any>;
+  request: (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<any>;
   reload: () => Promise<void>;
   onActionResult: (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => void;
   onNotice: (message: string) => void;
@@ -588,7 +588,7 @@ export function BotsWorkspace({
                 : session.state === "sealed"
                   ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s left`
                   : "Settled";
-              return <button type="button" role="radio" aria-checked={isSelected} tabIndex={isSelected ? 0 : -1} className={isSelected ? "active" : ""} key={session.id} onClick={() => { setSelectedFlashbackId(session.id); setFlashbackNewSession(false); }}>{kind} · {money(Number(session.allocation_usd || 0))} · {status}</button>;
+              return <button type="button" role="radio" aria-checked={isSelected} tabIndex={isSelected ? 0 : -1} className={isSelected ? "active" : ""} key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); }}>{kind} · {money(Number(session.allocation_usd || 0))} · {status}</button>;
             })}
           </div>
         </GradientPanel>}

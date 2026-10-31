@@ -21,7 +21,8 @@ export function formatMarketChartTime(
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
+      timeZone: "UTC",
     });
   }
-  return new Date(millis).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(millis).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 }

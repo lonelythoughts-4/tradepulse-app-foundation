@@ -229,7 +229,7 @@ export function AdminWorkspace({
       await request(`/v1/admin/withdrawals/${withdrawalReview.row.id}`, {
         method: "POST",
         body: JSON.stringify({ action: withdrawalReview.action }),
-      }, withdrawalReview.environment);
+      }, environment);
       onNotice(withdrawalReview.action === "approve" ? "Withdrawal approved and logged." : "Withdrawal rejected.");
       setWithdrawalReview(null);
       scheduleReconcile();

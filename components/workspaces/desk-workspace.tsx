@@ -11,7 +11,7 @@ export function DeskWorkspace({
   onNotice,
 }: {
   data: WorkspaceDashboard;
-  request: (path: string, options?: RequestInit) => Promise<any>;
+  request: (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<any>;
   reload: () => Promise<void>;
   onNotice: (message: string) => void;
 }) {
@@ -126,7 +126,7 @@ export function DeskWorkspace({
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
       if (!text) throw new Error("The analyst did not return a usable briefing.");
       setAnalystBriefing(text);
-      setAnalystMessages((messages) => [...messages, ...(question ? [{ role: "user" as const, text: question }] : []), { role: "assistant", text }].slice(-8));
+      setAnalystMessages((messages) => [...messages, ...(question ? [{ role: "user" as const, text: question }] : []), { role: "assistant" as const, text }].slice(-8));
       setAnalystQuestion("");
     } catch (error) {
       setAnalystError(error instanceof Error ? error.message : "The analyst is temporarily unavailable.");
@@ -145,7 +145,7 @@ export function DeskWorkspace({
       const response = await request("/v1/live-desk/analyst/escalate", { method: "POST", body: JSON.stringify({ issue }) });
       const ticketId = Number(response?.ticket_id);
       const text = Number.isFinite(ticketId) ? `Support ticket TP-${ticketId} is now in the admin queue.` : "Your issue was sent to the admin support queue.";
-      setAnalystMessages((messages) => [...messages, { role: "user", text: issue }, { role: "system", text }].slice(-8));
+      setAnalystMessages((messages) => [...messages, { role: "user" as const, text: issue }, { role: "system" as const, text }].slice(-8));
       setAnalystQuestion("");
     } catch (error) {
       setAnalystError(error instanceof Error ? error.message : "The support escalation could not be created.");

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --experimental-strip-types --test tests/*.test.ts && node --test tests/*.test.mjs",
+    "typecheck": "tsc --project tsconfig.verify.json",
+    "lint": "pnpm run typecheck"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
