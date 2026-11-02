@@ -11,14 +11,12 @@ const snapshot = {
   demo: { available_usd: 1_250, credit_available_usd: 45 },
 };
 
-test("the virtual demo is usable without the live wallet-risk acknowledgement", () => {
-  assert.equal(syntheticFundingNeedsDisclosure("demo"), false);
+test("only wallet and converted credit remain valid manual Synthetic sources", () => {
   assert.equal(syntheticFundingNeedsDisclosure("wallet"), true);
   assert.equal(syntheticFundingNeedsDisclosure("credit"), true);
 });
 
 test("the selected Synthetic source displays and validates its own capacity", () => {
   assert.equal(syntheticFundingCapacity("wallet", snapshot), 350);
-  assert.equal(syntheticFundingCapacity("demo", snapshot), 1_250);
   assert.equal(syntheticFundingCapacity("credit", snapshot), 45);
 });
