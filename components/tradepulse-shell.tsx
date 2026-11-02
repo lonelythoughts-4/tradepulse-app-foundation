@@ -15,6 +15,7 @@ import { DeskWorkspace } from "./workspaces/desk-workspace";
 import { AccountWorkspace } from "./workspaces/account-workspace";
 import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
+import { ProtectionWorkspace } from "./workspaces/protection-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
@@ -233,6 +234,7 @@ const navItems = [
   { label: "Wallet", icon: "wallet" },
   { label: "Earn", icon: "earn" },
   { label: "Account", icon: "account" },
+  { label: "Protection", icon: "account" },
 ] as const;
 
 type NavIconName =
@@ -599,6 +601,7 @@ const mobilePrimaryNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Account", icon: "account" },
 ];
 const mobileSecondaryNavItems: { label: string; icon: NavIconName }[] = [
+  { label: "Protection", icon: "account" },
   { label: "Earn", icon: "earn" },
   { label: "Live Desk", icon: "desk" },
   { label: "Community", icon: "community" },
@@ -4706,6 +4709,25 @@ export type LiveDashboard = {
     realized_pnl_usd?: number;
     recent_settlements?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; user_net_pnl_usd?: number; realized_pnl_usd?: number; close_reason?: string; closed_at?: number }>;
   };
+  protection?: {
+    programme?: string;
+    coverage_rate?: number;
+    protected_loss_usd?: number;
+    credits_issued_usd?: number;
+    settlements?: Array<{
+      source_event_key: string;
+      product: string;
+      position_id?: string;
+      eligible: boolean;
+      coverage_rate: number;
+      net_loss_usd: number;
+      credit_usd: number;
+      status: string;
+      created_at: number;
+      credited_at?: number | null;
+      entry_snapshot?: Record<string, unknown>;
+    }>;
+  };
   flashback_rules?: {
     version?: string;
     duration_seconds?: number;
@@ -5123,6 +5145,7 @@ export function activityAmountDisplay(amount: number) {
 
 export function activityLabel(kind: string, status = "", amount?: number) {
   const description = `${kind} ${status}`.toLowerCase();
+  if (kind === "strategy_protection_credit") return "Strategy Protection wallet credit";
   if (kind === "performance_fee") return "performance fee charged";
   if (kind === "flashback_allocation") return "Flashback entry locked";
   if (kind === "flashback_return") return "Flashback return";
@@ -6348,7 +6371,7 @@ function LiveWalletScreen({
   );
 }
 
-const deskTabs = ["Dashboard", "Bots", "Wallet", "Desk", "Account", "Earn", "Help", "Synthetic", "Admin"] as const;
+const deskTabs = ["Dashboard", "Bots", "Wallet", "Desk", "Account", "Earn", "Help", "Protection", "Synthetic", "Admin"] as const;
 type DeskTab = (typeof deskTabs)[number];
 
 function deskTabFromHash(): DeskTab | null {
@@ -6997,6 +7020,7 @@ function LiveTradePulse() {
         "Earn",
         "Account",
         "Help",
+        "Protection",
         "Synthetic",
         "Admin",
       ].includes(value)
@@ -7367,6 +7391,7 @@ function LiveTradePulse() {
               store={deskStore}
             />
           )}
+          {tab === "Protection" && <ProtectionWorkspace data={data} />}
           {tab === "Admin" && admin && (
             <AdminWorkspace
               admin={admin}
