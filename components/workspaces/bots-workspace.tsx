@@ -273,12 +273,12 @@ export function BotsWorkspace({
   }, [data.bots]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
-    // New and projected credit-only Memecoin desks must never imply that
-    // automatic trading was enabled. Saved funded/demo settings can opt in.
+    // Active demo is always automatic; converted credit remains manual-only.
+    // Funded Memecoin automation continues to use the saved customer choice.
     setMemecoinAssets(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
     setMemecoinLeverage(3);
     setMemecoinCadence(300);
-    setMemecoinAutoEnabled(false);
+    setMemecoinAutoEnabled(Boolean(selected.demo_trial) && !selected.demo_credit_only);
     setIncludeTrench(false);
     setMemecoinAssetCategories({ DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap" });
     if (selected.demo_credit_only) return;
@@ -304,7 +304,7 @@ export function BotsWorkspace({
       }
       if ([1, 3, 5, 10].includes(Number(settings.leverage))) setMemecoinLeverage(Number(settings.leverage));
       if ([60, 300, 900].includes(Number(settings.cadence_seconds))) setMemecoinCadence(Number(settings.cadence_seconds));
-      if (typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
+      if (!selected.demo_trial && typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
       if (typeof settings.include_trench === "boolean") setIncludeTrench(settings.include_trench);
     } catch {
       // An older authorization record should not prevent the default controls
@@ -964,13 +964,13 @@ ealed Return entry amount" /></div></label>
                 </div>;
               })}
               </div>}
-              {(selected.state === "running" || isDemoCreditOnlyBot) && (
+              {!isDemoBot && (selected.state === "running" || isDemoCreditOnlyBot) && (
                 <button
                   className="small-action"
-                  disabled={isActionPending(`memecoin-order:${selected.id}`) || (isDemoBot ? !activeDemoPool : isDemoCreditOnlyBot ? !activeDemoCredit : false)}
+                  disabled={isActionPending(`memecoin-order:${selected.id}`) || (isDemoCreditOnlyBot ? !activeDemoCredit : false)}
                   onClick={() => setMemecoinOrder({
                     direction: "long",
-                    source: isDemoBot ? "demo" : isDemoCreditOnlyBot ? "credit" : "wallet",
+                    source: isDemoCreditOnlyBot ? "credit" : "wallet",
                     amount: "20",
                     idempotencyKey: createMemecoinOrderIdempotencyKey(data.user.id, selected.id),
                   })}
@@ -1008,7 +1008,7 @@ ealed Return entry amount" /></div></label>
               <span className="eyebrow">{isDemoBot ? "SHARED DEMO CONTROLS" : awaitingAuthorization ? "FUNDED MEMECOIN BOT BETA" : "MEMECOIN STRATEGY CONTROLS"}</span>
               <p>
                 {isDemoBot
-                  ? "Choose how the shared virtual pool may be used by this Memecoin strategy. The pool remains separate from your wallet and from Synthetic; manual orders always require a separate review."
+                  ? "The shared virtual demo runs automatically after activation. Choose its strategy controls below; manual demo orders are never placed and the pool remains separate from your wallet."
                   : awaitingAuthorization
                   ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh launches on supported networks only after a same-network DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
@@ -1036,12 +1036,12 @@ ealed Return entry amount" /></div></label>
               <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
                 {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
               </div>
-              <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
+              <button type="button" className={isDemoBot || memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={isDemoBot || memecoinAutoEnabled} disabled={isDemoBot} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {isDemoBot ? "Always on" : memecoinAutoEnabled ? "On" : "Off"}</button>
               <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
               <button
                 className="primary-action"
                 disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0}
-                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
+                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: isDemoBot ? true : memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
               >
                 {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize Memecoin Bot Beta") : "Save strategy controls"} <StateIcon name="check" />
               </button>
@@ -1094,7 +1094,7 @@ ealed Return entry amount" /></div></label>
                 {isClosing ? "Finish closing bot" : "Close bot"} <X />
               </button>}
           </div>
-          {memecoinOrder && (
+          {memecoinOrder && !isDemoBot && (
             <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!isActionPending(`memecoin-order:${selected.id}`)}>
               <span className="eyebrow">MANUAL MEMECOIN ORDER</span>
               <h2>Review order</h2>
