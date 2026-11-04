@@ -7132,7 +7132,7 @@ function LiveTradePulse() {
               <span>ACTIVATION DEADLINE <b>{data?.demo?.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
               <span>FUNDING <b>Shared across Memecoin + Synthetic</b></span>
             </div>
-            <p>Virtual funds are separate from your wallet and cannot be withdrawn. Memecoin Auto and Trench Mode retain their existing demo safeguards. Synthetic orders using virtual funds require manual review; Synthetic Auto requires wallet funding.</p>
+            <p>Virtual funds are separate from your wallet and cannot be withdrawn.</p>
             <p>A qualifying first verified mainnet deposit while this demo is active ends it immediately. Only realized demo profit may create capped, non-withdrawable trading credit. Unused virtual funds, unrealized results, and unclaimed demo profit expire at the active-demo deadline.</p>
             <button
               type="button"
