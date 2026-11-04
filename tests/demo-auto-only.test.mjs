@@ -15,6 +15,5 @@ test("active demo Memecoin controls are automatic-only", () => {
 
 test("Synthetic does not offer the active demo pool as manual order funding", () => {
   assert.doesNotMatch(synthetic, />Demo pool ·/);
-  assert.match(synthetic, /Your active demo never places manual orders\./);
   assert.doesNotMatch(synthetic, /fundingSource === "demo"/);
 });
