@@ -31,12 +31,12 @@ export function ProtectionWorkspace({ data }: { data: LiveDashboard }) {
             </div>
             <strong>{Number(item.credit_usd || 0) > 0 ? `+${money(Number(item.credit_usd))}` : "—"}</strong>
           </div>
-        )) : <div className="empty-state"><strong>No settled protection entries yet</strong><p>Eligible automatic settlements will appear here automatically.</p></div>}
+        )) : <div className="empty-state"><strong>No protection credits yet</strong><p>Eligible credits will appear here after a qualifying loss settles.</p></div>}
       </section>
       <section className="gradient-panel">
         <span className="eyebrow">CLEAR TERMS</span>
         <h2>What qualifies</h2>
-        <p>Wallet-funded automatic orders qualify only when their entry-time market, risk, freshness, liquidity and strategy controls all passed. Manual trades, user overrides, stale or failed executions, virtual funds, testnet activity and duplicate settlements do not qualify.</p>
+        <p>Wallet-funded automatic orders qualify only when all market, risk, price-freshness, liquidity, and strategy checks passed before entry. Manual trades, user overrides, failed executions, virtual funds, and testnet activity do not qualify.</p>
         <p><strong>Strategy Protection is a platform programme, not insurance.</strong> Trading remains risky, losses can still occur, and profits are never guaranteed.</p>
       </section>
     </div>

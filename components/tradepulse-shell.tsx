@@ -2875,7 +2875,7 @@ function EarnScreen() {
         <div className="section-heading">
           <div>
             <span className="eyebrow">REFERRAL LEVELS</span>
-            <h2>Share the upside</h2>
+            <h2>How referral earnings work</h2>
           </div>
           <InfoTip>
             Level 1 earns 5% of eligible fees. Level 2 earns 2%.
@@ -5455,7 +5455,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
         <div className="section-heading">
           <div>
             <span className="eyebrow">REFERRAL LEVELS</span>
-            <h2>Share the upside</h2>
+            <h2>How referral earnings work</h2>
           </div>
         </div>
         {data.referral_rates.map((rate, index) => (
@@ -5638,13 +5638,13 @@ function LiveWalletScreen({
       setIntent(result.intent);
       setStep(2);
       onNotice(
-        "Deposit route created. Send only the selected asset on the selected network.",
+        "Deposit address created. Send only the selected asset on the selected network.",
       );
     } catch (error) {
       onNotice(
         error instanceof Error
           ? error.message
-          : "Could not create the deposit route.",
+          : "A deposit address could not be created. Choose another network or try again.",
       );
     } finally {
       setDepositPending(false);
@@ -5692,7 +5692,7 @@ function LiveWalletScreen({
       setWithdrawCode("");
       setReviewWithdrawal(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not create the withdrawal request.";
+      const message = error instanceof Error ? error.message : "The withdrawal request could not be created. Check the details and try again.";
       setWithdrawalError(message);
       onNotice(message);
     } finally {
@@ -5709,7 +5709,7 @@ function LiveWalletScreen({
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">DEPOSIT / ONE-TIME ROUTE</span>
+              <span className="eyebrow">DEPOSIT / ONE-TIME ADDRESS</span>
               <h2>
                 {step === 0
                   ? "Choose an asset"
@@ -5773,7 +5773,7 @@ function LiveWalletScreen({
                   <strong>
                     {asset} on {networks.find(([value]) => value === chain)?.[1] || chain}
                   </strong>
-                  <p>Use this matching network for your one-time deposit route.</p>
+                  <p>Use this network only for the deposit address shown next.</p>
                   <button type="button" className="small-action" onClick={() => setStep(1)}>
                     Change network
                   </button>
@@ -5794,7 +5794,7 @@ function LiveWalletScreen({
                 disabled={depositPending || !asset || !chain}
                 onClick={createRoute}
               >
-                {depositPending ? "Preparing route…" : "Create secure route"}{" "}
+                {depositPending ? "Preparing address…" : "Create deposit address"}{" "}
                 {!depositPending && <ChevronRight />}
               </button>
             </>
@@ -5823,7 +5823,7 @@ function LiveWalletScreen({
                   />
                   <div>
                     <strong>Deposit below minimum</strong>
-                    <small>Send the remaining amount to this same route to complete the credit.</small>
+                    <small>Send the remaining amount to this same address on the same network.</small>
                   </div>
                 </div>
               )}
@@ -5863,7 +5863,7 @@ function LiveWalletScreen({
                   Send {intent.asset} on {intent.chain} only
                 </strong>
                 <span>
-                  This is a one-time route. Another asset or network cannot be
+                  This is a one-time deposit address. Another asset or network cannot be
                   credited automatically.
                 </span>
               </div>
@@ -5897,7 +5897,7 @@ function LiveWalletScreen({
                     onNotice(
                       error instanceof Error
                         ? error.message
-                        : "Could not start deposit monitoring.",
+                        : "Deposit tracking could not start. Try again.",
                     );
                   } finally {
                     setDepositPending(false);
@@ -5930,10 +5930,10 @@ function LiveWalletScreen({
                         <strong>{label}</strong>
                         <small>
                           {index === 0
-                            ? "Waiting for the selected route to detect your transaction."
+                            ? "Waiting to detect your transfer to this address."
                             : index === 1
                               ? "On-chain confirmation is required before a balance credit."
-                              : "Your available balance updates after the route is fully settled."}
+                              : "Your available balance updates after the deposit is confirmed."}
                         </small>
                       </div>
                       <span
@@ -5950,7 +5950,7 @@ function LiveWalletScreen({
         </GradientPanel>
         {data.deposits.length > 0 && (
           <GradientPanel className="ledger-card">
-            <span className="eyebrow">MY DEPOSIT ROUTES</span>
+            <span className="eyebrow">MY DEPOSITS</span>
             {data.deposits.map((route) => (
               <div className="ledger-row" key={route.id}>
                 <div>
@@ -6021,7 +6021,7 @@ function LiveWalletScreen({
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">WITHDRAW / CROSS-CHECK</span>
+              <span className="eyebrow">WITHDRAW</span>
               <h2>Send funds safely</h2>
             </div>
             <span className="secure-chip">
@@ -6150,7 +6150,7 @@ function LiveWalletScreen({
         </GradientPanel>
         {reviewWithdrawal && (
           <AccessibleDialog label="Verify before sending" onClose={() => setReviewWithdrawal(false)} dismissible={!walletPending}>
-              <span className="eyebrow">FINAL CROSS-CHECK</span>
+              <span className="eyebrow">WITHDRAWAL REVIEW</span>
               <h2>Verify before sending</h2>
               <div className="mono-review">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -6189,7 +6189,7 @@ function LiveWalletScreen({
         <div className="ledger-header">
           <div>
             <span className="eyebrow">WALLET / HISTORY</span>
-            <h2>Ledger history</h2>
+            <h2>Transaction history</h2>
           </div>
         </div>
         <div className="filter-chips">
@@ -6319,7 +6319,7 @@ function LiveWalletScreen({
           <strong className="mint">{balancesVisible ? money(data.wallet.available) : "••••••"}</strong>
           <small>Available now</small>
         </div>
-        <div className="wallet-balance-facts" aria-label="Wallet account state">
+        <div className="wallet-balance-facts" aria-label="Wallet balances">
           <div>
             <span>LOCKED</span>
             <strong>{balancesVisible ? money(data.wallet.locked) : "••••••"}</strong>
@@ -6955,7 +6955,7 @@ function LiveTradePulse() {
     } catch (error) {
       const message = error instanceof DOMException && error.name === "AbortError"
         ? "Confirmation timed out. The request may have reached the server. Check your positions before submitting another order."
-        : error instanceof Error ? error.message : "Action failed.";
+        : error instanceof Error ? error.message : "TradePulse could not complete this action. Review your choices and try again.";
       setNotice(message);
       onError?.(message);
       return false;
@@ -7233,7 +7233,7 @@ function LiveTradePulse() {
                     </strong>
                     <small>
                       {chart.positions.length
-                        ? `${chart.positions.length} of your own open position(s) overlaid below`
+                        ? `${chart.positions.length} open ${chart.positions.length === 1 ? "position" : "positions"} shown below`
                         : "No open positions for this account"}
                     </small>
                   </div>
@@ -7264,13 +7264,13 @@ function LiveTradePulse() {
                 decoding="async"
               />
               <span className="eyebrow">YOUR BOT FLEET</span>
-              <h2>Start your first trade</h2>
+              <h2>Set up your first automation</h2>
               <p>
                 Choose Memecoin or Synthetic Indices when at least $20 is
                 available.
               </p>
               <button className="primary-action" onClick={() => setTab("Bots")}>
-                Start trade
+                Open automation setup
               </button>
             </GradientPanel>
           )}
@@ -7279,7 +7279,7 @@ function LiveTradePulse() {
               <GradientPanel className="bot-card">
                 <img
                   src="/illustrations/engine-paused.png"
-                  alt="Paused bot engine"
+                  alt="Paused automation"
                   className="illustration-engine-paused"
                   decoding="async"
                 />
@@ -7287,8 +7287,8 @@ function LiveTradePulse() {
                   <span className="eyebrow">BOT PAUSED</span>
                   <h2>One or more bots are paused</h2>
                   <p>
-                    Paused bots retain their allocation but do not process new
-                    strategy runs until you resume them.
+                    Paused bots keep their allocation but do not open new
+                    positions until you resume them.
                   </p>
                   <button
                     className="primary-action"

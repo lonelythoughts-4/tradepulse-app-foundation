@@ -124,19 +124,19 @@ export function DeskWorkspace({
         body: JSON.stringify({ question: question || undefined }),
       }, undefined, 25_000);
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
-      if (!text) throw new Error("The analyst did not return a usable briefing.");
+      if (!text) throw new Error("No briefing was available. Try again.");
       setAnalystBriefing(text);
       setAnalystMessages((messages) => [...messages, ...(question ? [{ role: "user" as const, text: question }] : []), { role: "assistant" as const, text }].slice(-8));
       setAnalystQuestion("");
     } catch (error) {
-      setAnalystError(error instanceof Error ? error.message : "The analyst is temporarily unavailable.");
+      setAnalystError(error instanceof Error ? error.message : "The analyst is unavailable right now. Try again shortly.");
     } finally {
       setAnalystLoading(false);
     }
   };
   const escalateAnalystIssue = async (issue = analystQuestion.trim()) => {
     if (analystLoading || issue.length < 10) {
-      setAnalystError("Describe the issue in at least 10 characters so an admin can investigate.");
+      setAnalystError("Add a little more detail so support can investigate.");
       return;
     }
     setAnalystLoading(true);
@@ -144,11 +144,11 @@ export function DeskWorkspace({
     try {
       const response = await request("/v1/live-desk/analyst/escalate", { method: "POST", body: JSON.stringify({ issue }) });
       const ticketId = Number(response?.ticket_id);
-      const text = Number.isFinite(ticketId) ? `Support ticket TP-${ticketId} is now in the admin queue.` : "Your issue was sent to the admin support queue.";
+      const text = Number.isFinite(ticketId) ? `Support request TP-${ticketId} was sent.` : "Your issue was sent to support.";
       setAnalystMessages((messages) => [...messages, { role: "user" as const, text: issue }, { role: "system" as const, text }].slice(-8));
       setAnalystQuestion("");
     } catch (error) {
-      setAnalystError(error instanceof Error ? error.message : "The support escalation could not be created.");
+      setAnalystError(error instanceof Error ? error.message : "The support request could not be sent. Try again.");
     } finally {
       setAnalystLoading(false);
     }
@@ -189,12 +189,12 @@ export function DeskWorkspace({
             <p className="selection-observation">This briefing follows your saved basket{selection.trench ? " with Trench Mode enabled" : ""}. Market data remains informational; every order still passes its live eligibility and risk checks.</p>
           </>
         ) : (
-          <div className="selection-empty"><PulseMark size={25} /><p>Choose a Memecoin strategy basket to see its market context here. Live Desk does not infer a selection from wallet activity.</p></div>
+          <div className="selection-empty"><PulseMark size={25} /><p>Choose a saved Memecoin basket to see its market context here.</p></div>
         )}
         <div className="analyst-boundary" aria-live="polite">
           <div className="analyst-identity">
             <span className="analyst-mark"><PulseMark size={18} /></span>
-            <div><strong>Desk Analyst</strong><small>{analystReady ? "Your account context" : "Connection pending"}</small></div>
+            <div><strong>Desk Analyst</strong><small>{analystReady ? "Ready to help" : "Connecting…"}</small></div>
           </div>
           <div className="analyst-copy">
             {analystMessages.length ? <div className="analyst-thread">{analystMessages.map((message, index) => <p key={`${message.role}-${index}`} className={`analyst-message analyst-message-${message.role}`}>{message.text}</p>)}</div> : analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask anything about your strategy, allocations, what to add or remove, activity, market scenarios, or your account. It will explain its reasoning; you always choose and confirm any action."}</p>}
@@ -215,7 +215,7 @@ export function DeskWorkspace({
                 placeholder="What could I add to my strategy, and why?"
               />
             </label>
-            <div className="analyst-actions"><button className="small-action analyst-action" disabled={!analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Checking context…" : analystQuestion.trim() ? "Send message" : analystBriefing ? "Refresh overview" : "Start conversation"}<StateIcon name="refresh" /></button><button className="small-action analyst-escalate" disabled={analystLoading || analystQuestion.trim().length < 10} onClick={() => void escalateAnalystIssue()}>Escalate to admin</button></div>
+            <div className="analyst-actions"><button className="small-action analyst-action" disabled={!analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Reviewing your account…" : analystQuestion.trim() ? "Send message" : analystBriefing ? "Refresh overview" : "Start conversation"}<StateIcon name="refresh" /></button><button className="small-action analyst-escalate" disabled={analystLoading || analystQuestion.trim().length < 10} onClick={() => void escalateAnalystIssue()}>Contact support</button></div>
           </div>
         </div>
       </GradientPanel>

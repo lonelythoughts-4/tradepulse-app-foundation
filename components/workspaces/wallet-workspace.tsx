@@ -217,13 +217,13 @@ function WalletWorkspaceBody({
       setIntent(result.intent);
       setStep(2);
       onNotice(
-        "Deposit route created. Send only the selected asset on the selected network.",
+        "Deposit address created. Send only the selected asset on the selected network.",
       );
     } catch (error) {
       onNotice(
         error instanceof Error
           ? error.message
-          : "Could not create the deposit route.",
+          : "A deposit address could not be created. Choose another network or try again.",
       );
     } finally {
       setDepositPending(false);
@@ -271,7 +271,7 @@ function WalletWorkspaceBody({
       setWithdrawCode("");
       setReviewWithdrawal(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not create the withdrawal request.";
+      const message = error instanceof Error ? error.message : "The withdrawal request could not be created. Check the details and try again.";
       setWithdrawalError(message);
       onNotice(message);
     } finally {
@@ -288,7 +288,7 @@ function WalletWorkspaceBody({
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">DEPOSIT / ONE-TIME ROUTE</span>
+              <span className="eyebrow">DEPOSIT / ONE-TIME ADDRESS</span>
               <h2>
                 {step === 0
                   ? "Choose an asset"
@@ -352,7 +352,7 @@ function WalletWorkspaceBody({
                   <strong>
                     {asset} on {networks.find(([value]) => value === chain)?.[1] || chain}
                   </strong>
-                  <p>Use this matching network for your one-time deposit route.</p>
+                  <p>Use this network only for the deposit address shown next.</p>
                   <button type="button" className="small-action" onClick={() => setStep(1)}>
                     Change network
                   </button>
@@ -373,7 +373,7 @@ function WalletWorkspaceBody({
                 disabled={depositPending || !asset || !chain}
                 onClick={createRoute}
               >
-                {depositPending ? "Preparing route…" : "Create secure route"}{" "}
+                {depositPending ? "Preparing address…" : "Create deposit address"}{" "}
                 {!depositPending && <ChevronRight />}
               </button>
             </>
@@ -402,7 +402,7 @@ function WalletWorkspaceBody({
                   />
                   <div>
                     <strong>Deposit below minimum</strong>
-                    <small>Send the remaining amount to this same route to complete the credit.</small>
+                    <small>Send the remaining amount to this same address on the same network.</small>
                   </div>
                 </div>
               )}
@@ -442,7 +442,7 @@ function WalletWorkspaceBody({
                   Send {intent.asset} on {intent.chain} only
                 </strong>
                 <span>
-                  This is a one-time route. Another asset or network cannot be
+                  This is a one-time deposit address. Another asset or network cannot be
                   credited automatically.
                 </span>
               </div>
@@ -476,7 +476,7 @@ function WalletWorkspaceBody({
                     onNotice(
                       error instanceof Error
                         ? error.message
-                        : "Could not start deposit monitoring.",
+                        : "Deposit tracking could not start. Try again.",
                     );
                   } finally {
                     setDepositPending(false);
@@ -509,10 +509,10 @@ function WalletWorkspaceBody({
                         <strong>{label}</strong>
                         <small>
                           {index === 0
-                            ? "Waiting for the selected route to detect your transaction."
+                            ? "Waiting to detect your transfer to this address."
                             : index === 1
                               ? "On-chain confirmation is required before a balance credit."
-                              : "Your available balance updates after the route is fully settled."}
+                              : "Your available balance updates after the deposit is confirmed."}
                         </small>
                       </div>
                       <span
@@ -529,7 +529,7 @@ function WalletWorkspaceBody({
         </GradientPanel>
         {data.deposits.length > 0 && (
           <GradientPanel className="ledger-card">
-            <span className="eyebrow">MY DEPOSIT ROUTES</span>
+            <span className="eyebrow">MY DEPOSITS</span>
             {data.deposits.map((route) => (
               <div className="ledger-row" key={route.id}>
                 <div>
@@ -600,7 +600,7 @@ function WalletWorkspaceBody({
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">WITHDRAW / CROSS-CHECK</span>
+              <span className="eyebrow">WITHDRAW</span>
               <h2>Send funds safely</h2>
             </div>
             <span className="secure-chip">
@@ -729,7 +729,7 @@ function WalletWorkspaceBody({
         </GradientPanel>
         {reviewWithdrawal && (
           <AccessibleDialog label="Verify before sending" onClose={() => setReviewWithdrawal(false)} dismissible={!walletPending}>
-              <span className="eyebrow">FINAL CROSS-CHECK</span>
+              <span className="eyebrow">WITHDRAWAL REVIEW</span>
               <h2>Verify before sending</h2>
               <div className="mono-review">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -768,7 +768,7 @@ function WalletWorkspaceBody({
         <div className="ledger-header">
           <div>
             <span className="eyebrow">WALLET / HISTORY</span>
-            <h2>Ledger history</h2>
+            <h2>Transaction history</h2>
           </div>
         </div>
         <div className="filter-chips">
@@ -842,7 +842,7 @@ function WalletWorkspaceBody({
             [
               ...data.engine.map((entry) => ({
                 kind: entry.status,
-                asset: "Engine",
+                asset: "Trading",
                 amount_usd: entry.net_realized,
                 status: entry.status,
                 created_at: entry.created_at,
@@ -907,7 +907,7 @@ function WalletWorkspaceBody({
           <strong className="mint">{balancesVisible ? money(data.wallet.available) : "••••••"}</strong>
           <small>Available now</small>
         </div>
-        <div className="wallet-balance-facts" aria-label="Wallet account state">
+        <div className="wallet-balance-facts" aria-label="Wallet balances">
           <div>
             <span>LOCKED</span>
             <strong>{balancesVisible ? money(data.wallet.locked) : "••••••"}</strong>

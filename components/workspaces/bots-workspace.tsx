@@ -325,7 +325,7 @@ export function BotsWorkspace({
     try {
       await refreshMemecoinCatalog();
     } catch (error) {
-      setBasketPickerError(error instanceof Error ? error.message : "Eligible strategy markets are temporarily unavailable.");
+      setBasketPickerError(error instanceof Error ? error.message : "Markets could not be loaded. Try again.");
     } finally {
       setBasketPickerLoading(false);
     }
@@ -345,7 +345,7 @@ export function BotsWorkspace({
   };
   const memecoinInsightLabel = (symbol: string) => {
     const insight = memecoinInsights[symbol];
-    if (!insight?.available) return "All-time settled market evidence is not published until the privacy-safe sample threshold is met.";
+    if (!insight?.available) return "Performance data will appear after enough trades have settled to protect user privacy.";
     return `All-time settled mainnet result: ${insight.positive_position_rate}% of ${insight.completed_positions} completed wallet-funded positions closed positive across ${insight.participant_count} participants. Historical results are not a forecast.`;
   };
   useEffect(() => {
@@ -413,7 +413,7 @@ export function BotsWorkspace({
         method: "POST",
         body: JSON.stringify(payload),
       }, undefined, durableAction ? 40_000 : undefined);
-      onNotice(response.message || "Saved successfully.");
+      onNotice(response.message || "Your changes were saved.");
       // The parent owns the desk snapshot. Apply an authoritative response
       // there rather than reaching across component scope; only responses
       // without a usable projection are reconciled in the background. The
@@ -433,7 +433,7 @@ export function BotsWorkspace({
     } catch (error) {
       const message = path === "/v1/bots" && error instanceof DOMException && error.name === "AbortError"
         ? "TradePulse is still confirming this allocation. Check your fleet before trying again."
-        : error instanceof Error ? error.message : "Action failed.";
+        : error instanceof Error ? error.message : "TradePulse could not complete this action. Review your choices and try again.";
       setReviewError(message);
       onNotice(message);
       if (path === "/v1/bots") void reload().catch(() => undefined);
@@ -745,7 +745,7 @@ ealed Return entry amount" /></div></label>
           />
           <BotProductCard
             name="Synthetic Indices"
-            description="Trade the shared synthetic engine"
+            description="Automated synthetic index strategy"
             icon="S"
             selected={product === "synthetic"}
             onClick={() => setProduct("synthetic")}
@@ -763,7 +763,7 @@ ealed Return entry amount" /></div></label>
           />
         </div>
         <div className="available-line">
-          <span>AVAILABLE TO DEPLOY</span>
+          <span>AVAILABLE TO ALLOCATE</span>
           <strong>{money(data.wallet.available)}</strong>
         </div>
         <p className="minimum-hint">
@@ -795,9 +795,9 @@ ealed Return entry amount" /></div></label>
           Review allocation <ChevronRight />
         </button>
         {review && (
-          <AccessibleDialog label="Confirm deployment" onClose={() => setReview(false)} dismissible={!isActionPending("bot:create")}>
+          <AccessibleDialog label="Confirm allocation" onClose={() => setReview(false)} dismissible={!isActionPending("bot:create")}>
               <span className="eyebrow">FINAL REVIEW</span>
-              <h2>Confirm deployment</h2>
+              <h2>Confirm allocation</h2>
               <div className="fact-block">
                 <span>
                   PRODUCT <b>{productLabel}</b>
@@ -816,7 +816,7 @@ ealed Return entry amount" /></div></label>
                 </span>
                 {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
               </div>
-              {product === "memecoin" && <p>Live market data is used to internally settle results against this Memecoin allocation.</p>}
+              {product === "memecoin" && <p>Results use live market data and settle within this Memecoin allocation.</p>}
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
@@ -830,7 +830,7 @@ ealed Return entry amount" /></div></label>
                   }
                 }}
               >
-                {isActionPending("bot:create") ? `Starting ${productLabel} bot…` : "Start trade"} <Zap />
+                {isActionPending("bot:create") ? `Creating ${productLabel} automation…` : "Create automation"} <Zap />
               </button>
               <button className="ghost-action" disabled={isActionPending("bot:create")} onClick={() => setReview(false)}>
                 Go back
@@ -1010,7 +1010,7 @@ ealed Return entry amount" /></div></label>
                 {isDemoBot
                   ? "The shared virtual demo runs automatically after activation. Choose its strategy controls below; manual demo orders are never placed and the pool remains separate from your wallet."
                   : awaitingAuthorization
-                  ? "Your assigned Memecoin allocation is the capital at risk. TradePulse uses live market data and internally settles results. Trench Mode watches fresh launches on supported networks only after a same-network DEX quote and liquidity gate; it does not guarantee protection from rugs or rapid loss."
+                  ? "Only your Memecoin allocation is at risk. Results use live market data and settle within that allocation. Trench Mode checks fresh launches only after a same-network DEX quote and liquidity review; it cannot prevent rugs, taxes, freezes, or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
               </p>
               {awaitingAuthorization && <div className="activity-row" role="status">
@@ -1338,7 +1338,7 @@ ealed Return entry amount" /></div></label>
         <GradientPanel className="bot-card">
           <img
             src="/illustrations/engine-paused.png"
-            alt="Paused bot engine"
+            alt="Paused automation"
             className="illustration-engine-paused"
             decoding="async"
           />
@@ -1346,8 +1346,8 @@ ealed Return entry amount" /></div></label>
             <span className="eyebrow">BOT PAUSED</span>
             <h2>One or more bots are paused</h2>
             <p>
-              Paused bots retain allocation and do not process new strategy runs
-              until resumed.
+              Paused bots keep their allocation but do not open new positions
+              until you resume them.
             </p>
           </div>
         </GradientPanel>

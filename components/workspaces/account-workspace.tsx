@@ -120,7 +120,7 @@ export function AccountWorkspace({
       onNotice(message);
     } catch (error) {
       setNotificationState((current) => ({ ...current, [key]: enabled }));
-      const message = error instanceof Error ? error.message : "Notification setting could not be updated.";
+      const message = error instanceof Error ? error.message : "This notification setting could not be updated. Try again.";
       setModalFeedback({ message, error: true });
       onNotice(message);
     } finally {
@@ -140,7 +140,7 @@ export function AccountWorkspace({
       setLanguage(next);
       onNotice("Language preference saved.");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Language preference could not be saved.");
+      onNotice(error instanceof Error ? error.message : "Your language could not be saved. Try again.");
     } finally {
       setLanguageSaving(false);
     }
@@ -167,7 +167,7 @@ export function AccountWorkspace({
       if (closeModal) setModal("");
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Action could not be completed.";
+      const message = error instanceof Error ? error.message : "TradePulse could not save this change. Try again.";
       setModalFeedback({ message, error: true });
       onNotice(message);
       return false;
@@ -401,7 +401,7 @@ export function AccountWorkspace({
             {modal === "language" && (
               <>
                 <h2>Language preference</h2>
-                <p>Choose the language used for TradePulse messages and future desk activation screens.</p>
+                <p>Choose the language used for TradePulse messages and activation screens.</p>
                 <fieldset className="activation-languages account-language-options" aria-label="Choose language">
                   <div className="language-options">
                     {languages.map((item) => (
@@ -515,7 +515,7 @@ export function AccountWorkspace({
                   />
                 </label>
                 <label className="amount-field">
-                  <span>ROUTE LABEL</span>
+                  <span>ADDRESS LABEL</span>
                   <input
                     value={nickname}
                     onChange={(event) => setNickname(event.target.value)}
@@ -530,7 +530,7 @@ export function AccountWorkspace({
                     post(
                       "/v1/account/whitelist",
                       { chain, nickname, address },
-                      "Destination saved with the configured cooling period.",
+                      "Destination saved. It becomes available after the security delay.",
                     )
                   }
                 >

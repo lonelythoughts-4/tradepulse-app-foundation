@@ -92,7 +92,7 @@ export function HelpWorkspace({
       </div>
       <GradientPanel className="levels-card">
         <span className="eyebrow">COMMON QUESTIONS</span>
-        <h2>Clear answers, fast</h2>
+        <h2>Deposits, withdrawals, and account access</h2>
         {[
           [
             "Below-minimum deposit",
@@ -100,7 +100,7 @@ export function HelpWorkspace({
           ],
           [
             "Deposit not showing",
-            "Use I made this deposit after sending; credit follows on-chain confirmation.",
+            "Choose I sent the deposit after sending; credit follows on-chain confirmation.",
           ],
           [
             "Withdrawal pending",

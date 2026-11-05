@@ -5,7 +5,7 @@ export function SessionExpiredState({ onReauthenticate }: { onReauthenticate?: (
       <span className="eyebrow">SESSION EXPIRED</span>
       <h1>Your session has ended.</h1>
       <p>Sign in again to continue. Your saved settings and balances remain protected.</p>
-      <button className="primary-action" onClick={onReauthenticate}>Re-authenticate</button>
+      <button className="primary-action" onClick={onReauthenticate}>Sign in again</button>
     </main>
   )
 }

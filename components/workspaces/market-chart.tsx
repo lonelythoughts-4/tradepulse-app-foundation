@@ -202,7 +202,7 @@ export function MarketChart({
   }, [hasCandles]);
   useEffect(() => setOffset((current) => Math.min(current, maxOffset)), [maxOffset]);
   if (!hasCandles) {
-    return <div className="market-chart market-chart-empty" role="status">Waiting for the first verified market tick</div>;
+    return <div className="market-chart market-chart-empty" role="status">Waiting for live market data</div>;
   }
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));

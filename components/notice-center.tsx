@@ -74,7 +74,7 @@ export function NoticeCenter({ center, onPreferences }: {
   if (!center.open) return null;
   return <AccessibleDialog label="Notifications" onClose={() => center.setOpen(false)}>
     <h2>Notifications</h2>
-    {center.refreshError && <p role="status">Updates unavailable. Showing the last received notices; retrying automatically.</p>}
+    {center.refreshError && <p role="status">Notifications could not be refreshed. Showing the latest saved notices and trying again automatically.</p>}
     {center.notices.length ? center.notices.map((item) => <div className="activity-row" key={item.id}>
       <div className="activity-info"><strong>{item.title}</strong><p>{item.body}</p></div>
     </div>) : <p>No current notices.</p>}
