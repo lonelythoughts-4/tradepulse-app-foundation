@@ -35,14 +35,14 @@ export function TelegramAuthPage({ children }: { children: ReactNode }) {
     <section className={styles.identity} aria-labelledby="telegram-entry-title">
       <PulseWeave />
       <div className={styles.identityCopy}>
-        <h1 id="telegram-entry-title">A desk for every<br />market moment.</h1>
-        <p>Your markets, wallet and activity.<br />Together in TradePulse.</p>
+        <h1 id="telegram-entry-title">Open your<br />TradePulse desk.</h1>
+        <p>Wallet, Memecoin, Synthetic,<br />and account activity in one place.</p>
       </div>
     </section>
     <section className={styles.access} aria-labelledby="telegram-auth-heading">
       <div className={styles.signin}>
-        <h2 id="telegram-auth-heading">Make yourself<br />at home.</h2>
-        <p className={styles.intro}>Sign in with Telegram to open your desk.</p>
+        <h2 id="telegram-auth-heading">Continue with<br />Telegram.</h2>
+        <p className={styles.intro}>Confirm this browser in Telegram. No password needed.</p>
         {children}
         <details className={styles.help}>
           <summary>How does sign-in work?<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 8 5 5 5-5" /></svg></summary>
