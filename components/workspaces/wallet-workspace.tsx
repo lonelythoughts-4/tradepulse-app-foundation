@@ -707,7 +707,7 @@ function WalletWorkspaceBody({
               value={withdrawChain}
               onChange={(event) => setWithdrawChain(event.target.value)}
             >
-              {networks.map(([value, label]) => (
+              {withdrawNetworks.map(([value, label]) => (
                 <option value={value} key={value}>
                   {label}
                 </option>
