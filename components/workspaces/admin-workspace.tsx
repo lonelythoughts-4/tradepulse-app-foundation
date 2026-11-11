@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { GradientPanel, Send, ShieldCheck, X } from "./shared-ui";
 import { fundingFeedback, type FundingOutcome } from "../../lib/admin-funding-feedback";
@@ -140,6 +140,13 @@ export function AdminWorkspace({
   const [broadcastTarget, setBroadcastTarget] = useState("");
   const [broadcastPending, setBroadcastPending] = useState(false);
   const [adminMember, setAdminMember] = useState("");
+  const [signerStatus, setSignerStatus] = useState<
+    "checking" | "locked" | "unlocked" | "unavailable"
+  >("checking");
+  const [signerPassphrase, setSignerPassphrase] = useState("");
+  const [signerPending, setSignerPending] = useState(false);
+  const [signerError, setSignerError] = useState("");
+  const signerSubmitting = useRef(false);
   const [vaultChain, setVaultChain] = useState("");
   const [vaultAsset, setVaultAsset] = useState("USDT");
   const [vaultAddress, setVaultAddress] = useState("");
@@ -246,6 +253,26 @@ export function AdminWorkspace({
         ? current
         : admin.chains[0]?.id || "",
     );
+    let active = true;
+    setSignerStatus("checking");
+    setSignerError("");
+    request("/v1/admin/signer", {}, environment)
+      .then((response) => {
+        if (!active) return;
+        if (response.status !== "locked" && response.status !== "unlocked") {
+          throw new Error("The signer returned an invalid status.");
+        }
+        setSignerStatus(response.status);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setSignerStatus("unavailable");
+        setSignerError(
+          error instanceof Error
+            ? error.message
+            : "Protected signer status is unavailable.",
+        );
+      });
     request("/v1/admin/vaults")
       .then((response) =>
         setVaults(Array.isArray(response.vaults) ? response.vaults : []),
@@ -272,7 +299,42 @@ export function AdminWorkspace({
         setFlashbackDirectionConfig("");
         setFlashbackDirectionHistory([]);
       });
+    return () => { active = false; };
   }, [environment]);
+  const unlockSigner = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (signerSubmitting.current || !signerPassphrase.trim()) return;
+    signerSubmitting.current = true;
+    setSignerPending(true);
+    setSignerError("");
+    const passphrase = signerPassphrase;
+    setSignerPassphrase("");
+    try {
+      const response = await request(
+        "/v1/admin/signer",
+        {
+          method: "POST",
+          body: JSON.stringify({ passphrase }),
+        },
+        environment,
+        20_000,
+      );
+      if (response.status !== "unlocked") {
+        throw new Error("The signer did not confirm that it was unlocked.");
+      }
+      setSignerStatus("unlocked");
+      onNotice("Protected signer unlocked. Signer-backed operations can proceed.");
+    } catch (error) {
+      setSignerError(
+        error instanceof Error
+          ? error.message
+          : "Could not unlock the protected signer.",
+      );
+    } finally {
+      signerSubmitting.current = false;
+      setSignerPending(false);
+    }
+  };
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
@@ -558,6 +620,102 @@ export function AdminWorkspace({
           {isAdminActionPending("sweeps:toggle") ? "Updating…" : "Toggle sweeps"}
         </button>
       </div>
+      <section className="admin-table signer-control" aria-labelledby="signer-control-title">
+        <div className="signer-control-header">
+          <div className="signer-control-title">
+            <h3 id="signer-control-title">Protected signer</h3>
+            <p>
+              Unlocking keeps the signing key available in server memory for
+              signer-backed operations. It does not send funds.
+            </p>
+          </div>
+          <span
+            className="signer-control-status"
+            data-state={signerStatus}
+            role="status"
+            aria-live="polite"
+          >
+            {signerStatus === "checking"
+              ? "Checking status…"
+              : signerStatus === "unavailable"
+                ? "Unavailable"
+                : signerStatus === "unlocked"
+                  ? "Unlocked"
+                  : "Locked"}
+          </span>
+        </div>
+        {signerStatus === "locked" && (
+          <form className="signer-control-form" onSubmit={(event) => void unlockSigner(event)}>
+            <label className="amount-field">
+              Signer unlock passphrase
+              <input
+                type="password"
+                name="signer-unlock-passphrase"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={1024}
+                value={signerPassphrase}
+                onChange={(event) => setSignerPassphrase(event.target.value)}
+                disabled={signerPending}
+              />
+            </label>
+            <button
+              className="primary-action"
+              type="submit"
+              disabled={signerPending || !signerPassphrase.trim()}
+              aria-busy={signerPending}
+            >
+              {signerPending ? "Unlocking signer…" : "Unlock signer"}
+            </button>
+          </form>
+        )}
+        {signerStatus === "unlocked" && (
+          <p className="signer-control-note">
+            The signer is unlocked in memory. It returns to locked after its
+            service restarts.
+          </p>
+        )}
+        {signerStatus === "unavailable" && (
+          <div className="signer-control-unavailable">
+            <p className="signer-control-note" role="alert">
+              {signerError || "The signer service is unavailable. Check the server service before retrying."}
+            </p>
+            <button
+              className="text-action"
+              type="button"
+              disabled={signerStatus === "checking"}
+              aria-busy={signerStatus === "checking"}
+              onClick={() => {
+                setSignerStatus("checking");
+                setSignerError("");
+                void request("/v1/admin/signer", {}, environment)
+                  .then((response) => {
+                    if (response.status !== "locked" && response.status !== "unlocked") {
+                      throw new Error("The signer returned an invalid status.");
+                    }
+                    setSignerStatus(response.status);
+                  })
+                  .catch((error) => {
+                    setSignerStatus("unavailable");
+                    setSignerError(
+                      error instanceof Error
+                        ? error.message
+                        : "Protected signer status is unavailable.",
+                    );
+                  });
+              }}
+            >
+              Retry signer status
+            </button>
+          </div>
+        )}
+        {signerError && signerStatus !== "unavailable" && (
+          <p className="signer-control-note" role="alert">{signerError}</p>
+        )}
+        <p className="signer-control-command">
+          SSH fallback: <code>cd /home/deploy/tradepulse-signer &amp;&amp; python3 signerctl.py</code>
+        </p>
+      </section>
       {withdrawalReview && (
         <AccessibleDialog label={withdrawalReview.action === "approve" ? "Review withdrawal approval" : "Review withdrawal rejection"}
           onClose={() => setWithdrawalReview(null)} dismissible={!withdrawalPending}>
