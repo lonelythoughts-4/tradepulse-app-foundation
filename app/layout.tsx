@@ -34,8 +34,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'dark',
-  themeColor: '#07090d',
+  colorScheme: 'light dark',
+  themeColor: '#f4f1ea',
 }
 
 export default function RootLayout({
@@ -44,8 +44,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} ${jetBrainsMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable} ${jetBrainsMono.variable}`}>
       <body className="antialiased">
+        <Script id="tradepulse-desk-theme" strategy="beforeInteractive">
+          {`try{const saved=localStorage.getItem("tradepulse.desk-theme");const theme=saved==="light"||saved==="dark"?saved:"light";document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}catch{}`}
+        </Script>
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}

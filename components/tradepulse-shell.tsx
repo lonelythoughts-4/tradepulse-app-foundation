@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
 import { DeskLoading } from "./desk-loading";
 import { TelegramAuthPage } from "./auth-entry";
+import authEntryStyles from "./auth-entry.module.css";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
 import { createDeskStore, useDeskSelector, type DeskStore } from "../lib/desk-store";
 import type { DeskState } from "../lib/desk-types";
@@ -22,6 +23,12 @@ import { formatMarketChartTime } from "../lib/market-chart-time";
 import { shouldApplyEnvironmentProjection, shouldClearEnvironmentProjection } from "../lib/environment-switch.js";
 import { handoffRefreshDelayMs, telegramMobileLaunchUrl } from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
+import {
+  DESK_THEME_STORAGE_KEY,
+  nextDeskTheme,
+  resolveDeskTheme,
+  type DeskTheme,
+} from "../lib/theme-preference";
 type FunctionalIconProps = { size?: number; className?: string };
 const functionalIconMarkup = {
   bell: '<path d="M12 4.6 Q16.4 4.8 16.6 9.4 L16.7 13.3 Q16.8 14.9 17.9 15.4 L6.2 15.5 Q7.2 14.9 7.3 13.3 L7.4 9.2 Q7.6 4.8 12 4.6 Z"/><path d="M11 4.7 L11.2 3.6"/><path d="M10.4 17.5 Q12 18.5 13.6 17.4"/>',
@@ -37,6 +44,8 @@ const functionalIconMarkup = {
   send: '<path d="M4.1 11.7 L19.4 4.4 Q20.1 4.1 19.8 4.9 L13.6 19.3 Q13.3 20 12.8 19.4 L9.6 13.6 L4.3 12.7 Q3.7 12.5 4.1 11.7 Z"/><path d="M9.6 13.6 L19.2 4.7"/>',
   shieldCheck:
     '<path d="M12 3.5 L18.4 5.7 Q19 5.9 18.9 6.6 L18.6 11.9 Q18.3 16.3 12.2 19.2 Q12 19.3 11.8 19.2 Q5.7 16.2 5.4 11.9 L5.1 6.6 Q5 5.9 5.7 5.7 Z"/><path d="M8.7 12.1 L10.9 14.2 L15.2 9.9"/>',
+  moon: '<path d="M18.6 15.3 Q16.4 16.6 14 16.2 Q9.6 15.5 8.8 11.3 Q8.3 8.7 9.8 6.3 Q6.1 7.2 5.2 10.8 Q4.1 15.3 7.7 18 Q11.3 20.7 15.2 18.5 Q17.3 17.4 18.6 15.3 Z"/>',
+  sun: '<circle cx="12" cy="12" r="3.6"/><path d="M12 3.4 L12 5.3 M12 18.7 L12 20.6 M3.4 12 L5.3 12 M18.7 12 L20.6 12 M5.9 5.9 L7.3 7.3 M16.7 16.7 L18.1 18.1 M18.1 5.9 L16.7 7.3 M7.3 16.7 L5.9 18.1"/>',
   x: '<path d="M6.1 6.3 L18 17.8"/><path d="M17.9 6.1 L6.3 18"/>',
 } as const;
 function FunctionalIcon({
@@ -82,6 +91,9 @@ export const Download = (props: FunctionalIconProps) => (
 const Fuel = (props: FunctionalIconProps) => (
   <FunctionalIcon name="fuel" {...props} />
 );
+const Moon = (props: FunctionalIconProps) => (
+  <FunctionalIcon name="moon" {...props} />
+);
 export const History = (props: FunctionalIconProps) => (
   <FunctionalIcon name="history" {...props} />
 );
@@ -93,6 +105,9 @@ export const Send = (props: FunctionalIconProps) => (
 );
 export const ShieldCheck = (props: FunctionalIconProps) => (
   <FunctionalIcon name="shieldCheck" {...props} />
+);
+const Sun = (props: FunctionalIconProps) => (
+  <FunctionalIcon name="sun" {...props} />
 );
 const X = (props: FunctionalIconProps) => (
   <FunctionalIcon name="x" {...props} />
@@ -722,6 +737,8 @@ function Header({
   isAdmin = true,
   pageTitle = "Dashboard",
   notificationCount = 0,
+  theme = "dark",
+  onThemeChange,
 }: {
   setActive: (view: string) => void;
   onNotifications?: () => void;
@@ -732,6 +749,8 @@ function Header({
   isAdmin?: boolean;
   pageTitle?: string;
   notificationCount?: number;
+  theme?: DeskTheme;
+  onThemeChange?: () => void;
 }) {
   const initials =
     profileName
@@ -767,6 +786,18 @@ function Header({
             onClick={() => setActive("Admin")}
           >
             <NavIcon name="admin" />
+          </button>
+        )}
+        {onThemeChange && (
+          <button
+            type="button"
+            className="icon-button theme-toggle"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-pressed={theme === "light"}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            onClick={onThemeChange}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         )}
         <button
@@ -4931,6 +4962,7 @@ function BrowserBotHandoff() {
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
   const [botUrl, setBotUrl] = useState("");
+  const [qrSvg, setQrSvg] = useState("");
   const [expiresIn, setExpiresIn] = useState(300);
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
@@ -4955,7 +4987,7 @@ function BrowserBotHandoff() {
         const handoff = contentType.includes("application/json")
           ? await response.json()
           : { error: (await response.text()).slice(0, 240) };
-        if (!response.ok || !handoff.token || !handoff.bot_url) {
+        if (!response.ok || !handoff.token || !handoff.bot_url || !handoff.qr_svg) {
           throw new Error(
             handoff.error || "Could not prepare a secure Telegram connection.",
           );
@@ -4963,11 +4995,12 @@ function BrowserBotHandoff() {
         if (cancelled) return;
         setToken(handoff.token);
         setBotUrl(handoff.bot_url);
+        setQrSvg(handoff.qr_svg);
         const handoffExpiry = Number(handoff.expires_in);
         const validExpiry = Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300;
         setExpiresIn(validExpiry);
         setState("ready");
-        setMessage("Secure Telegram link ready. It refreshes automatically.");
+        setMessage("Scan the code with your phone camera or Telegram, or continue with Telegram.");
         if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
         refreshTimer.current = window.setTimeout(() => {
           if (cancelled) return;
@@ -4995,7 +5028,7 @@ function BrowserBotHandoff() {
     };
   }, [attempt]);
   useEffect(() => {
-    if (state !== "waiting" || !token) return;
+    if ((state !== "ready" && state !== "waiting") || !token) return;
     const deadline = Date.now() + expiresIn * 1_000;
     let inFlight = false;
     let terminal = false;
@@ -5074,6 +5107,7 @@ function BrowserBotHandoff() {
     mobileFallbackTimer.current = null;
     setToken("");
     setBotUrl("");
+    setQrSvg("");
     setMessage("");
     setState("preparing");
     setAttempt((current) => current + 1);
@@ -5094,6 +5128,18 @@ function BrowserBotHandoff() {
   };
   return (
     <div className="browser-handoff" data-state={state}>
+      {state !== "preparing" && qrSvg && (
+        <div className={authEntryStyles.qrPanel}>
+          <img
+            className={authEntryStyles.qrImage}
+            src={`data:image/svg+xml;base64,${qrSvg}`}
+            alt="Scan to open this secure Telegram sign-in request"
+            width={184}
+            height={184}
+          />
+          <p>Scan with your phone, then press Start in Telegram.</p>
+        </div>
+      )}
       {state === "ready" && botUrl ? (
         <a
           className="primary-action"
@@ -5118,8 +5164,18 @@ function BrowserBotHandoff() {
     </div>
   );
 }
-function AuthEntryPage() {
-  return <TelegramAuthPage><BrowserBotHandoff /></TelegramAuthPage>;
+function AuthEntryPage({
+  theme,
+  onThemeChange,
+}: {
+  theme: DeskTheme;
+  onThemeChange: () => void;
+}) {
+  return (
+    <TelegramAuthPage theme={theme} onThemeChange={onThemeChange}>
+      <BrowserBotHandoff />
+    </TelegramAuthPage>
+  );
 }
 export function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -6382,6 +6438,8 @@ function deskTabFromHash(): DeskTab | null {
 
 function LiveTradePulse() {
   const reduceMotion = useReducedMotion();
+  const [deskTheme, setDeskTheme] = useState<DeskTheme>("light");
+  const [deskThemeReady, setDeskThemeReady] = useState(false);
   const deskStoreRef = useRef<DeskStore | null>(null);
   if (!deskStoreRef.current) {
     deskStoreRef.current = createDeskStore({ resources: { dashboard: null, synthetic: null } });
@@ -6415,6 +6473,30 @@ function LiveTradePulse() {
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let storedTheme: string | null = null;
+    try {
+      storedTheme = window.localStorage.getItem(DESK_THEME_STORAGE_KEY);
+    } catch {
+      /* Theme persistence is optional. */
+    }
+    setDeskTheme(resolveDeskTheme(storedTheme));
+    setDeskThemeReady(true);
+  }, []);
+  useEffect(() => {
+    if (!deskThemeReady) return;
+    document.documentElement.dataset.theme = deskTheme;
+    document.documentElement.style.colorScheme = deskTheme;
+    const themeColor = deskTheme === "light" ? "#f4f1ea" : "#07090d";
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", themeColor);
+    try {
+      window.localStorage.setItem(DESK_THEME_STORAGE_KEY, deskTheme);
+    } catch {
+      /* The selected theme still applies for this session. */
+    }
+  }, [deskTheme, deskThemeReady]);
   useEffect(() => {
     const applyHash = () => {
       const next = deskTabFromHash();
@@ -6968,7 +7050,14 @@ function LiveTradePulse() {
     }
   };
   if (loading) return <DeskLoading />;
-  if (!data) return <AuthEntryPage />;
+  if (!data) {
+    return (
+      <AuthEntryPage
+        theme={deskTheme}
+        onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
+      />
+    );
+  }
   if (!data.user.onboarding_complete)
     return <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} />;
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
@@ -7113,6 +7202,8 @@ function LiveTradePulse() {
           notificationCount={unreadNoticeCount}
           avatarId={avatarId}
           onAvatarClick={() => setAvatarPickerOpen(true)}
+          theme={deskTheme}
+          onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
         />
         <NoticeCenter center={noticeCenter} onPreferences={() => {
           noticeCenter.setOpen(false);
@@ -7299,24 +7390,6 @@ function LiveTradePulse() {
                 </div>
               </GradientPanel>
             )}
-          {tab === "Dashboard" && data.demo?.state === "issued" && (
-            <GradientPanel className="demo-banner">
-              <img
-                src="/illustrations/demo-banner.png"
-                alt="Virtual memecoin demo"
-                className="illustration-demo-banner"
-                decoding="async"
-              />
-              <div>
-                <span className="eyebrow">VIRTUAL DEMO</span>
-                <h2>Explore before you fund</h2>
-                <p>
-                  Your virtual demo is isolated from wallet funds and cannot be
-                  withdrawn.
-                </p>
-              </div>
-            </GradientPanel>
-          )}
           {tab === "Bots" && (
             <BotsWorkspace
               data={data}
