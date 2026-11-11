@@ -33,6 +33,32 @@ type DepositRouteOption = {
   chain: string;
   network: string;
   confirmations: number;
+  available: boolean;
+};
+
+const depositAssetNames: Record<string, string> = {
+  USDT: "Tether USD",
+  USDC: "USD Coin",
+  ETH: "Ether",
+  BNB: "BNB",
+  MATIC: "Polygon",
+  SOL: "Solana",
+};
+
+const depositNetworkNames: Record<string, string> = {
+  ERC20: "Ethereum",
+  BEP20: "BNB Chain",
+  BASE: "Base",
+  ARBITRUM: "Arbitrum",
+  POLYGON: "Polygon",
+  SPL: "Solana",
+  TON: "TON",
+  ETH_SEPOLIA: "Ethereum Sepolia",
+  BNB_TESTNET: "BNB Smart Chain Testnet",
+  BASE_SEPOLIA: "Base Sepolia",
+  ARB_SEPOLIA: "Arbitrum Sepolia",
+  POLYGON_AMOY: "Polygon Amoy",
+  SOL_DEVNET: "Solana Devnet",
 };
 
 export function WalletWorkspace({
@@ -201,7 +227,19 @@ function WalletWorkspaceBody({
     setDepositRoutesError("");
     try {
       const result = await request("/v1/deposits/routes", {}, environment);
-      if (result.environment !== environment || !Array.isArray(result.routes)) {
+      if (
+        result.environment !== environment ||
+        !Array.isArray(result.routes) ||
+        result.routes.some(
+          (route: DepositRouteOption) =>
+            !route ||
+            typeof route.asset !== "string" ||
+            typeof route.chain !== "string" ||
+            typeof route.network !== "string" ||
+            typeof route.confirmations !== "number" ||
+            typeof route.available !== "boolean",
+        )
+      ) {
         throw new Error(`Deposit network options did not match ${environment}. Try again.`);
       }
       setDepositRoutes(result.routes);
@@ -223,8 +261,20 @@ function WalletWorkspaceBody({
     setStep(0);
     void loadDepositRoutes();
   }, [environment, loadDepositRoutes, view]);
-  const depositAssets = [...new Set(depositRoutes.map((route) => route.asset))];
+  const listedDepositAssets = [...new Set(depositRoutes.map((route) => route.asset))];
+  const preferredDepositAssets =
+    environment === "testnet"
+      ? ["ETH", "BNB", "SOL", "MATIC"]
+      : ["USDT", "USDC"];
+  const depositAssets = [
+    ...preferredDepositAssets.filter((item) => listedDepositAssets.includes(item)),
+    ...listedDepositAssets.filter((item) => !preferredDepositAssets.includes(item)),
+  ];
   const depositNetworks = depositRoutes.filter((route) => route.asset === asset);
+  const depositNetworkName = (network: string) =>
+    depositRoutes.find((route) => route.chain === network)?.network ||
+    depositNetworkNames[network] ||
+    network;
   const showOverview = () => {
     setView("overview");
     setStep(0);
@@ -248,8 +298,15 @@ function WalletWorkspaceBody({
   });
   const createRoute = async () => {
     if (depositPending || !asset || !chain) return;
-    if (!depositRoutes.some((route) => route.asset === asset && route.chain === chain)) {
-      onNotice(`That ${environment} deposit route is no longer available. Reload the network options and choose another route.`);
+    const selectedRoute = depositRoutes.find(
+      (route) => route.asset === asset && route.chain === chain,
+    );
+    if (!selectedRoute?.available) {
+      onNotice(
+        selectedRoute
+          ? `${selectedRoute.network} is under maintenance. Choose another network or retry the options later.`
+          : `That ${environment} deposit route is no longer available. Reload the network options and choose another route.`,
+      );
       await loadDepositRoutes();
       setStep(1);
       return;
@@ -378,7 +435,7 @@ function WalletWorkspaceBody({
                 >
                   <PaymentMark asset={item} />
                   <strong>{item}</strong>
-                  <small>{item === "USDT" ? "Tether USD" : "USD Coin"}</small>
+                  <small>{depositAssetNames[item] || item}</small>
                   <ChevronRight />
                 </button>
               ))}
@@ -392,6 +449,7 @@ function WalletWorkspaceBody({
                     type="button"
                     key={`${route.asset}:${route.chain}`}
                     className={chain === route.chain ? "selected" : ""}
+                    disabled={!route.available}
                     onClick={() => {
                       setChain(route.chain);
                       setIntent(null);
@@ -400,7 +458,11 @@ function WalletWorkspaceBody({
                   >
                     <PaymentMark asset={route.chain} />
                     <strong>{route.network}</strong>
-                    <small>{route.confirmations} confirmations · {route.asset} only</small>
+                    <small>
+                      {route.available
+                        ? `${route.confirmations} confirmations · ${route.asset} only`
+                        : `Temporarily unavailable · ${route.asset} only`}
+                    </small>
                     <ChevronRight />
                   </button>
                 ))}
@@ -416,7 +478,7 @@ function WalletWorkspaceBody({
                 <span>✓</span>
                 <div>
                   <strong>
-                    {asset} on {depositRoutes.find((route) => route.asset === asset && route.chain === chain)?.network || chain}
+                    {asset} on {depositNetworkName(chain)}
                   </strong>
                   <p>Use this network only for the deposit address shown next.</p>
                   <button type="button" className="small-action" onClick={() => setStep(1)}>
@@ -484,7 +546,7 @@ function WalletWorkspaceBody({
                   <div className="qr-grid" />
                 )}
                 <small>
-                  SCAN TO DEPOSIT {intent.asset} ON {intent.chain}
+                  SCAN TO DEPOSIT {intent.asset} ON {depositNetworkName(intent.chain)}
                 </small>
               </div>
               <div className="copy-field">
@@ -505,7 +567,8 @@ function WalletWorkspaceBody({
               </div>
               <div className="warning-block">
                 <strong>
-                  Send {intent.asset} on {intent.chain} only
+                  <PaymentMark asset={intent.asset} compact /> Send {intent.asset} on{" "}
+                  {depositNetworkName(intent.chain)} only
                 </strong>
                 <span>
                   This is a one-time deposit address. Another asset or network cannot be
@@ -600,9 +663,13 @@ function WalletWorkspaceBody({
               <div className="ledger-row" key={route.id}>
                 <div>
                   <strong>
-                    {route.asset} / {route.chain}
+                    <PaymentMark asset={route.asset} compact /> {route.asset} /{" "}
+                    {depositNetworkName(route.chain)}
                   </strong>
-                  <small>{route.address}</small>
+                  <small>
+                    <PaymentMark asset={route.asset} compact />{" "}
+                    {depositNetworkName(route.chain)} · {route.address}
+                  </small>
                 </div>
                 <span
                   className={`activity-status ${route.status.includes("fail") ? "review" : "complete"}`}

@@ -145,6 +145,17 @@ type PaymentMarkName =
 const paymentMarkNames: Record<string, PaymentMarkName> = {
   USDT: "usdt",
   USDC: "usdc",
+  ETH: "ethereum",
+  "Ethereum Sepolia": "ethereum",
+  ETH_SEPOLIA: "ethereum",
+  "BNB Testnet": "bnb",
+  BNB_TESTNET: "bnb",
+  MATIC: "polygon",
+  "Polygon Amoy": "polygon",
+  POLYGON_AMOY: "polygon",
+  SOL: "solana",
+  "Solana Devnet": "solana",
+  SOL_DEVNET: "solana",
   Ethereum: "ethereum",
   ERC20: "ethereum",
   "BNB Chain": "bnb",
@@ -153,14 +164,18 @@ const paymentMarkNames: Record<string, PaymentMarkName> = {
   BASE: "base",
   Arbitrum: "arbitrum",
   ARBITRUM: "arbitrum",
+  "Arbitrum Sepolia": "arbitrum",
+  ARB_SEPOLIA: "arbitrum",
   Polygon: "polygon",
   POLYGON: "polygon",
   Solana: "solana",
   SPL: "solana",
+  "Base Sepolia": "base",
+  BASE_SEPOLIA: "base",
 };
 export function PaymentMark({ asset, compact = false }: { asset: string; compact?: boolean }) {
   const name = paymentMarkNames[asset] || "base";
-  const isAsset = asset === "USDT" || asset === "USDC";
+  const isAsset = ["USDT", "USDC", "ETH", "BNB", "MATIC", "SOL"].includes(asset);
   return (
     <span
       className={isAsset ? "coin-mark" : "network-mark"}
