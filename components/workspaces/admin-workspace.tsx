@@ -147,6 +147,8 @@ export function AdminWorkspace({
   const [signerPending, setSignerPending] = useState(false);
   const [signerError, setSignerError] = useState("");
   const signerSubmitting = useRef(false);
+  const [signerStatusRefreshPending, setSignerStatusRefreshPending] = useState(false);
+  const signerStatusRefreshSubmitting = useRef(false);
   const [vaultChain, setVaultChain] = useState("");
   const [vaultAsset, setVaultAsset] = useState("USDT");
   const [vaultAddress, setVaultAddress] = useState("");
@@ -333,6 +335,30 @@ export function AdminWorkspace({
     } finally {
       signerSubmitting.current = false;
       setSignerPending(false);
+    }
+  };
+  const refreshSignerStatus = async () => {
+    if (signerStatusRefreshSubmitting.current) return;
+    signerStatusRefreshSubmitting.current = true;
+    setSignerStatusRefreshPending(true);
+    setSignerStatus("checking");
+    setSignerError("");
+    try {
+      const response = await request("/v1/admin/signer", {}, environment);
+      if (response.status !== "locked" && response.status !== "unlocked") {
+        throw new Error("The signer returned an invalid status.");
+      }
+      setSignerStatus(response.status);
+    } catch (error) {
+      setSignerStatus("unavailable");
+      setSignerError(
+        error instanceof Error
+          ? error.message
+          : "Protected signer status is unavailable.",
+      );
+    } finally {
+      signerStatusRefreshSubmitting.current = false;
+      setSignerStatusRefreshPending(false);
     }
   };
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
@@ -683,29 +709,11 @@ export function AdminWorkspace({
             <button
               className="text-action"
               type="button"
-              disabled={signerStatus === "checking"}
-              aria-busy={signerStatus === "checking"}
-              onClick={() => {
-                setSignerStatus("checking");
-                setSignerError("");
-                void request("/v1/admin/signer", {}, environment)
-                  .then((response) => {
-                    if (response.status !== "locked" && response.status !== "unlocked") {
-                      throw new Error("The signer returned an invalid status.");
-                    }
-                    setSignerStatus(response.status);
-                  })
-                  .catch((error) => {
-                    setSignerStatus("unavailable");
-                    setSignerError(
-                      error instanceof Error
-                        ? error.message
-                        : "Protected signer status is unavailable.",
-                    );
-                  });
-              }}
+              disabled={signerStatusRefreshPending}
+              aria-busy={signerStatusRefreshPending}
+              onClick={() => void refreshSignerStatus()}
             >
-              Retry signer status
+              {signerStatusRefreshPending ? "Checking…" : "Retry signer status"}
             </button>
           </div>
         )}
