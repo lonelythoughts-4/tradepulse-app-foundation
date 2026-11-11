@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   shouldApplyEnvironmentProjection,
   shouldClearEnvironmentProjection,
-  shouldPersistMainnetOnLeavingAdmin,
+  shouldResetEnvironmentForAccess,
 } from "../lib/environment-switch.js";
 
 test("a late dashboard response from the previous workspace is ignored", () => {
@@ -21,12 +21,19 @@ test("clears the old projection before moving to another environment", () => {
   assert.equal(shouldClearEnvironmentProjection("testnet", "testnet"), false);
 });
 
-test("leaving the admin workspace persists mainnet for the shared bot session", async () => {
-  assert.equal(shouldPersistMainnetOnLeavingAdmin("Admin", "testnet"), false);
-  assert.equal(shouldPersistMainnetOnLeavingAdmin("Dashboard", "testnet"), true);
-  assert.equal(shouldPersistMainnetOnLeavingAdmin("Dashboard", "mainnet"), false);
+test("admin testnet selection persists across tabs while non-admin access returns to mainnet", async () => {
+  assert.equal(shouldResetEnvironmentForAccess(true, "testnet"), false);
+  assert.equal(shouldResetEnvironmentForAccess(true, "mainnet"), false);
+  assert.equal(shouldResetEnvironmentForAccess(false, "testnet"), true);
+  assert.equal(shouldResetEnvironmentForAccess(false, "mainnet"), false);
 
   const shell = await readFile(new URL("../components/tradepulse-shell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /shouldPersistMainnetOnLeavingAdmin\(tab, webEnvironment\)/);
-  assert.match(shell, /request\("\/v1\/admin\/environment", \{[\s\S]*?environment: "mainnet"/);
+  assert.match(shell, /shouldResetEnvironmentForAccess\(data\.user\.is_admin, webEnvironment\)/);
+  assert.match(shell, /environment=\{\(data\.user\.is_admin \? webEnvironment : "mainnet"\)\.toUpperCase\(\)\}/);
+  assert.match(shell, /headers = \(targetEnvironment = webEnvironment\)/);
+  const resetEffect = shell.match(
+    /if \(!data \|\| !shouldResetEnvironmentForAccess[\s\S]*?\}, \[([^\]]+)\]\);/,
+  );
+  assert.ok(resetEffect, "the environment access guard should remain in place");
+  assert.doesNotMatch(resetEffect[1], /\btab\b/);
 });

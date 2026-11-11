@@ -20,7 +20,11 @@ import { ProtectionWorkspace } from "./workspaces/protection-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
-import { shouldApplyEnvironmentProjection, shouldClearEnvironmentProjection } from "../lib/environment-switch.js";
+import {
+  shouldApplyEnvironmentProjection,
+  shouldClearEnvironmentProjection,
+  shouldResetEnvironmentForAccess,
+} from "../lib/environment-switch.js";
 import { handoffRefreshDelayMs, telegramMobileLaunchUrl } from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import {
@@ -6778,15 +6782,14 @@ function LiveTradePulse() {
         // cannot be read during a transient control-plane outage.
       });
   }, [data?.user.id, data?.user.is_admin]);
-  // Testnet is an isolated control-room workspace, never a customer desk
-  // context. Leaving Admin (or losing admin access after a new Telegram
-  // session) immediately returns the browser to the mainnet projection.
+  // Keep the per-admin testnet selection across web tabs. Only return to
+  // mainnet if the signed-in account does not have testnet access.
   useEffect(() => {
-    if (!data || (tab === "Admin" && data.user.is_admin) || (webEnvironment === "mainnet" && data.environment === "mainnet")) return;
+    if (!data || !shouldResetEnvironmentForAccess(data.user.is_admin, webEnvironment)) return;
     selectedEnvironmentRef.current = "mainnet";
     setWebEnvironment("mainnet");
-    void load("mainnet");
-  }, [tab, data?.user.is_admin, webEnvironment]);
+    void load("mainnet", true);
+  }, [data?.user.is_admin, webEnvironment]);
   useEffect(() => {
     const demo = data?.demo;
     const state = demo?.pool_state || demo?.state;
@@ -7196,7 +7199,7 @@ function LiveTradePulse() {
           setActive={selectChromeTab}
           onNotifications={noticeCenter.openNotices}
           profileName={profileName}
-          environment={(tab === "Admin" && data.user.is_admin ? webEnvironment : "mainnet").toUpperCase()}
+          environment={(data.user.is_admin ? webEnvironment : "mainnet").toUpperCase()}
           isAdmin={data.user.is_admin}
           pageTitle={chromeActive}
           notificationCount={unreadNoticeCount}

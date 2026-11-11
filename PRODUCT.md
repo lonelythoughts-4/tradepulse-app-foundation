@@ -27,6 +27,7 @@ Users may arrive from Telegram on a phone, from a desktop browser handoff, or th
 - Preserve the current routes, visual identity, illustrations, custom SVG icons, and information architecture.
 - Keep Memecoin and Synthetic product flows distinct while sharing wallet/account state.
 - Preserve server-authenticated API behavior, Mongo-backed market state, wallet safeguards, and admin-only controls.
+- Keep each administrator's isolated Testnet selection across web app tabs; regular users remain on Mainnet and server-side authorization continues to gate Testnet data.
 - Improve clarity, accessibility, responsive behavior, and consistency without changing API contracts or business logic.
 - MANUAL remains the default execution mode; AUTO is explicit opt-in.
 
