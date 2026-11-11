@@ -12,7 +12,9 @@ STORY: Understand the desk, confirm the browser in Telegram, and return automati
 
 FIRST VIEWPORT: Desktop pairs the gateway headline with the current sign-in handoff. Narrow screens stack the welcome copy and handoff, keep navigation and the primary action accessible, and reflow at phone widths. Pulse motion respects reduced-motion preferences.
 
-FORM: Preserve the existing handoff start, confirmation polling, retry, and automatic session completion behavior. The API returns a QR encoding the same short-lived Telegram URL as the direct link; both complete through the existing handoff poll and HttpOnly session. Do not copy the source repository's email form or simulated Telegram success flow; neither is this app's auth contract. Source reference: https://github.com/lonelythoughts-4/tradepulse-welcome-gateway
+FORM: Preserve the existing handoff start, confirmation polling, retry, and automatic session completion behavior. The API returns a QR encoding the same short-lived Telegram URL as the direct link; both complete through the existing handoff poll and HttpOnly session. Telegram is currently the only connected sign-in method. The welcome page must say plainly that email/password sign-in, account registration, and password recovery are not available yet; do not render those as working forms or imply they are backed by TradePulse. Source reference: https://github.com/lonelythoughts-4/tradepulse-welcome-gateway
+
+HELP: Keep a compact, keyboard-accessible sign-in FAQ on the welcome page covering the live Telegram flow, unavailable email/password and recovery flows, QR fallback/expiry, and password safety. Do not copy claims from the source gateway about referrals, email verification, session revocation, key storage, or expiry timings unless verified against TradePulse.
 
 FINISH: Verify the QR decodes to the backend-issued handoff URL and completes through the real Telegram flow, along with theme preference, mobile reflow, keyboard focus, and handoff error/waiting states.
 

@@ -7,6 +7,7 @@ import styles from "./auth-entry.module.css";
 const navigation = [
   ["How it works", "#how-it-works"],
   ["Your desk", "#capabilities"],
+  ["Sign-in help", "#sign-in-help"],
 ] as const;
 
 function PulseGlyph({ className }: { className?: string }) {
@@ -178,6 +179,33 @@ export function TelegramAuthPage({
             </div>
           ))}
         </dl>
+      </section>
+
+      <PulseDivider />
+
+      <section className={styles.help} id="sign-in-help" aria-labelledby="sign-in-help-title">
+        <div className={styles.sectionIntro}>
+          <h2 id="sign-in-help-title">Sign-in help</h2>
+          <p>What is available now, and what is not connected yet.</p>
+        </div>
+        <div className={styles.helpList}>
+          <details>
+            <summary>How do I sign in to TradePulse?</summary>
+            <p>Use the QR code or continue with Telegram. Confirm the request in your TradePulse bot, then this browser will finish signing in automatically.</p>
+          </details>
+          <details>
+            <summary>Can I sign in with email and a password?</summary>
+            <p>Not yet. Email and password sign-in, account registration, and password recovery are not connected to TradePulse. Telegram confirmation is the only sign-in method available on this page.</p>
+          </details>
+          <details>
+            <summary>What if I cannot scan the QR code?</summary>
+            <p>Select “Continue with Telegram” to open the same secure sign-in request. If the link expires, this page prepares a fresh one automatically.</p>
+          </details>
+          <details>
+            <summary>Does Telegram receive my password?</summary>
+            <p>No. This sign-in confirms the browser through Telegram; do not share passwords, recovery phrases, or one-time codes in chat.</p>
+          </details>
+        </div>
       </section>
 
       <footer className={styles.footer}>

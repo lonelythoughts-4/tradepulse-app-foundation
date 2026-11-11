@@ -30,7 +30,7 @@
   box-sizing: border-box;
 }
 
-.page :is(a, button):focus-visible {
+.page :is(a, button, summary):focus-visible {
   outline: 2px solid var(--pulse);
   outline-offset: 4px;
 }
@@ -418,7 +418,8 @@
 }
 
 .steps,
-.capabilities {
+.capabilities,
+.help {
   width: min(100% - 48px, 1216px);
   margin: 0 auto;
   padding: 76px 0 82px;
@@ -512,6 +513,60 @@
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.help {
+  max-width: 840px;
+}
+
+.helpList {
+  margin-top: 28px;
+  border-top: 1px solid var(--ink);
+}
+
+.helpList details {
+  border-bottom: 1px solid var(--line);
+}
+
+.helpList summary {
+  min-height: 56px;
+  padding: 17px 32px 17px 0;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  list-style: none;
+  position: relative;
+}
+
+.helpList summary::-webkit-details-marker {
+  display: none;
+}
+
+.helpList summary::after {
+  position: absolute;
+  top: 17px;
+  right: 4px;
+  color: var(--pulse);
+  content: "+";
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.helpList details[open] summary::after {
+  content: "−";
+}
+
+.helpList details p {
+  max-width: 68ch;
+  padding: 0 28px 18px 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .footer {
@@ -628,6 +683,7 @@
   .hero,
   .steps,
   .capabilities,
+  .help,
   .divider {
     width: min(100% - 40px, 520px);
   }
@@ -660,7 +716,8 @@
   }
 
   .steps,
-  .capabilities {
+  .capabilities,
+  .help {
     padding: 54px 0 60px;
   }
 
@@ -736,6 +793,7 @@
   .hero,
   .steps,
   .capabilities,
+  .help,
   .divider {
     width: calc(100% - 32px);
   }
