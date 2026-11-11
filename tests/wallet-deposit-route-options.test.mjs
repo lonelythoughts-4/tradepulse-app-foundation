@@ -21,6 +21,8 @@ test("the wallet loads deposit asset/network pairs from the selected environment
   assert.match(wallet, /ETH: "Ether"/);
   assert.match(wallet, /SOL_DEVNET: "Solana Devnet"/);
   assert.match(wallet, /depositNetworkName\(intent\.chain\)/);
+  assert.match(wallet, /error\.name === "AbortError"/);
+  assert.match(wallet, /background monitoring is enabled/);
   assert.match(shell, /<WalletWorkspace[\s\S]*?environment=\{data\.user\.is_admin \? webEnvironment : "mainnet"\}/);
   for (const [assetOrNetwork, icon] of [
     ["ETH_SEPOLIA", "ethereum"],

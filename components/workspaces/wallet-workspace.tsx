@@ -597,15 +597,15 @@ function WalletWorkspaceBody({
                         : current,
                     );
                     onNotice(
-                      result.detected
-                        ? `Transfer detected. Status: ${result.status}. Credit happens after confirmation.`
-                        : `Monitoring started. No transfer detected yet; nothing was credited.`,
+                      "Monitoring started. The background watcher will check this address; funds are credited only after on-chain detection and confirmation.",
                     );
                   } catch (error) {
                     onNotice(
-                      error instanceof Error
-                        ? error.message
-                        : "Deposit tracking could not start. Try again.",
+                      error instanceof DOMException && error.name === "AbortError"
+                        ? "The status request timed out. Your deposit address is unchanged, and background monitoring is enabled. Check this deposit again from My Deposits."
+                        : error instanceof Error
+                          ? error.message
+                          : "Deposit tracking could not start. Try again.",
                     );
                   } finally {
                     setDepositPending(false);
