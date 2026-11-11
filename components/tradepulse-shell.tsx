@@ -7409,6 +7409,7 @@ function LiveTradePulse() {
               store={deskStore}
               poll={() => request("/v1/dashboard")}
               request={request}
+              environment={data.user.is_admin ? webEnvironment : "mainnet"}
               onWalletUpdate={({ wallet, withdrawal, deposits }) =>
                 updateDashboard((current) =>
                   current

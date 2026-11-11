@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AccessibleDialog } from "../accessible-dialog";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
@@ -28,17 +28,26 @@ import {
   Zap,
 } from "../tradepulse-shell";
 
+type DepositRouteOption = {
+  asset: string;
+  chain: string;
+  network: string;
+  confirmations: number;
+};
+
 export function WalletWorkspace({
   store,
   poll,
   request,
+  environment,
   onWalletUpdate,
   onNotice,
   initialView = "overview",
 }: {
   store: DeskStore;
   poll: () => Promise<LiveDashboard>;
-  request: (path: string, options?: RequestInit) => Promise<any>;
+  request: (path: string, options?: RequestInit, environment?: "mainnet" | "testnet") => Promise<any>;
+  environment: "mainnet" | "testnet";
   onWalletUpdate: (update: {
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
@@ -62,6 +71,7 @@ export function WalletWorkspace({
     <WalletWorkspaceBody
       data={data}
       request={request}
+      environment={environment}
       onWalletUpdate={onWalletUpdate}
       onNotice={onNotice}
       initialView={initialView}
@@ -72,12 +82,14 @@ export function WalletWorkspace({
 function WalletWorkspaceBody({
   data,
   request,
+  environment,
   onWalletUpdate,
   onNotice,
   initialView = "overview",
 }: {
   data: LiveDashboard;
-  request: (path: string, options?: RequestInit) => Promise<any>;
+  request: (path: string, options?: RequestInit, environment?: "mainnet" | "testnet") => Promise<any>;
+  environment: "mainnet" | "testnet";
   onWalletUpdate: (update: {
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
@@ -93,9 +105,12 @@ function WalletWorkspaceBody({
     setView(initialView);
   }, [initialView]);
   const [step, setStep] = useState(0);
-  const [asset, setAsset] = useState("USDT");
-  const [chain, setChain] = useState("ERC20");
+  const [asset, setAsset] = useState("");
+  const [chain, setChain] = useState("");
   const [expectedAmount, setExpectedAmount] = useState("");
+  const [depositRoutes, setDepositRoutes] = useState<DepositRouteOption[]>([]);
+  const [depositRoutesLoading, setDepositRoutesLoading] = useState(false);
+  const [depositRoutesError, setDepositRoutesError] = useState("");
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [intent, setIntent] = useState<
@@ -173,7 +188,7 @@ function WalletWorkspaceBody({
       window.clearInterval(timer);
     };
   }, [intent?.id, intent?.status, intent?.watch_enabled]);
-  const networks = [
+  const withdrawNetworks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
     ["BASE", "Base"],
@@ -181,6 +196,35 @@ function WalletWorkspaceBody({
     ["POLYGON", "Polygon"],
     ["SPL", "Solana"],
   ];
+  const loadDepositRoutes = useCallback(async () => {
+    setDepositRoutesLoading(true);
+    setDepositRoutesError("");
+    try {
+      const result = await request("/v1/deposits/routes", {}, environment);
+      if (result.environment !== environment || !Array.isArray(result.routes)) {
+        throw new Error(`Deposit network options did not match ${environment}. Try again.`);
+      }
+      setDepositRoutes(result.routes);
+    } catch (error) {
+      setDepositRoutes([]);
+      setDepositRoutesError(
+        error instanceof Error ? error.message : "Deposit network options could not be loaded. Try again.",
+      );
+    } finally {
+      setDepositRoutesLoading(false);
+    }
+  }, [environment, request]);
+  useEffect(() => {
+    if (view !== "deposit") return;
+    setAsset("");
+    setChain("");
+    setExpectedAmount("");
+    setIntent(null);
+    setStep(0);
+    void loadDepositRoutes();
+  }, [environment, loadDepositRoutes, view]);
+  const depositAssets = [...new Set(depositRoutes.map((route) => route.asset))];
+  const depositNetworks = depositRoutes.filter((route) => route.asset === asset);
   const showOverview = () => {
     setView("overview");
     setStep(0);
@@ -204,6 +248,12 @@ function WalletWorkspaceBody({
   });
   const createRoute = async () => {
     if (depositPending || !asset || !chain) return;
+    if (!depositRoutes.some((route) => route.asset === asset && route.chain === chain)) {
+      onNotice(`That ${environment} deposit route is no longer available. Reload the network options and choose another route.`);
+      await loadDepositRoutes();
+      setStep(1);
+      return;
+    }
     setDepositPending(true);
     try {
       const result = await request("/v1/deposits/routes", {
@@ -213,7 +263,7 @@ function WalletWorkspaceBody({
           chain,
           expected_amount: expectedAmount || null,
         }),
-      });
+      }, environment);
       setIntent(result.intent);
       setStep(2);
       onNotice(
@@ -303,13 +353,26 @@ function WalletWorkspaceBody({
           </div>
           {step === 0 && (
             <div className="choice-grid">
-              {["USDT", "USDC"].map((item) => (
+              {depositRoutesLoading && <p role="status">Loading {environment} deposit assets…</p>}
+              {depositRoutesError && (
+                <div role="alert">
+                  <p>{depositRoutesError}</p>
+                  <button type="button" className="small-action" onClick={() => void loadDepositRoutes()}>
+                    Retry network options
+                  </button>
+                </div>
+              )}
+              {!depositRoutesLoading && !depositRoutesError && depositAssets.length === 0 && (
+                <p role="status">No deposit routes are currently available in {environment}.</p>
+              )}
+              {!depositRoutesLoading && !depositRoutesError && depositAssets.map((item) => (
                 <button
                   type="button"
                   key={item}
                   className={asset === item ? "selected" : ""}
                   onClick={() => {
                     setAsset(item);
+                    setChain("");
                     setStep(1);
                   }}
                 >
@@ -324,23 +387,26 @@ function WalletWorkspaceBody({
           {step === 1 && (
             <>
               <div className="choice-grid">
-                {networks.map(([value, label]) => (
+                {depositNetworks.map((route) => (
                   <button
                     type="button"
-                    key={value}
-                    className={chain === value ? "selected" : ""}
+                    key={`${route.asset}:${route.chain}`}
+                    className={chain === route.chain ? "selected" : ""}
                     onClick={() => {
-                      setChain(value);
+                      setChain(route.chain);
                       setIntent(null);
                       setStep(2);
                     }}
                   >
-                    <PaymentMark asset={value} />
-                    <strong>{label}</strong>
-                    <small>Use only this matching network</small>
+                    <PaymentMark asset={route.chain} />
+                    <strong>{route.network}</strong>
+                    <small>{route.confirmations} confirmations · {route.asset} only</small>
                     <ChevronRight />
                   </button>
                 ))}
+                {depositNetworks.length === 0 && (
+                  <p role="status">No {asset} deposit networks are currently available in {environment}.</p>
+                )}
               </div>
             </>
           )}
@@ -350,7 +416,7 @@ function WalletWorkspaceBody({
                 <span>✓</span>
                 <div>
                   <strong>
-                    {asset} on {networks.find(([value]) => value === chain)?.[1] || chain}
+                    {asset} on {depositRoutes.find((route) => route.asset === asset && route.chain === chain)?.network || chain}
                   </strong>
                   <p>Use this network only for the deposit address shown next.</p>
                   <button type="button" className="small-action" onClick={() => setStep(1)}>
@@ -635,7 +701,7 @@ function WalletWorkspaceBody({
           </label>
           <label className="amount-field">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <PaymentMark asset={withdrawChain} compact /> NETWORK · {networks.find(([value]) => value === withdrawChain)?.[1] || withdrawChain}
+              <PaymentMark asset={withdrawChain} compact /> NETWORK · {withdrawNetworks.find(([value]) => value === withdrawChain)?.[1] || withdrawChain}
             </span>
             <select
               value={withdrawChain}
