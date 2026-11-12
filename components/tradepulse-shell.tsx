@@ -25,7 +25,7 @@ import {
   shouldClearEnvironmentProjection,
   shouldResetEnvironmentForAccess,
 } from "../lib/environment-switch.js";
-import { handoffRefreshDelayMs, telegramMobileLaunchUrl } from "../lib/browser-handoff.js";
+import { handoffRefreshDelayMs, telegramAppLaunchUrl } from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import {
   DESK_THEME_STORAGE_KEY,
@@ -5136,13 +5136,14 @@ function BrowserBotHandoff() {
     refreshTimer.current = null;
     setState("waiting");
     setMessage("Confirm this browser in Telegram. Your desk will open here automatically.");
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const mobileUrl = isMobile ? telegramMobileLaunchUrl(botUrl) : botUrl;
-    if (mobileUrl === botUrl) return;
+    const appUrl = telegramAppLaunchUrl(botUrl);
+    if (appUrl === botUrl) return;
     event.preventDefault();
-    window.location.assign(mobileUrl);
+    window.location.assign(appUrl);
     mobileFallbackTimer.current = window.setTimeout(() => {
-      if (document.visibilityState === "visible") window.location.assign(botUrl);
+      if (document.visibilityState === "visible" && document.hasFocus()) {
+        window.location.assign(botUrl);
+      }
     }, 1_200);
   };
   return (
