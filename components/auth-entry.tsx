@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import type { DeskTheme } from "../lib/theme-preference";
 import styles from "./auth-entry.module.css";
 
@@ -34,6 +34,12 @@ export function TelegramAuthPage({
   const [menuOpen, setMenuOpen] = useState(false);
   const storyRef = useRef<HTMLDivElement>(null);
   const wheelGesture = useRef({ delta: 0, locked: false, resetTimer: 0 });
+  const touchGesture = useRef<{
+    panel: HTMLElement;
+    startX: number;
+    startY: number;
+    startScrollTop: number;
+  } | null>(null);
 
   const navigatePanel = useCallback((direction: -1 | 1) => {
     const story = storyRef.current;
@@ -54,7 +60,7 @@ export function TelegramAuthPage({
     if (!story) return;
 
     const handleWheel = (event: WheelEvent) => {
-      if (!window.matchMedia("(min-width: 901px) and (min-height: 760px) and (pointer: fine)").matches) return;
+      if (!window.matchMedia("(min-width: 901px) and (min-height: 760px)").matches) return;
       if (event.ctrlKey) return;
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
@@ -90,8 +96,50 @@ export function TelegramAuthPage({
     };
   }, [navigatePanel]);
 
+  const handleStoryTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (!window.matchMedia("(any-pointer: coarse)").matches) return;
+    const touch = event.touches[0];
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const panel = target?.closest<HTMLElement>("[data-auth-panel]");
+    if (
+      !touch
+      || !panel
+      || target?.closest("a, button, input, textarea, select, summary, [contenteditable='true']")
+    ) {
+      touchGesture.current = null;
+      return;
+    }
+
+    touchGesture.current = {
+      panel,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startScrollTop: panel.scrollTop,
+    };
+  };
+
+  const handleStoryTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const gesture = touchGesture.current;
+    touchGesture.current = null;
+    const touch = event.changedTouches[0];
+    if (!gesture || !touch) return;
+
+    const deltaY = gesture.startY - touch.clientY;
+    const deltaX = gesture.startX - touch.clientX;
+    if (Math.abs(deltaY) < 48 || Math.abs(deltaY) < Math.abs(deltaX) * 1.15) return;
+
+    const maxScrollTop = Math.max(0, gesture.panel.scrollHeight - gesture.panel.clientHeight);
+    const startedAtVerticalEdge = deltaY > 0
+      ? gesture.startScrollTop >= maxScrollTop - 2
+      : gesture.startScrollTop <= 2;
+    const scrolledWithinPanel = Math.abs(gesture.panel.scrollTop - gesture.startScrollTop) > 8;
+    if (maxScrollTop > 32 && (!startedAtVerticalEdge || scrolledWithinPanel)) return;
+
+    navigatePanel(deltaY > 0 ? 1 : -1);
+  };
+
   const handleStoryKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!window.matchMedia("(min-width: 901px) and (min-height: 760px) and (pointer: fine)").matches) return;
+    if (!window.matchMedia("(min-width: 901px) and (min-height: 760px)").matches) return;
     if (event.target !== event.currentTarget) return;
     if (event.key === "ArrowDown" || event.key === "PageDown") {
       event.preventDefault();
@@ -162,9 +210,14 @@ export function TelegramAuthPage({
         className={styles.story}
         ref={storyRef}
         role="region"
-        aria-label="Welcome page sections. Scroll vertically on desktop to move between sections."
+        aria-label="Welcome page sections. Scroll vertically on desktop or swipe up and down on touch screens to move between sections."
         tabIndex={0}
         onKeyDown={handleStoryKeyDown}
+        onTouchStart={handleStoryTouchStart}
+        onTouchEnd={handleStoryTouchEnd}
+        onTouchCancel={() => {
+          touchGesture.current = null;
+        }}
       >
         <section className={`${styles.hero} ${styles.panel}`} data-auth-panel aria-labelledby="welcome-title">
           <div className={styles.heroCopy}>

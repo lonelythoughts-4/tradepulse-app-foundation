@@ -28,7 +28,7 @@ test("the welcome page omits the repeated pulse mark and security shield", async
   assert.match(source, /TradePulse will never ask for your password/);
 });
 
-test("the desktop welcome sections advance horizontally from vertical scrolling", async () => {
+test("the welcome sections advance horizontally from desktop scrolling and touch swipes", async () => {
   const [source, styles] = await Promise.all([
     readFile(new URL("../components/auth-entry.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/auth-entry.module.css", import.meta.url), "utf8"),
@@ -40,7 +40,13 @@ test("the desktop welcome sections advance horizontally from vertical scrolling"
   assert.match(source, /onKeyDown=\{handleStoryKeyDown\}/);
   assert.equal((source.match(/data-auth-panel(?:\s|>)/g) ?? []).length, 4);
   assert.match(styles, /\.story\s*\{\s*display: block;/s);
-  assert.match(styles, /min-width: 901px\) and \(min-height: 760px\) and \(pointer: fine/);
+  assert.match(source, /onTouchStart=\{handleStoryTouchStart\}/);
+  assert.match(source, /onTouchEnd=\{handleStoryTouchEnd\}/);
+  assert.match(source, /startedAtVerticalEdge/);
+  assert.match(styles, /min-width: 901px\) and \(min-height: 760px\)/);
+  assert.match(styles, /max-width: 900px\) and \(any-pointer: coarse\)/);
+  assert.match(styles, /overflow-y: auto;\s+overscroll-behavior-y: contain;\s+scroll-snap-align: start/s);
+  assert.match(styles, /flex: 0 0 100%/);
   assert.match(styles, /scroll-snap-type: x mandatory/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
