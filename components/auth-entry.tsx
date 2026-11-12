@@ -61,7 +61,7 @@ export function TelegramAuthPage({
       const target = event.target instanceof HTMLElement ? event.target : null;
       const panel = target?.closest<HTMLElement>("[data-auth-panel]");
       const canScrollPanel = panel
-        && panel.scrollHeight > panel.clientHeight + 1
+        && panel.scrollHeight > panel.clientHeight + 32
         && (event.deltaY > 0
           ? panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1
           : panel.scrollTop > 0);
