@@ -10,14 +10,6 @@ const navigation = [
   ["Sign-in help", "#sign-in-help"],
 ] as const;
 
-function PulseGlyph({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 36 24" fill="none" aria-hidden="true">
-      <path d="M1 12h8l4-9 6 18 5-13 3 4h8" />
-    </svg>
-  );
-}
-
 function PulseDivider() {
   return (
     <div className={styles.divider} aria-hidden="true">
@@ -45,7 +37,6 @@ export function TelegramAuthPage({
     <main className={styles.page} data-theme={theme} id="top">
       <header className={styles.header}>
         <a className={styles.wordmark} href="#top" aria-label="TradePulse home">
-          <PulseGlyph className={styles.logo} />
           <span>TradePulse</span>
         </a>
         <nav className={styles.navigation} aria-label="Page">
@@ -114,7 +105,6 @@ export function TelegramAuthPage({
             Memecoin markets, and Synthetic desk.
           </p>
           <div className={styles.pulseMark} aria-hidden="true">
-            <PulseGlyph />
             <span>TRADEPULSE DESK</span>
           </div>
         </div>
@@ -126,10 +116,6 @@ export function TelegramAuthPage({
           </p>
           {children}
           <p className={styles.security}>
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 3 19 6v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
             TradePulse will never ask for your password, recovery phrase, or one-time code.
           </p>
         </section>
@@ -210,7 +196,6 @@ export function TelegramAuthPage({
 
       <footer className={styles.footer}>
         <a className={styles.wordmark} href="#top" aria-label="TradePulse home">
-          <PulseGlyph className={styles.logo} />
           <span>TradePulse</span>
         </a>
         <span>Trading involves risk. Confirm sign-in requests only in Telegram.</span>

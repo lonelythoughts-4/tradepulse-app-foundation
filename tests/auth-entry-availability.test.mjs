@@ -16,3 +16,14 @@ test("the welcome page explains the live sign-in method and unavailable email fl
   assert.doesNotMatch(source, /type="email"/);
   assert.doesNotMatch(source, /Create Account|Sign up with Google/);
 });
+
+test("the welcome page omits the repeated pulse mark and security shield", async () => {
+  const source = await readFile(
+    new URL("../components/auth-entry.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(source, /PulseGlyph/);
+  assert.doesNotMatch(source, /M12 3 19 6v5c0 4\.5/);
+  assert.match(source, /TradePulse will never ask for your password/);
+});
