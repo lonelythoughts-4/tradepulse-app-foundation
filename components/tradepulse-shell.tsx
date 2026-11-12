@@ -25,7 +25,11 @@ import {
   shouldClearEnvironmentProjection,
   shouldResetEnvironmentForAccess,
 } from "../lib/environment-switch.js";
-import { handoffRefreshDelayMs, telegramAppLaunchUrl } from "../lib/browser-handoff.js";
+import {
+  handoffRefreshDelayMs,
+  telegramAppLaunchUrl,
+  telegramInstallUrl,
+} from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import {
   DESK_THEME_STORAGE_KEY,
@@ -4986,12 +4990,12 @@ function BrowserBotHandoff() {
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
   const refreshTimer = useRef<number | null>(null);
-  const mobileFallbackTimer = useRef<number | null>(null);
+  const launchFallbackTimer = useRef<number | null>(null);
   useEffect(
     () => () => {
       if (timer.current) window.clearTimeout(timer.current);
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-      if (mobileFallbackTimer.current) window.clearTimeout(mobileFallbackTimer.current);
+      if (launchFallbackTimer.current) window.clearTimeout(launchFallbackTimer.current);
     },
     [],
   );
@@ -5089,6 +5093,8 @@ function BrowserBotHandoff() {
         }
         timer.current = null;
         terminal = true;
+        if (launchFallbackTimer.current) window.clearTimeout(launchFallbackTimer.current);
+        launchFallbackTimer.current = null;
         window.location.replace("/");
       } catch (error) {
         terminal = true;
@@ -5125,10 +5131,10 @@ function BrowserBotHandoff() {
   const retry = () => {
     if (timer.current) window.clearTimeout(timer.current);
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-    if (mobileFallbackTimer.current) window.clearTimeout(mobileFallbackTimer.current);
+    if (launchFallbackTimer.current) window.clearTimeout(launchFallbackTimer.current);
     timer.current = null;
     refreshTimer.current = null;
-    mobileFallbackTimer.current = null;
+    launchFallbackTimer.current = null;
     setToken("");
     setBotUrl("");
     setQrSvg("");
@@ -5144,10 +5150,29 @@ function BrowserBotHandoff() {
     const appUrl = telegramAppLaunchUrl(botUrl);
     if (appUrl === botUrl) return;
     event.preventDefault();
-    window.location.assign(appUrl);
-    mobileFallbackTimer.current = window.setTimeout(() => {
+    const installUrl = telegramInstallUrl(
+      navigator.userAgent,
+      /Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1,
+    );
+    const appTab = window.open("about:blank", "_blank");
+    if (!appTab) {
+      setMessage("Your browser blocked the Telegram launch. Allow pop-ups, or scan the QR code instead.");
+      return;
+    }
+    try {
+      appTab.opener = null;
+      appTab.location.replace(appUrl);
+    } catch {
+      appTab.location.replace(installUrl);
+      return;
+    }
+    launchFallbackTimer.current = window.setTimeout(() => {
       if (document.visibilityState === "visible" && document.hasFocus()) {
-        window.location.assign(botUrl);
+        try {
+          appTab.location.replace(installUrl);
+        } catch {
+          window.open(installUrl, "_blank", "noopener,noreferrer");
+        }
       }
     }, 1_200);
   };
@@ -5168,7 +5193,7 @@ function BrowserBotHandoff() {
       {state === "ready" && botUrl ? (
         <a
           className="primary-action"
-          href={botUrl}
+          href={telegramAppLaunchUrl(botUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={openTelegram}
