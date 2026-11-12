@@ -36,7 +36,7 @@ test("the desktop welcome sections advance horizontally from vertical scrolling"
 
   assert.match(source, /onWheel=\{handleWheel\}/);
   assert.match(source, /onKeyDown=\{handleStoryKeyDown\}/);
-  assert.equal((source.match(/data-auth-panel/g) ?? []).length, 4);
+  assert.equal((source.match(/data-auth-panel(?:\s|>)/g) ?? []).length, 4);
   assert.match(styles, /\.story\s*\{\s*display: block;/s);
   assert.match(styles, /min-width: 901px\) and \(min-height: 760px\) and \(pointer: fine/);
   assert.match(styles, /scroll-snap-type: x mandatory/);
