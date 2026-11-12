@@ -60,7 +60,7 @@ export function TelegramAuthPage({
     if (!story) return;
 
     const handleWheel = (event: WheelEvent) => {
-      if (!window.matchMedia("(min-width: 901px) and (min-height: 760px)").matches) return;
+      if (!window.matchMedia("(any-pointer: fine)").matches) return;
       if (event.ctrlKey) return;
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
@@ -139,7 +139,7 @@ export function TelegramAuthPage({
   };
 
   const handleStoryKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!window.matchMedia("(min-width: 901px) and (min-height: 760px)").matches) return;
+    if (!window.matchMedia("(any-pointer: fine)").matches) return;
     if (event.target !== event.currentTarget) return;
     if (event.key === "ArrowDown" || event.key === "PageDown") {
       event.preventDefault();
@@ -234,9 +234,6 @@ export function TelegramAuthPage({
               One secure entrance to your TradePulse account, wallet, bots,
               Memecoin markets, and Synthetic desk.
             </p>
-            <div className={styles.pulseMark} aria-hidden="true">
-              <span>TRADEPULSE DESK</span>
-            </div>
           </div>
 
           <section className={styles.signIn} id="sign-in" aria-labelledby="sign-in-title">

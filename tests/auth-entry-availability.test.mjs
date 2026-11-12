@@ -22,10 +22,17 @@ test("the welcome page omits the repeated pulse mark and security shield", async
     new URL("../components/auth-entry.tsx", import.meta.url),
     "utf8",
   );
+  const styles = await readFile(
+    new URL("../components/auth-entry.module.css", import.meta.url),
+    "utf8",
+  );
 
+  assert.doesNotMatch(source, /TRADEPULSE DESK|pulseMark/);
   assert.doesNotMatch(source, /PulseGlyph/);
   assert.doesNotMatch(source, /M12 3 19 6v5c0 4\.5/);
   assert.match(source, /TradePulse will never ask for your password/);
+  assert.match(styles, /\.page\s*\{[^}]*overflow-x: clip;/s);
+  assert.equal((styles.match(/justify-content: safe center;/g) ?? []).length, 2);
 });
 
 test("the welcome sections advance horizontally from desktop scrolling and touch swipes", async () => {
@@ -43,7 +50,8 @@ test("the welcome sections advance horizontally from desktop scrolling and touch
   assert.match(source, /onTouchStart=\{handleStoryTouchStart\}/);
   assert.match(source, /onTouchEnd=\{handleStoryTouchEnd\}/);
   assert.match(source, /startedAtVerticalEdge/);
-  assert.match(styles, /min-width: 901px\) and \(min-height: 760px\)/);
+  assert.match(styles, /@media \(any-pointer: fine\)/);
+  assert.match(source, /matchMedia\("\(any-pointer: fine\)"\)/);
   assert.match(styles, /max-width: 900px\) and \(any-pointer: coarse\)/);
   assert.match(styles, /overflow-y: auto;\s+overscroll-behavior-y: contain;\s+scroll-snap-align: start/s);
   assert.match(styles, /flex: 0 0 100%/);
