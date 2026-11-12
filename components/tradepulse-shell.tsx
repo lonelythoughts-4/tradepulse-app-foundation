@@ -5154,27 +5154,17 @@ function BrowserBotHandoff() {
       navigator.userAgent,
       /Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1,
     );
-    const appTab = window.open("about:blank", "_blank");
-    if (!appTab) {
-      setMessage("Your browser blocked the Telegram launch. Allow pop-ups, or scan the QR code instead.");
-      return;
-    }
-    try {
-      appTab.opener = null;
-      appTab.location.replace(appUrl);
-    } catch {
-      appTab.location.replace(installUrl);
-      return;
-    }
+    const appTab = window.open(appUrl, "_blank");
+    if (appTab) appTab.opener = null;
     launchFallbackTimer.current = window.setTimeout(() => {
       if (document.visibilityState === "visible" && document.hasFocus()) {
-        try {
+        if (appTab && !appTab.closed) {
           appTab.location.replace(installUrl);
-        } catch {
+        } else {
           window.open(installUrl, "_blank", "noopener,noreferrer");
         }
       }
-    }, 1_200);
+    }, 1_800);
   };
   return (
     <div className="browser-handoff" data-state={state}>

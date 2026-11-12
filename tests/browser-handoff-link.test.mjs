@@ -37,15 +37,15 @@ test("Telegram install fallbacks match Android, Apple and desktop devices", () =
   );
 });
 
-test("the browser handoff opens Telegram separately and keeps the auth tab", async () => {
+test("the browser handoff launches Telegram directly in a separate tab", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
   );
 
   assert.match(shell, /const appUrl = telegramAppLaunchUrl\(botUrl\)/);
-  assert.match(shell, /window\.open\("about:blank", "_blank"\)/);
-  assert.match(shell, /appTab\.location\.replace\(appUrl\)/);
+  assert.match(shell, /window\.open\(appUrl, "_blank"\)/);
+  assert.match(shell, /if \(appTab\) appTab\.opener = null/);
   assert.match(shell, /href=\{telegramAppLaunchUrl\(botUrl\)\}/);
   assert.match(shell, /document\.visibilityState === "visible" && document\.hasFocus\(\)/);
   assert.match(shell, /setTimeout\(\(\) => \{\s*if \(document\.visibilityState === "visible" && document\.hasFocus\(\)\)/);
