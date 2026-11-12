@@ -30,9 +30,22 @@
   box-sizing: border-box;
 }
 
+.story:focus-visible,
 .page :is(a, button, summary):focus-visible {
   outline: 2px solid var(--pulse);
   outline-offset: 4px;
+}
+
+.story:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.story {
+  display: block;
+}
+
+.helpPage {
+  display: block;
 }
 
 .header {
@@ -762,7 +775,98 @@
   }
 }
 
+@media (min-width: 901px) and (min-height: 760px) and (pointer: fine) {
+  .page {
+    display: flex;
+    height: 100svh;
+    min-height: 760px;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .story {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .story::-webkit-scrollbar {
+    display: none;
+  }
+
+  .story:focus-visible {
+    outline-offset: -4px;
+  }
+
+  .panel {
+    display: flex;
+    width: 100%;
+    min-width: 100%;
+    height: 100%;
+    min-height: 100%;
+    flex: 0 0 100%;
+    flex-direction: column;
+    justify-content: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .story > .divider {
+    display: none;
+  }
+
+  .hero {
+    width: 100%;
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    padding: 48px clamp(36px, 7vw, 100px);
+  }
+
+  .steps,
+  .capabilities {
+    width: 100%;
+    margin: 0;
+    padding: 48px clamp(36px, 7vw, 100px);
+  }
+
+  .steps ol {
+    gap: clamp(24px, 4vw, 56px);
+  }
+
+  .helpPage {
+    align-items: stretch;
+    padding-top: 24px;
+  }
+
+  .helpPage .help {
+    width: min(840px, calc(100% - clamp(72px, 12vw, 160px)));
+    max-width: none;
+    margin: auto;
+    padding: 24px 0;
+  }
+
+  .helpPage .footer {
+    width: 100%;
+    flex: 0 0 auto;
+    margin-top: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .story {
+    scroll-behavior: auto;
+  }
+
   .titleAccent path {
     animation: none;
     stroke-dashoffset: 0;
