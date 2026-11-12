@@ -4998,6 +4998,7 @@ function BrowserBotHandoff() {
   useEffect(() => {
     let cancelled = false;
     const prepare = async () => {
+      let requestId = "";
       try {
         const response = await fetch("/api/v1/auth/handoff/start", {
           method: "POST",
@@ -5006,6 +5007,7 @@ function BrowserBotHandoff() {
         const handoff = contentType.includes("application/json")
           ? await response.json()
           : { error: (await response.text()).slice(0, 240) };
+        requestId = typeof handoff.request_id === "string" ? handoff.request_id : "";
         if (!response.ok || !handoff.token || !handoff.bot_url || !handoff.qr_svg) {
           throw new Error(
             handoff.error || "Could not prepare a secure Telegram connection.",
@@ -5029,16 +5031,19 @@ function BrowserBotHandoff() {
         }, handoffRefreshDelayMs(validExpiry));
       } catch (error) {
         if (cancelled) return;
-        if (attempt < 3) {
+        if (attempt < 1) {
           setState("preparing");
-          setMessage("Creating a secure Telegram link…");
+          setMessage("The sign-in service did not respond. Retrying once…");
           timer.current = window.setTimeout(() => {
             if (!cancelled) setAttempt((current) => current + 1);
-          }, 2_500);
+          }, 1_000);
           return;
         }
         setState("error");
-        setMessage("We could not refresh the secure Telegram link yet.");
+        const reason = error instanceof Error
+          ? error.message
+          : "Could not prepare a secure Telegram connection.";
+        setMessage(requestId ? `${reason} Reference: ${requestId}` : reason);
       }
     };
     void prepare();
@@ -5170,17 +5175,16 @@ function BrowserBotHandoff() {
         >
           Continue with Telegram
         </a>
+      ) : state === "error" ? (
+        <button className="primary-action" type="button" onClick={retry}>
+          Try again
+        </button>
       ) : (
         <button className="primary-action" type="button" disabled aria-busy="true">
           {state === "waiting" ? "Waiting for Telegram…" : "Preparing secure link…"}
         </button>
       )}
       {message && <small role="status" aria-live="polite">{message}</small>}
-      {state === "error" && (
-        <button className="small-action" type="button" onClick={retry}>
-          Create a new secure link
-        </button>
-      )}
     </div>
   );
 }

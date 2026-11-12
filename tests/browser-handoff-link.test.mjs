@@ -23,4 +23,7 @@ test("the browser handoff tries Telegram's app before its web fallback", async (
   assert.match(shell, /const appUrl = telegramAppLaunchUrl\(botUrl\)/);
   assert.match(shell, /window\.location\.assign\(appUrl\)/);
   assert.match(shell, /document\.visibilityState === "visible" && document\.hasFocus\(\)/);
+  assert.match(shell, /state === "error" \? \(\s*<button className="primary-action" type="button" onClick=\{retry\}>/);
+  assert.match(shell, /The sign-in service did not respond\. Retrying once…/);
+  assert.match(shell, /Reference: \$\{requestId\}/);
 });
