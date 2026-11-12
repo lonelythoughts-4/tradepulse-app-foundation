@@ -34,7 +34,8 @@ test("the desktop welcome sections advance horizontally from vertical scrolling"
     readFile(new URL("../components/auth-entry.module.css", import.meta.url), "utf8"),
   ]);
 
-  assert.match(source, /onWheel=\{handleWheel\}/);
+  assert.match(source, /addEventListener\("wheel", handleWheel, \{ passive: false \}\)/);
+  assert.doesNotMatch(source, /onWheel=\{handleWheel\}/);
   assert.match(source, /onKeyDown=\{handleStoryKeyDown\}/);
   assert.equal((source.match(/data-auth-panel(?:\s|>)/g) ?? []).length, 4);
   assert.match(styles, /\.story\s*\{\s*display: block;/s);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent, type ReactNode, type WheelEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { DeskTheme } from "../lib/theme-preference";
 import styles from "./auth-entry.module.css";
 
@@ -35,7 +35,7 @@ export function TelegramAuthPage({
   const storyRef = useRef<HTMLDivElement>(null);
   const wheelGesture = useRef({ delta: 0, locked: false, resetTimer: 0 });
 
-  const navigatePanel = (direction: -1 | 1) => {
+  const navigatePanel = useCallback((direction: -1 | 1) => {
     const story = storyRef.current;
     if (!story) return;
     const panels = story.querySelectorAll<HTMLElement>("[data-auth-panel]");
@@ -47,37 +47,48 @@ export function TelegramAuthPage({
       left: nextIndex * story.clientWidth,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
-  };
+  }, []);
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (!window.matchMedia("(min-width: 901px) and (min-height: 760px) and (pointer: fine)").matches) return;
-    if (event.ctrlKey) return;
-    if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+  useEffect(() => {
+    const story = storyRef.current;
+    if (!story) return;
 
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const panel = target?.closest<HTMLElement>("[data-auth-panel]");
-    const canScrollPanel = panel
-      && panel.scrollHeight > panel.clientHeight + 1
-      && (event.deltaY > 0
-        ? panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1
-        : panel.scrollTop > 0);
-    if (canScrollPanel) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (!window.matchMedia("(min-width: 901px) and (min-height: 760px) and (pointer: fine)").matches) return;
+      if (event.ctrlKey) return;
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
 
-    event.preventDefault();
-    const gesture = wheelGesture.current;
-    gesture.delta += event.deltaY;
-    if (!gesture.locked && Math.abs(gesture.delta) >= 24) {
-      gesture.locked = true;
-      gesture.delta = 0;
-      navigatePanel(event.deltaY > 0 ? 1 : -1);
-    }
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const panel = target?.closest<HTMLElement>("[data-auth-panel]");
+      const canScrollPanel = panel
+        && panel.scrollHeight > panel.clientHeight + 1
+        && (event.deltaY > 0
+          ? panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1
+          : panel.scrollTop > 0);
+      if (canScrollPanel) return;
 
-    window.clearTimeout(gesture.resetTimer);
-    gesture.resetTimer = window.setTimeout(() => {
-      gesture.delta = 0;
-      gesture.locked = false;
-    }, 650);
-  };
+      event.preventDefault();
+      const gesture = wheelGesture.current;
+      gesture.delta += event.deltaY;
+      if (!gesture.locked && Math.abs(gesture.delta) >= 24) {
+        gesture.locked = true;
+        gesture.delta = 0;
+        navigatePanel(event.deltaY > 0 ? 1 : -1);
+      }
+
+      window.clearTimeout(gesture.resetTimer);
+      gesture.resetTimer = window.setTimeout(() => {
+        gesture.delta = 0;
+        gesture.locked = false;
+      }, 650);
+    };
+
+    story.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      story.removeEventListener("wheel", handleWheel);
+      window.clearTimeout(wheelGesture.current.resetTimer);
+    };
+  }, [navigatePanel]);
 
   const handleStoryKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!window.matchMedia("(min-width: 901px) and (min-height: 760px) and (pointer: fine)").matches) return;
@@ -153,7 +164,6 @@ export function TelegramAuthPage({
         role="region"
         aria-label="Welcome page sections. Scroll vertically on desktop to move between sections."
         tabIndex={0}
-        onWheel={handleWheel}
         onKeyDown={handleStoryKeyDown}
       >
         <section className={`${styles.hero} ${styles.panel}`} data-auth-panel aria-labelledby="welcome-title">
