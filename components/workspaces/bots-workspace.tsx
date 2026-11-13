@@ -3,6 +3,7 @@
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
+import { DeskLocalized } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
@@ -565,6 +566,7 @@ export function BotsWorkspace({
   };
   if (view === "flashback")
     return (
+      <DeskLocalized>
       <div className="bot-detail">
         <button className="back-action" onClick={() => { setFlashbackNewSession(false); setView("fleet"); }}>
           <StateIcon name="arrow-left" /> Fleet overview
@@ -714,9 +716,11 @@ ealed Return entry amount" /></div></label>
           <button className="ghost-action" disabled={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")} onClick={() => setFlashbackReview(false)}>Go back</button>
         </AccessibleDialog>}
       </div>
+      </DeskLocalized>
     );
   if (view === "create")
     return (
+      <DeskLocalized>
       <div className="bot-flow">
         <button
           className="back-action"
@@ -838,6 +842,7 @@ ealed Return entry amount" /></div></label>
           </AccessibleDialog>
         )}
       </div>
+      </DeskLocalized>
     );
     if (view === "detail" && selected) {
       const paused = selected.state === "paused";
@@ -866,6 +871,7 @@ ealed Return entry amount" /></div></label>
         return label.includes(basketQuery.trim().toLowerCase());
       });
     return (
+      <DeskLocalized>
       <div className="bot-detail">
         <button className="back-action" onClick={() => setView("fleet")}>
           <StateIcon name="arrow-left" /> Fleet overview
@@ -1193,10 +1199,12 @@ ealed Return entry amount" /></div></label>
             </AccessibleDialog>
           )}
         </div>
+        </DeskLocalized>
     );
   }
   const deployedCapital = displayBots.reduce((sum, bot) => sum + bot.capital_usd, 0);
   return (
+    <DeskLocalized>
     <div className="bots-screen">
       <div className="fleet-heading">
         <div>
@@ -1367,5 +1375,6 @@ ealed Return entry amount" /></div></label>
         </p>
       )}
     </div>
+    </DeskLocalized>
   );
 }

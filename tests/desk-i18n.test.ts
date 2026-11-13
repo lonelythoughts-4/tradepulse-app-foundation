@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { localizeApiError, translateDesk } from "../lib/desk-i18n.ts";
+import { localizeApiError, translateDesk, translateDeskPhrase } from "../lib/desk-i18n.ts";
 
 test("desk navigation and account language strings follow the saved locale", () => {
   assert.equal(translateDesk("es", "nav.wallet"), "Cartera");
@@ -19,4 +19,18 @@ test("API errors use the selected language and retain a support reference", () =
 
 test("English API errors retain server detail", () => {
   assert.equal(localizeApiError("en", "Balance too low", 400), "Balance too low");
+});
+
+test("workspace phrases and accessible labels use the selected language", () => {
+  assert.equal(translateDeskPhrase("es", "Help center"), "Centro de ayuda");
+  assert.equal(translateDeskPhrase("ja", "Your market context"), "市場の状況");
+  assert.equal(translateDeskPhrase("ru", "  Notifications  "), "  Уведомления  ");
+  assert.equal(translateDeskPhrase("it", "ALLOCATION"), "ALLOCAZIONE");
+});
+
+test("dynamic phrases are translated without changing their values", () => {
+  assert.equal(
+    translateDeskPhrase("es", "Loading testnet deposit assets…"),
+    "Cargando activos de depósito de testnet…",
+  );
 });

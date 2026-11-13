@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "./accessible-dialog";
+import { DeskLocalized } from "./desk-language";
 
 export type WebNotice = { id: string; title: string; body: string };
 
@@ -72,7 +73,7 @@ export function NoticeCenter({ center, onPreferences }: {
   center: ReturnType<typeof useNoticeCenter>; onPreferences: () => void;
 }) {
   if (!center.open) return null;
-  return <AccessibleDialog label="Notifications" onClose={() => center.setOpen(false)}>
+  return <DeskLocalized><AccessibleDialog label="Notifications" onClose={() => center.setOpen(false)}>
     <h2>Notifications</h2>
     {center.refreshError && <p role="status">Notifications could not be refreshed. Showing the latest saved notices and trying again automatically.</p>}
     {center.notices.length ? center.notices.map((item) => <div className="activity-row" key={item.id}>
@@ -80,5 +81,5 @@ export function NoticeCenter({ center, onPreferences }: {
     </div>) : <p>No current notices.</p>}
     <button type="button" className="ghost-action" onClick={onPreferences}>Telegram notification preferences</button>
     <button type="button" className="ghost-action" onClick={() => center.setOpen(false)}>Close</button>
-  </AccessibleDialog>;
+  </AccessibleDialog></DeskLocalized>;
 }

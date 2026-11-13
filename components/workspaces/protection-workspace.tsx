@@ -1,6 +1,7 @@
 "use client";
 
 import type { LiveDashboard } from "../tradepulse-shell";
+import { DeskLocalized } from "../desk-language";
 
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 
@@ -8,6 +9,7 @@ export function ProtectionWorkspace({ data }: { data: LiveDashboard }) {
   const protection = data.protection;
   const rows = protection?.settlements || [];
   return (
+    <DeskLocalized>
     <div className="workspace-stack protection-workspace">
       <section className="gradient-panel bot-card">
         <div>
@@ -40,5 +42,6 @@ export function ProtectionWorkspace({ data }: { data: LiveDashboard }) {
         <p><strong>Strategy Protection is a platform programme, not insurance.</strong> Trading remains risky, losses can still occur, and profits are never guaranteed.</p>
       </section>
     </div>
+    </DeskLocalized>
   );
 }

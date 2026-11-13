@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { DeskLocalized } from "../desk-language";
 import {
   ChevronRight,
   GradientPanel,
@@ -75,6 +76,7 @@ export function HelpWorkspace({
     };
   }, [activeTicket?.id, activeTicket?.status]);
   return (
+    <DeskLocalized>
     <div className="account-screen">
       <div className="screen-title">
         <div>
@@ -335,5 +337,6 @@ export function HelpWorkspace({
         </GradientPanel>
       )}
     </div>
+    </DeskLocalized>
   );
 }

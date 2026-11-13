@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
+import { DeskLocalized } from "../desk-language";
 import { Bell, GradientPanel, PulseMark, StateIcon, X } from "./shared-ui";
 
 export function DeskWorkspace({
@@ -154,6 +155,7 @@ export function DeskWorkspace({
     }
   };
   return (
+    <DeskLocalized>
     <div className="desk-screen">
       <div className="desk-identity">
         <div className="desk-brand-lockup">
@@ -331,5 +333,6 @@ export function DeskWorkspace({
         )}
       </GradientPanel>
     </div>
+    </DeskLocalized>
   );
 }

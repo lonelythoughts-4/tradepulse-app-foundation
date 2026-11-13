@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
+import { DeskLocalized } from "../desk-language";
 import { GradientPanel, Send, ShieldCheck, X } from "./shared-ui";
 import { fundingFeedback, type FundingOutcome } from "../../lib/admin-funding-feedback";
 
@@ -143,7 +144,7 @@ export function AdminWorkspace({
   const [signerStatus, setSignerStatus] = useState<
     "checking" | "locked" | "unlocked" | "unavailable"
   >("checking");
-  const [signerPassphrase, setSignerPassphrase] = useState("");
+  const [signerPin, setSignerPin] = useState("");
   const [signerPending, setSignerPending] = useState(false);
   const [signerError, setSignerError] = useState("");
   const signerSubmitting = useRef(false);
@@ -305,18 +306,18 @@ export function AdminWorkspace({
   }, [environment]);
   const unlockSigner = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (signerSubmitting.current || !signerPassphrase.trim()) return;
+    if (signerSubmitting.current || !signerPin.trim()) return;
     signerSubmitting.current = true;
     setSignerPending(true);
     setSignerError("");
-    const passphrase = signerPassphrase;
-    setSignerPassphrase("");
+    const pin = signerPin;
+    setSignerPin("");
     try {
       const response = await request(
         "/v1/admin/signer",
         {
           method: "POST",
-          body: JSON.stringify({ passphrase }),
+          body: JSON.stringify({ action: "unlock", pin }),
         },
         environment,
         20_000,
@@ -331,6 +332,36 @@ export function AdminWorkspace({
         error instanceof Error
           ? error.message
           : "Could not unlock the protected signer.",
+      );
+    } finally {
+      signerSubmitting.current = false;
+      setSignerPending(false);
+    }
+  };
+  const lockSigner = async () => {
+    if (signerSubmitting.current) return;
+    signerSubmitting.current = true;
+    setSignerPending(true);
+    setSignerError("");
+    setSignerPin("");
+    try {
+      const response = await request(
+        "/v1/admin/signer",
+        {
+          method: "POST",
+          body: JSON.stringify({ action: "lock" }),
+        },
+        environment,
+        20_000,
+      );
+      if (response.status !== "locked") {
+        throw new Error("The signer did not confirm that it was locked.");
+      }
+      setSignerStatus("locked");
+      onNotice("Protected signer locked.");
+    } catch (error) {
+      setSignerError(
+        error instanceof Error ? error.message : "Could not lock the protected signer.",
       );
     } finally {
       signerSubmitting.current = false;
@@ -575,6 +606,7 @@ export function AdminWorkspace({
     }
   };
   return (
+    <DeskLocalized>
     <div className="admin-screen">
       {adminHelpOpen && <AccessibleDialog label="Admin control room guide" onClose={() => setAdminHelpOpen(false)}>
         <h2>Control room guide</h2>
@@ -673,22 +705,23 @@ export function AdminWorkspace({
         {signerStatus === "locked" && (
           <form className="signer-control-form" onSubmit={(event) => void unlockSigner(event)}>
             <label className="amount-field">
-              Signer unlock passphrase
+              Signer unlock PIN
               <input
                 type="password"
-                name="signer-unlock-passphrase"
+                name="signer-unlock-pin"
+                inputMode="numeric"
                 autoComplete="off"
                 spellCheck={false}
                 maxLength={1024}
-                value={signerPassphrase}
-                onChange={(event) => setSignerPassphrase(event.target.value)}
+                value={signerPin}
+                onChange={(event) => setSignerPin(event.target.value)}
                 disabled={signerPending}
               />
             </label>
             <button
               className="primary-action"
               type="submit"
-              disabled={signerPending || !signerPassphrase.trim()}
+              disabled={signerPending || !signerPin.trim()}
               aria-busy={signerPending}
             >
               {signerPending ? "Unlocking signer…" : "Unlock signer"}
@@ -696,10 +729,20 @@ export function AdminWorkspace({
           </form>
         )}
         {signerStatus === "unlocked" && (
-          <p className="signer-control-note">
-            The signer is unlocked in memory. It returns to locked after its
-            service restarts.
-          </p>
+          <div className="signer-control-unavailable">
+            <p className="signer-control-note">
+              The signer is unlocked in memory. Lock it as soon as this task is complete.
+            </p>
+            <button
+              className="danger-action"
+              type="button"
+              disabled={signerPending}
+              aria-busy={signerPending}
+              onClick={() => void lockSigner()}
+            >
+              {signerPending ? "Locking signer…" : "Lock signer"}
+            </button>
+          </div>
         )}
         {signerStatus === "unavailable" && (
           <div className="signer-control-unavailable">
@@ -720,9 +763,6 @@ export function AdminWorkspace({
         {signerError && signerStatus !== "unavailable" && (
           <p className="signer-control-note" role="alert">{signerError}</p>
         )}
-        <p className="signer-control-command">
-          SSH fallback: <code>cd /home/deploy/tradepulse-signer &amp;&amp; python3 signerctl.py</code>
-        </p>
       </section>
       {withdrawalReview && (
         <AccessibleDialog label={withdrawalReview.action === "approve" ? "Review withdrawal approval" : "Review withdrawal rejection"}
@@ -1512,5 +1552,6 @@ export function AdminWorkspace({
         </GradientPanel>
       </div>
     </div>
+    </DeskLocalized>
   );
 }

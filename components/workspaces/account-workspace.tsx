@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { localizeApiError, translateDesk, type LanguageCode } from "../../lib/desk-i18n";
+import { DeskLocalized, useDeskLanguage } from "../desk-language";
 import {
   avatarOptions,
   ChevronRight,
@@ -70,7 +71,7 @@ export function AccountWorkspace({
   const [address, setAddress] = useState("");
   const [notificationState, setNotificationState] = useState(data.notifications);
   const [securityCodeSet, setSecurityCodeSet] = useState(Boolean(data.user.security_code_set));
-  const [language, setLanguage] = useState<LanguageCode>(data.user.language_code || "en");
+  const language = useDeskLanguage();
   const enabledNotificationCount = ["fills", "fees", "deposits", "hwm_breaks"].filter((key) => Boolean(notificationState[key])).length;
   const [notificationPending, setNotificationPending] = useState<Record<string, boolean>>({});
   const notificationRequestPending = useRef(new Set<string>());
@@ -92,9 +93,6 @@ export function AccountWorkspace({
   useEffect(() => {
     setSecurityCodeSet(Boolean(data.user.security_code_set));
   }, [data.user.security_code_set]);
-  useEffect(() => {
-    setLanguage(data.user.language_code || "en");
-  }, [data.user.language_code]);
   useEffect(() => {
     if (!openNotificationsRequest) return;
     setModal("notifications");
@@ -134,9 +132,8 @@ export function AccountWorkspace({
   };
   const chooseLanguage = (next: LanguageCode) => {
     if (next === language) return;
-    setLanguage(next);
-    void onLanguageChange(next).catch((error) => {
-      const message = error instanceof Error ? error.message : localizeApiError(next, "", 500);
+    void onLanguageChange(next).catch(() => {
+      const message = localizeApiError(language, "", 500);
       setModalFeedback({ message, error: true });
       onNotice(message);
     });
@@ -172,6 +169,7 @@ export function AccountWorkspace({
     }
   };
   return (
+    <DeskLocalized>
     <div className="account-screen">
       <div className="screen-title">
         <div>
@@ -564,5 +562,6 @@ export function AccountWorkspace({
         </AccessibleDialog>
       )}
     </div>
+    </DeskLocalized>
   );
 }

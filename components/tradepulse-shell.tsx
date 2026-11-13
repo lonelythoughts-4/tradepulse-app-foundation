@@ -32,6 +32,7 @@ import {
 } from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { localizeApiError, translateDesk, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
+import { DeskLanguageProvider, DeskLocalized } from "./desk-language";
 import {
   DESK_THEME_STORAGE_KEY,
   nextDeskTheme,
@@ -495,6 +496,7 @@ function AvatarPicker({
   pending?: boolean;
 }) {
   return (
+    <DeskLocalized>
     <AccessibleDialog
       label="Choose your TradePulse desk identity"
       onClose={onClose}
@@ -533,6 +535,7 @@ function AvatarPicker({
         </button>
       </div>
     </AccessibleDialog>
+    </DeskLocalized>
   );
 }
 
@@ -562,6 +565,7 @@ function Sidebar({
       .map((part) => part[0]?.toUpperCase())
       .join("") || "TP";
   return (
+    <DeskLocalized>
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`} aria-label="Workspace navigation">
       <button
         className="sidebar-collapse"
@@ -651,6 +655,7 @@ function Sidebar({
         </button>
       </div>
     </aside>
+    </DeskLocalized>
   );
 }
 const mobilePrimaryNavItems: { label: string; icon: NavIconName }[] = [
@@ -712,6 +717,7 @@ function BottomNav({
   );
   const secondaryActive = secondaryItems.some((item) => item.label === active);
   return (
+    <DeskLocalized>
     <nav
       className="bottom-nav"
       aria-label="Primary navigation"
@@ -771,6 +777,7 @@ function BottomNav({
         </div>
       )}
     </nav>
+    </DeskLocalized>
   );
 }
 
@@ -810,6 +817,7 @@ function Header({
       .join("") || "TP";
   const localizedTitle = localizedNavLabel(language, pageTitle);
   return (
+    <DeskLocalized>
     <header className="topbar">
       <div className="mobile-brand">
         <PulseMark size={27} />
@@ -868,6 +876,7 @@ function Header({
         </button>
       </div>
     </header>
+    </DeskLocalized>
   );
 }
 
@@ -968,6 +977,7 @@ function BalanceHero({ wallet }: { wallet?: VisualDeskModel["wallet"] }) {
   const change = wallet ? equity - wallet.hwm : 2836.12;
   const positive = change >= 0;
   return (
+    <DeskLocalized>
     <GradientPanel className="balance-hero reveal-card">
       <div className="panel-heading">
         <div>
@@ -1017,6 +1027,7 @@ function BalanceHero({ wallet }: { wallet?: VisualDeskModel["wallet"] }) {
         </svg>
       </div>
     </GradientPanel>
+    </DeskLocalized>
   );
 }
 
@@ -1101,6 +1112,7 @@ function BotCard({
   const factualTone = factual?.status === "running" || factual?.status === "demo active" ? "running" : "paused";
   const paused = factual ? factualTone === "paused" : bot.state === "paused";
   return (
+    <DeskLocalized>
     <GradientPanel
       className={`bot-card reveal-card ${onOpen ? "bot-card-openable" : ""}`}
       onClick={onOpen}
@@ -1151,6 +1163,7 @@ function BotCard({
         {bot.compound && <span className="compound-chip">{factual ? bot.compound : `COMPOUND ${bot.compound}`}</span>}
       </div>
     </GradientPanel>
+    </DeskLocalized>
   );
 }
 
@@ -1166,6 +1179,7 @@ function StatChips({
   const running = fleet.filter((bot) => bot.state === "running").length;
   const paused = fleet.filter((bot) => bot.state === "paused").length;
   return (
+    <DeskLocalized>
     <div className="stat-chips reveal-card">
       {[
         ["RUNNING BOTS", String(running).padStart(2, "0")],
@@ -1180,6 +1194,7 @@ function StatChips({
         </div>
       ))}
     </div>
+    </DeskLocalized>
   );
 }
 function Activity({
@@ -1225,6 +1240,7 @@ function Activity({
         { key: "deposit", title: "Deposit received", sub: "USDC · Wallet", amount: 1250, time: "1h", status: "complete" },
       ];
   return (
+    <DeskLocalized>
     <GradientPanel className="activity-card reveal-card">
       <div className="section-heading">
         <div>
@@ -1254,6 +1270,7 @@ function Activity({
       </div>
       {selectedEntry && <ActivityDetailDialog entry={selectedEntry} onClose={() => setSelectedEntry(null)} />}
     </GradientPanel>
+    </DeskLocalized>
   );
 }
 
@@ -1293,7 +1310,7 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
   const isFee = entry.kind === "performance_fee";
   const isNonFinancial = isNonFinancialActivity(entry.kind);
   const isFlashbackLock = isFlashbackEntryLock(entry.kind);
-  return <AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
+  return <DeskLocalized><AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
     <button className="modal-close" type="button" onClick={onClose} aria-label="Close activity details"><X size={16} /></button>
     <span className="eyebrow">ACTIVITY DETAILS</span>
     <h2>{activityLabel(entry.kind, entry.status, amount)}</h2>
@@ -1312,7 +1329,7 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
     </div>
     {!position && !isNonFinancial && <p>This settlement record does not include a market-level execution record.</p>}
     <button className="ghost-action" type="button" onClick={onClose}>Close</button>
-  </AccessibleDialog>;
+  </AccessibleDialog></DeskLocalized>;
 }
 function DemoBanner({
   demo,
@@ -1341,6 +1358,7 @@ function DemoBanner({
   if (!demo || (!active && demo.state !== "issued" && tradingCredit <= 0)) return null;
   if (demo.state === "issued" && hasFundedDesk) return null;
   return (
+    <DeskLocalized>
     <GradientPanel className="demo-banner reveal-card">
       <div>
         <span className="eyebrow">
@@ -1379,10 +1397,12 @@ function DemoBanner({
         </button>
       )}
     </GradientPanel>
+    </DeskLocalized>
   );
 }
 function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
   return (
+    <DeskLocalized>
     <GradientPanel className="empty-bots">
       <img
         src="/illustrations/empty-bots.png"
@@ -1397,6 +1417,7 @@ function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
         Launch your first bot <ChevronRight size={14} />
       </button>
     </GradientPanel>
+    </DeskLocalized>
   );
 }
 
@@ -2842,6 +2863,7 @@ export function Dashboard({
   onOpenBot?: (bot: Bot) => void;
 }) {
   return (
+    <DeskLocalized>
     <div className="dashboard-grid">
       <BalanceHero wallet={model?.wallet} />
       <StatChips fleet={bots} tier={model?.tier} alerts={model?.alerts} />
@@ -2880,6 +2902,7 @@ export function Dashboard({
         ACCOUNT SNAPSHOT · LIVE DATA
       </div>
     </div>
+    </DeskLocalized>
   );
 }
 
@@ -4693,17 +4716,20 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
   const pages = activationStories[language];
   const chooseLanguage = (next: LanguageCode) => {
     if (next === language) return;
+    const previousLanguage = language;
     setLanguage(next);
     setLanguageError("");
-    void onLanguageChange(next).catch((error) => {
-      setLanguageError(error instanceof Error ? error.message : localizeApiError(next, "", 500));
-      onNotice(error instanceof Error ? error.message : localizeApiError(next, "", 500));
+    void onLanguageChange(next).catch(() => {
+      setLanguage(previousLanguage);
+      const message = localizeApiError(previousLanguage, "", 500);
+      setLanguageError(message);
+      onNotice(message);
     });
   };
   const advance = async (next: number) => { setStep(next); try { await request("/v1/onboarding/step", { method: "POST", body: JSON.stringify({ step: Math.min(next, 4) }) }); } catch (error) { onNotice(error instanceof Error ? error.message : translateDesk(language, "error.request")); } };
   if (step < 4) {
     const page = pages[step];
-    return <main className="activation-shell"><section className="activation-stage" aria-labelledby="activation-title"><p className="activation-progress">{activationProgress[language](step + 1)}</p><h1 id="activation-title">{page[0]}</h1><p>{page[1]}</p><fieldset className="activation-languages" aria-label={activationCopy[language].language}><legend>{activationCopy[language].language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} onClick={() => chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{languageError && <p role="alert">{languageError}</p>}<div className="activation-actions"><button className="primary-action" onClick={() => advance(step + 1)}>{translateDesk(language, "activation.continue")}</button>{step > 0 && <button className="text-action" onClick={() => setStep(step - 1)}>{translateDesk(language, "activation.back")}</button>}</div></section></main>;
+    return <DeskLocalized><main className="activation-shell"><section className="activation-stage" aria-labelledby="activation-title"><p className="activation-progress">{activationProgress[language](step + 1)}</p><h1 id="activation-title">{page[0]}</h1><p>{page[1]}</p><fieldset className="activation-languages" aria-label={activationCopy[language].language}><legend>{activationCopy[language].language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} onClick={() => chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{languageError && <p role="alert">{languageError}</p>}<div className="activation-actions"><button className="primary-action" onClick={() => advance(step + 1)}>{translateDesk(language, "activation.continue")}</button>{step > 0 && <button className="text-action" onClick={() => setStep(step - 1)}>{translateDesk(language, "activation.back")}</button>}</div></section></main></DeskLocalized>;
   }
   const gateReady = Boolean(channel?.enabled && channel.configured);
   const copy = activationCopy[language];
@@ -4720,7 +4746,7 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
     } finally { setAccepting(false); }
   };
   const verified = Boolean(channel?.verified || state === "verified");
-  return <main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><p className="activation-progress">{activationProgress[language](5)}</p><h1 id="activation-title">{copy.title}</h1><p>{copy.intro}{gateReady ? ` ${translateDesk(language, "activation.channelIntro")}` : ""}</p><fieldset className="activation-languages" aria-label={copy.language}><legend>{copy.language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} onClick={() => chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{languageError && <p role="alert">{languageError}</p>}{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">{translateDesk(language, "activation.join")}</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? translateDesk(language, "activation.checking") : translateDesk(language, "activation.recheck")}</button>{state === "not_joined" || state === "restricted" ? <small>{translateDesk(language, "activation.membershipPending")}</small> : null}{state === "unavailable" ? <small>{translateDesk(language, "activation.membershipUnavailable")}</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>{copy.terms}</strong><br />{copy.body}</p><button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>{accepting ? copy.opening : copy.accept}</button></div>}</section></main>;
+  return <DeskLocalized><main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><p className="activation-progress">{activationProgress[language](5)}</p><h1 id="activation-title">{copy.title}</h1><p>{copy.intro}{gateReady ? ` ${translateDesk(language, "activation.channelIntro")}` : ""}</p><fieldset className="activation-languages" aria-label={copy.language}><legend>{copy.language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} onClick={() => chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{languageError && <p role="alert">{languageError}</p>}{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">{translateDesk(language, "activation.join")}</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? translateDesk(language, "activation.checking") : translateDesk(language, "activation.recheck")}</button>{state === "not_joined" || state === "restricted" ? <small>{translateDesk(language, "activation.membershipPending")}</small> : null}{state === "unavailable" ? <small>{translateDesk(language, "activation.membershipUnavailable")}</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>{copy.terms}</strong><br />{copy.body}</p><button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>{accepting ? copy.opening : copy.accept}</button></div>}</section></main></DeskLocalized>;
 }
 
 export type LiveDashboard = {
@@ -5578,6 +5604,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
     }
   };
   return (
+    <DeskLocalized>
     <div className="account-screen">
       <div className="screen-title">
         <div>
@@ -5660,6 +5687,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
         ))}
       </GradientPanel>
     </div>
+    </DeskLocalized>
   );
 }
 
@@ -6557,6 +6585,7 @@ function LiveTradePulse() {
   const reduceMotion = useReducedMotion();
   const [deskTheme, setDeskTheme] = useState<DeskTheme>("light");
   const [deskThemeReady, setDeskThemeReady] = useState(false);
+  const [uiLanguage, setUiLanguage] = useState<LanguageCode>("en");
   const deskStoreRef = useRef<DeskStore | null>(null);
   if (!deskStoreRef.current) {
     deskStoreRef.current = createDeskStore({ resources: { dashboard: null, synthetic: null } });
@@ -6597,8 +6626,8 @@ function LiveTradePulse() {
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    document.documentElement.lang = data?.user.language_code || "en";
-  }, [data?.user.language_code]);
+    document.documentElement.lang = uiLanguage;
+  }, [uiLanguage]);
   useEffect(() => {
     let storedTheme: string | null = null;
     try {
@@ -6879,6 +6908,8 @@ function LiveTradePulse() {
       } else {
         next.user.language_code = languageRef.current;
       }
+      next.user.language_code = languageRef.current;
+      setUiLanguage(languageRef.current);
       authenticatedUserRef.current = next.user.id;
       updateDashboard(next);
       const resolvedEnvironment = next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet";
@@ -7221,6 +7252,8 @@ function LiveTradePulse() {
     if (next === languageRef.current) return Promise.resolve();
     const revision = ++languageRevisionRef.current;
     languageRef.current = next;
+    setUiLanguage(next);
+    document.documentElement.lang = next;
     updateDashboard((current) => current
       ? { ...current, user: { ...current.user, language_code: next } }
       : current);
@@ -7236,17 +7269,21 @@ function LiveTradePulse() {
     }, (error) => {
       if (languageRevisionRef.current !== revision) return;
       languageRef.current = persistedLanguageRef.current;
+      setUiLanguage(persistedLanguageRef.current);
+      document.documentElement.lang = persistedLanguageRef.current;
       updateDashboard((current) => current
         ? { ...current, user: { ...current.user, language_code: persistedLanguageRef.current } }
         : current);
-      setNotice(error instanceof Error
-        ? error.message
-        : localizeApiError(persistedLanguageRef.current, "", 500));
+      setNotice(localizeApiError(persistedLanguageRef.current, "", 500));
       throw error;
     });
   };
   if (!data.user.onboarding_complete)
-    return <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} onLanguageChange={changeLanguage} />;
+    return (
+      <DeskLanguageProvider language={uiLanguage}>
+        <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} onLanguageChange={changeLanguage} />
+      </DeskLanguageProvider>
+    );
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
@@ -7387,11 +7424,13 @@ function LiveTradePulse() {
   };
   const workspacePresence = getWorkspacePresencePlan(Boolean(reduceMotion));
   return (
+    <DeskLanguageProvider language={uiLanguage}>
+    <DeskLocalized>
     <div className="app-shell">
       <Sidebar
         active={chromeActive}
         setActive={selectChromeTab}
-        language={data.user.language_code || "en"}
+        language={uiLanguage}
         profileName={profileName}
         profileTier={data.user.tier || "TradePulse account"}
         isAdmin={data.user.is_admin}
@@ -7410,7 +7449,7 @@ function LiveTradePulse() {
           onAvatarClick={() => setAvatarPickerOpen(true)}
           theme={deskTheme}
           onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
-          language={data.user.language_code || "en"}
+          language={uiLanguage}
         />
         <NoticeCenter center={noticeCenter} onPreferences={() => {
           noticeCenter.setOpen(false);
@@ -7702,9 +7741,11 @@ function LiveTradePulse() {
         active={chromeActive}
         setActive={selectChromeTab}
         isAdmin={data.user.is_admin}
-        language={data.user.language_code || "en"}
+        language={uiLanguage}
       />
     </div>
+    </DeskLocalized>
+    </DeskLanguageProvider>
   );
 }
 

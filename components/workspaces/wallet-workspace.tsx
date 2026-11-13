@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { DeskState } from "../../lib/desk-types";
+import { translateDeskPhrase } from "../../lib/desk-i18n";
+import { useDeskLanguage } from "../desk-language";
 import { useResourcePoller } from "./use-resource-poller";
 import {
   activityAmountDisplay,
@@ -34,6 +36,26 @@ type DepositRouteOption = {
   network: string;
   confirmations: number;
   available: boolean;
+};
+
+const depositStatusLabel = (
+  t: (phrase: string) => string,
+  status: string,
+) => {
+  const labels: Record<string, string> = {
+    watching: "Monitoring",
+    pending: "Pending",
+    confirming: "Confirming",
+    pending_dust: "Below minimum",
+    confirmed_pending_sweep: "Confirmed · pending sweep",
+    sweeping: "Sweeping",
+    sweep_confirming: "Confirming sweep",
+    credited_and_closed: "Credited",
+    failed: "Failed",
+    expired: "Expired",
+  };
+  const normalized = status.toLowerCase();
+  return t(labels[normalized] || normalized.replaceAll("_", " "));
 };
 
 const depositAssetNames: Record<string, string> = {
@@ -124,6 +146,12 @@ function WalletWorkspaceBody({
   onNotice: (message: string) => void;
   initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
 }) {
+  const language = useDeskLanguage();
+  const t = useCallback(
+    (phrase: string, replacements?: Record<string, string | number>) =>
+      translateDeskPhrase(language, phrase, replacements),
+    [language],
+  );
   const [view, setView] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
@@ -240,18 +268,18 @@ function WalletWorkspaceBody({
             typeof route.available !== "boolean",
         )
       ) {
-        throw new Error(`Deposit network options did not match ${environment}. Try again.`);
+        throw new Error(t("Deposit network options did not match {environment}. Try again.", { environment }));
       }
       setDepositRoutes(result.routes);
     } catch (error) {
       setDepositRoutes([]);
       setDepositRoutesError(
-        error instanceof Error ? error.message : "Deposit network options could not be loaded. Try again.",
+        error instanceof Error ? error.message : t("Deposit network options could not be loaded. Try again."),
       );
     } finally {
       setDepositRoutesLoading(false);
     }
-  }, [environment, request]);
+  }, [environment, request, t]);
   useEffect(() => {
     if (view !== "deposit") return;
     setAsset("");
@@ -271,10 +299,13 @@ function WalletWorkspaceBody({
     ...listedDepositAssets.filter((item) => !preferredDepositAssets.includes(item)),
   ];
   const depositNetworks = depositRoutes.filter((route) => route.asset === asset);
-  const depositNetworkName = (network: string) =>
-    depositRoutes.find((route) => route.chain === network)?.network ||
-    depositNetworkNames[network] ||
-    network;
+  const depositNetworkName = (network: string) => {
+    const name =
+      depositRoutes.find((route) => route.chain === network)?.network ||
+      depositNetworkNames[network] ||
+      network;
+    return t(name);
+  };
   const showOverview = () => {
     setView("overview");
     setStep(0);
@@ -304,8 +335,8 @@ function WalletWorkspaceBody({
     if (!selectedRoute?.available) {
       onNotice(
         selectedRoute
-          ? `${selectedRoute.network} is under maintenance. Choose another network or retry the options later.`
-          : `That ${environment} deposit route is no longer available. Reload the network options and choose another route.`,
+          ? t("{network} is under maintenance. Choose another network or retry the options later.", { network: selectedRoute.network })
+          : t("That {environment} deposit route is no longer available. Reload the network options and choose another route.", { environment }),
       );
       await loadDepositRoutes();
       setStep(1);
@@ -324,13 +355,13 @@ function WalletWorkspaceBody({
       setIntent(result.intent);
       setStep(2);
       onNotice(
-        "Deposit address created. Send only the selected asset on the selected network.",
+        t("Deposit address created. Send only the selected asset on the selected network."),
       );
     } catch (error) {
       onNotice(
         error instanceof Error
           ? error.message
-          : "A deposit address could not be created. Choose another network or try again.",
+          : t("A deposit address could not be created. Choose another network or try again."),
       );
     } finally {
       setDepositPending(false);
@@ -366,7 +397,9 @@ function WalletWorkspaceBody({
         },
       });
       onNotice(
-        `Withdrawal ${String(result.withdrawal_id || "request").slice(0, 8)} is queued for review.`,
+        t("Withdrawal {id} is queued for review.", {
+          id: String(result.withdrawal_id || "request").slice(0, 8),
+        }),
       );
       setSubmittedWithdrawal({
         asset: withdrawAsset,
@@ -378,7 +411,7 @@ function WalletWorkspaceBody({
       setWithdrawCode("");
       setReviewWithdrawal(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "The withdrawal request could not be created. Check the details and try again.";
+      const message = error instanceof Error ? error.message : t("The withdrawal request could not be created. Check the details and try again.");
       setWithdrawalError(message);
       onNotice(message);
     } finally {
@@ -389,38 +422,38 @@ function WalletWorkspaceBody({
     return (
       <div className="wallet-flow">
         <button className="back-action" onClick={showOverview}>
-          <StateIcon name="arrow-left" /> Wallet overview
+          <StateIcon name="arrow-left" /> {t("Wallet overview")}
         </button>
         <StepRail current={step} />
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">DEPOSIT / ONE-TIME ADDRESS</span>
+              <span className="eyebrow">{t("DEPOSIT / ONE-TIME ADDRESS")}</span>
               <h2>
                 {step === 0
-                  ? "Choose an asset"
+                  ? t("Choose an asset")
                   : step === 1
-                    ? "Choose a network"
-                    : `Send ${asset} to TradePulse`}
+                    ? t("Choose a network")
+                    : t("Send {asset} to TradePulse", { asset })}
               </h2>
             </div>
             <span className="secure-chip">
-              <StateIcon name="lock" /> PROTECTED
+              <StateIcon name="lock" /> {t("PROTECTED")}
             </span>
           </div>
           {step === 0 && (
             <div className="choice-grid">
-              {depositRoutesLoading && <p role="status">Loading {environment} deposit assets…</p>}
+              {depositRoutesLoading && <p role="status">{t("Loading {environment} deposit assets…", { environment })}</p>}
               {depositRoutesError && (
                 <div role="alert">
                   <p>{depositRoutesError}</p>
                   <button type="button" className="small-action" onClick={() => void loadDepositRoutes()}>
-                    Retry network options
+                    {t("Retry network options")}
                   </button>
                 </div>
               )}
               {!depositRoutesLoading && !depositRoutesError && depositAssets.length === 0 && (
-                <p role="status">No deposit routes are currently available in {environment}.</p>
+                <p role="status">{t("No deposit routes are currently available in {environment}.", { environment })}</p>
               )}
               {!depositRoutesLoading && !depositRoutesError && depositAssets.map((item) => (
                 <button
@@ -460,14 +493,17 @@ function WalletWorkspaceBody({
                     <strong>{route.network}</strong>
                     <small>
                       {route.available
-                        ? `${route.confirmations} confirmations · ${route.asset} only`
-                        : `Temporarily unavailable · ${route.asset} only`}
+                        ? t("{confirmations} confirmations · {asset} only", {
+                            confirmations: route.confirmations,
+                            asset: route.asset,
+                          })
+                        : t("Temporarily unavailable · {asset} only", { asset: route.asset })}
                     </small>
                     <ChevronRight />
                   </button>
                 ))}
                 {depositNetworks.length === 0 && (
-                  <p role="status">No {asset} deposit networks are currently available in {environment}.</p>
+                  <p role="status">{t("No {asset} deposit networks are currently available in {environment}.", { asset, environment })}</p>
                 )}
               </div>
             </>
@@ -480,14 +516,14 @@ function WalletWorkspaceBody({
                   <strong>
                     {asset} on {depositNetworkName(chain)}
                   </strong>
-                  <p>Use this network only for the deposit address shown next.</p>
+                  <p>{t("Use this network only for the deposit address shown next.")}</p>
                   <button type="button" className="small-action" onClick={() => setStep(1)}>
-                    Change network
+                    {t("Change network")}
                   </button>
                 </div>
               </div>
               <label className="amount-field">
-                <span>EXPECTED AMOUNT / OPTIONAL</span>
+                <span>{t("EXPECTED AMOUNT / OPTIONAL")}</span>
                 <input
                   value={expectedAmount}
                   onChange={(event) => setExpectedAmount(event.target.value)}
@@ -501,7 +537,7 @@ function WalletWorkspaceBody({
                 disabled={depositPending || !asset || !chain}
                 onClick={createRoute}
               >
-                {depositPending ? "Preparing address…" : "Create deposit address"}{" "}
+                {depositPending ? t("Preparing address…") : t("Create deposit address")}{" "}
                 {!depositPending && <ChevronRight />}
               </button>
             </>
@@ -516,8 +552,8 @@ function WalletWorkspaceBody({
                     className="deposit-credited-art"
                     decoding="async"
                   />
-                  <strong>Deposit credited</strong>
-                  <small>Your verified transfer is now in your available wallet balance.</small>
+                  <strong>{t("Deposit credited")}</strong>
+                  <small>{t("Your verified transfer is now in your available wallet balance.")}</small>
                 </div>
               )}
               {intent.status.toLowerCase() === "pending_dust" && (
@@ -529,8 +565,8 @@ function WalletWorkspaceBody({
                     decoding="async"
                   />
                   <div>
-                    <strong>Deposit below minimum</strong>
-                    <small>Send the remaining amount to this same address on the same network.</small>
+                    <strong>{t("Deposit below minimum")}</strong>
+                    <small>{t("Send the remaining amount to this same address on the same network.")}</small>
                   </div>
                 </div>
               )}
@@ -546,13 +582,16 @@ function WalletWorkspaceBody({
                   <div className="qr-grid" />
                 )}
                 <small>
-                  SCAN TO DEPOSIT {intent.asset} ON {depositNetworkName(intent.chain)}
+                  {t("SCAN TO DEPOSIT {asset} ON {network}", {
+                    asset: intent.asset,
+                    network: depositNetworkName(intent.chain),
+                  })}
                 </small>
               </div>
               <div className="copy-field">
                 <code>{intent.address}</code>
                 <button
-                  aria-label="Copy deposit address"
+                  aria-label={t("Copy deposit address")}
                   onClick={async () => {
                     await navigator.clipboard?.writeText(intent.address);
                     setCopiedAddress(true);
@@ -567,12 +606,14 @@ function WalletWorkspaceBody({
               </div>
               <div className="warning-block">
                 <strong>
-                  <PaymentMark asset={intent.asset} compact /> Send {intent.asset} on{" "}
-                  {depositNetworkName(intent.chain)} only
+                  <PaymentMark asset={intent.asset} compact />{" "}
+                  {t("Send {asset} on {network} only", {
+                    asset: intent.asset,
+                    network: depositNetworkName(intent.chain),
+                  })}
                 </strong>
                 <span>
-                  This is a one-time deposit address. Another asset or network cannot be
-                  credited automatically.
+                  {t("This is a one-time deposit address. Another asset or network cannot be credited automatically.")}
                 </span>
               </div>
               <button
@@ -597,25 +638,25 @@ function WalletWorkspaceBody({
                         : current,
                     );
                     onNotice(
-                      "Monitoring started. The background watcher will check this address; funds are credited only after on-chain detection and confirmation.",
+                      t("Monitoring started. The background watcher will check this address; funds are credited only after on-chain detection and confirmation."),
                     );
                   } catch (error) {
                     onNotice(
                       error instanceof DOMException && error.name === "AbortError"
-                        ? "The status request timed out. Your deposit address is unchanged, and background monitoring is enabled. Check this deposit again from My Deposits."
+                        ? t("Monitoring could not be confirmed. Your address is unchanged. Retry monitoring from My Deposits; do not send another transfer.")
                         : error instanceof Error
                           ? error.message
-                          : "Deposit tracking could not start. Try again.",
+                          : t("Deposit tracking could not start. Try again."),
                     );
                   } finally {
                     setDepositPending(false);
                   }
                 }}
               >
-                {depositPending ? "Checking deposit…" : "I made this deposit"} <ChevronRight />
+                {depositPending ? t("Checking deposit…") : t("I made this deposit")} <ChevronRight />
               </button>
               <div className="timeline">
-                <span className="eyebrow">DEPOSIT STATUS</span>
+                <span className="eyebrow">{t("DEPOSIT STATUS")}</span>
                 {["Detected", "Verified", "Credited"].map((label, index) => {
                   const status = intent.status.toLowerCase();
                   const complete =
@@ -635,19 +676,19 @@ function WalletWorkspaceBody({
                         {complete ? "✓" : index + 1}
                       </i>
                       <div>
-                        <strong>{label}</strong>
+                        <strong>{t(label)}</strong>
                         <small>
                           {index === 0
-                            ? "Waiting to detect your transfer to this address."
+                              ? t("Waiting to detect your transfer to this address.")
                             : index === 1
-                              ? "On-chain confirmation is required before a balance credit."
-                              : "Your available balance updates after the deposit is confirmed."}
+                                ? t("On-chain confirmation is required before a balance credit.")
+                                : t("Your available balance updates after the deposit is confirmed.")}
                         </small>
                       </div>
                       <span
                         className={`status-chip ${complete ? "running" : "review"}`}
                       >
-                        {complete ? "complete" : "pending"}
+                        {t(complete ? "complete" : "pending")}
                       </span>
                     </div>
                   );
@@ -658,7 +699,7 @@ function WalletWorkspaceBody({
         </GradientPanel>
         {data.deposits.length > 0 && (
           <GradientPanel className="ledger-card">
-            <span className="eyebrow">MY DEPOSITS</span>
+            <span className="eyebrow">{t("MY DEPOSITS")}</span>
             {data.deposits.map((route) => (
               <div className="ledger-row" key={route.id}>
                 <div>
@@ -674,7 +715,7 @@ function WalletWorkspaceBody({
                 <span
                   className={`activity-status ${route.status.includes("fail") ? "review" : "complete"}`}
                 >
-                  {route.status}
+                  {depositStatusLabel(t, route.status)}
                 </span>
                 <button
                   className="small-action"
@@ -685,7 +726,7 @@ function WalletWorkspaceBody({
                     setStep(2);
                   }}
                 >
-                  Open
+                  {t("Open")}
                 </button>
               </div>
             ))}
@@ -697,28 +738,31 @@ function WalletWorkspaceBody({
     return (
       <div className="wallet-flow">
         <button className="back-action" onClick={showOverview}>
-          <StateIcon name="arrow-left" /> Wallet overview
+          <StateIcon name="arrow-left" /> {t("Wallet overview")}
         </button>
         <StepRail current={2} />
         <GradientPanel className="flow-card">
           <div className="success-state">
             <img
               src="/illustrations/withdrawal-sent.png"
-              alt="Withdrawal queued for secure review"
+              alt={t("Withdrawal queued")}
               className="withdrawal-sent-art"
               decoding="async"
             />
-            <strong>Withdrawal queued</strong>
+            <strong>{t("Withdrawal queued")}</strong>
             <small>
-              {money(submittedWithdrawal.amount)} {submittedWithdrawal.asset} on{" "}
-              {submittedWithdrawal.chain} is reserved for review.
+              {t("{amount} {asset} on {network} is reserved for review.", {
+                amount: money(submittedWithdrawal.amount),
+                asset: submittedWithdrawal.asset,
+                network: submittedWithdrawal.chain,
+              })}
             </small>
           </div>
           <button className="primary-action" onClick={showOverview}>
-            Back to wallet <ChevronRight />
+            {t("Back to wallet")} <ChevronRight />
           </button>
           <button className="ghost-action" onClick={() => setView("history")}>
-            View withdrawal history
+            {t("View withdrawal history")}
           </button>
         </GradientPanel>
       </div>
@@ -727,36 +771,36 @@ function WalletWorkspaceBody({
     return (
       <div className="wallet-flow">
         <button className="back-action" onClick={showOverview}>
-          <StateIcon name="arrow-left" /> Wallet overview
+          <StateIcon name="arrow-left" /> {t("Wallet overview")}
         </button>
         <StepRail current={2} />
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">WITHDRAW</span>
-              <h2>Send funds safely</h2>
+              <span className="eyebrow">{t("WITHDRAW")}</span>
+              <h2>{t("Send funds safely")}</h2>
             </div>
             <span className="secure-chip">
-              <ShieldCheck /> SECURE
+              <ShieldCheck /> {t("SECURE")}
             </span>
           </div>
           <div className="withdrawable-summary">
             <div>
-              <span>Withdrawable now</span>
+              <span>{t("Withdrawable now")}</span>
               <strong>{money(data.wallet.available)}</strong>
             </div>
             <div>
-              <span>Locked in bots</span>
+              <span>{t("Locked in bots")}</span>
               <strong>{money(data.wallet.locked)}</strong>
             </div>
             <small>
-              Only available wallet balance can be withdrawn. Check every
-              destination character before continuing.
+              {t("Only available wallet balance can be withdrawn. Check every destination character before continuing.")}
             </small>
           </div>
           <label className="amount-field">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <PaymentMark asset={withdrawAsset} compact /> ASSET · {withdrawAsset}
+              <PaymentMark asset={withdrawAsset} compact />{" "}
+              {t("ASSET · {asset}", { asset: withdrawAsset })}
             </span>
             <select
               value={withdrawAsset}
@@ -768,7 +812,10 @@ function WalletWorkspaceBody({
           </label>
           <label className="amount-field">
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <PaymentMark asset={withdrawChain} compact /> NETWORK · {withdrawNetworks.find(([value]) => value === withdrawChain)?.[1] || withdrawChain}
+              <PaymentMark asset={withdrawChain} compact />{" "}
+              {t("NETWORK · {network}", {
+                network: withdrawNetworks.find(([value]) => value === withdrawChain)?.[1] || withdrawChain,
+              })}
             </span>
             <select
               value={withdrawChain}
@@ -776,26 +823,26 @@ function WalletWorkspaceBody({
             >
               {withdrawNetworks.map(([value, label]) => (
                 <option value={value} key={value}>
-                  {label}
+                  {t(label)}
                 </option>
               ))}
             </select>
           </label>
           <label className="amount-field">
-            <span>DESTINATION ADDRESS</span>
+            <span>{t("DESTINATION ADDRESS")}</span>
             <input
               value={withdrawAddress}
               onChange={(event) =>
                 setWithdrawAddress(event.target.value.replace(/\s/g, ""))
               }
-              placeholder="Paste the full destination address"
+              placeholder={t("Paste the full destination address")}
               autoComplete="off"
             />
           </label>
           {data.whitelist.filter((route) => route.chain === withdrawChain)
             .length > 0 && (
             <div className="saved-destinations">
-              <span className="field-caption">SAVED DESTINATIONS</span>
+              <span className="field-caption">{t("SAVED DESTINATIONS")}</span>
               {data.whitelist
                 .filter((route) => route.chain === withdrawChain)
                 .map((route) => {
@@ -812,7 +859,7 @@ function WalletWorkspaceBody({
                       <span>{route.nickname}</span>
                       <small>
                         {route.address.slice(0, 8)}…{route.address.slice(-6)}{" "}
-                        {cooling ? "· cooling" : ""}
+                        {cooling ? `· ${t("cooling")}` : ""}
                       </small>
                       <ChevronRight />
                     </button>
@@ -821,7 +868,7 @@ function WalletWorkspaceBody({
             </div>
           )}
           <label className="amount-field">
-            <span>AMOUNT / USD</span>
+            <span>{t("AMOUNT / USD")}</span>
             <input
               value={withdrawAmount}
               onChange={(event) =>
@@ -832,7 +879,7 @@ function WalletWorkspaceBody({
             />
           </label>
           <label className="amount-field">
-            <span>SIX-DIGIT SECURITY CODE</span>
+            <span>{t("SIX-DIGIT SECURITY CODE")}</span>
             <input
               type="password"
               value={withdrawCode}
@@ -857,13 +904,13 @@ function WalletWorkspaceBody({
             }
             onClick={() => { setWithdrawalError(""); setReviewWithdrawal(true); }}
           >
-            Review withdrawal <ChevronRight />
+            {t("Review withdrawal")} <ChevronRight />
           </button>
         </GradientPanel>
         {reviewWithdrawal && (
-          <AccessibleDialog label="Verify before sending" onClose={() => setReviewWithdrawal(false)} dismissible={!walletPending}>
-              <span className="eyebrow">WITHDRAWAL REVIEW</span>
-              <h2>Verify before sending</h2>
+          <AccessibleDialog label={t("Verify before sending")} onClose={() => setReviewWithdrawal(false)} dismissible={!walletPending}>
+                <span className="eyebrow">{t("WITHDRAWAL REVIEW")}</span>
+                <h2>{t("Verify before sending")}</h2>
               <div className="mono-review">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <PaymentMark asset={withdrawAsset} compact />
@@ -871,22 +918,21 @@ function WalletWorkspaceBody({
                   {withdrawAsset} / {withdrawChain}
                 </span>
                 <code>{withdrawAddress}</code>
-                <span>AMOUNT / {money(Number(withdrawAmount))}</span>
+                <span>{t("AMOUNT / {amount}", { amount: money(Number(withdrawAmount)) })}</span>
               </div>
               <p>
-                Withdrawal requests are reviewed before release. Confirm only
-                when the address and network are correct.
+                {t("Withdrawal requests are reviewed before release. Confirm only when the address and network are correct.")}
               </p>
               {withdrawalError && <p className="security-feedback" role="alert">{withdrawalError}</p>}
               <button className="primary-action" disabled={walletPending} aria-busy={walletPending} onClick={submitWithdrawal}>
-                {walletPending ? "Submitting…" : "Confirm withdrawal"} <Send />
+                {walletPending ? t("Submitting…") : t("Confirm withdrawal")} <Send />
               </button>
               <button
                 className="ghost-action"
                 disabled={walletPending}
                 onClick={() => setReviewWithdrawal(false)}
               >
-                Go back
+                {t("Go back")}
               </button>
           </AccessibleDialog>
         )}
@@ -896,12 +942,12 @@ function WalletWorkspaceBody({
     return (
       <div className="ledger-screen">
         <button className="back-action" onClick={showOverview}>
-          <StateIcon name="arrow-left" /> Wallet overview
+          <StateIcon name="arrow-left" /> {t("Wallet overview")}
         </button>
         <div className="ledger-header">
           <div>
-            <span className="eyebrow">WALLET / HISTORY</span>
-            <h2>Transaction history</h2>
+            <span className="eyebrow">{t("WALLET / HISTORY")}</span>
+            <h2>{t("Transaction history")}</h2>
           </div>
         </div>
         <div className="filter-chips">
@@ -912,12 +958,12 @@ function WalletWorkspaceBody({
               onClick={() => setHistoryFilter(filter)}
             >
               {filter === "all"
-                ? "All"
+                ? t("All")
                 : filter === "deposit"
-                  ? "Deposits"
+                  ? t("Deposits")
                   : filter === "withdraw"
-                    ? "Withdrawals"
-                    : "Bot activity"}
+                    ? t("Withdrawals")
+                    : t("Bot activity")}
             </button>
           ))}
         </div>
@@ -929,15 +975,15 @@ function WalletWorkspaceBody({
               return (
               <div className="ledger-row" key={`${entry.created_at}-${index}`}>
                 <div>
-                  <strong>{activityLabel(entry.kind, entry.status, amount)}</strong>
+                  <strong>{t(activityLabel(entry.kind, entry.status, amount))}</strong>
                   <small>
-                    {isFlashbackEntryLock(entry.kind) ? "Entry locked until the sealed result is revealed" : isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
+                    {isFlashbackEntryLock(entry.kind) ? t("Entry locked until the sealed result is revealed") : isNonFinancial ? t("Strategy controls saved · no balance change") : `${entry.asset} / ${t(entry.status)}`}
                   </small>
                 </div>
                 <span
                   className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
                 >
-                  {entry.status}
+                  {t(entry.status)}
                 </span>
                 <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
                   {isNonFinancial ? "—" : activityAmountDisplay(amount)}
@@ -947,11 +993,10 @@ function WalletWorkspaceBody({
             })
           ) : (
             <div className="empty-wallet-state">
-              <img src="/illustrations/empty-wallet.png" alt="Empty wallet" />
-              <strong>No wallet activity yet</strong>
+              <img src="/illustrations/empty-wallet.png" alt={t("No wallet activity yet")} />
+              <strong>{t("No wallet activity yet")}</strong>
               <small>
-                Your verified deposits, withdrawals, and bot allocations will
-                appear here.
+                {t("Your verified deposits, withdrawals, and bot allocations will appear here.")}
               </small>
             </div>
           )}
@@ -962,12 +1007,12 @@ function WalletWorkspaceBody({
     return (
       <div className="ledger-screen">
         <button className="back-action" onClick={showOverview}>
-          <StateIcon name="arrow-left" /> Wallet overview
+          <StateIcon name="arrow-left" /> {t("Wallet overview")}
         </button>
         <div className="ledger-header">
           <div>
-            <span className="eyebrow">WALLET / ACTIVITY</span>
-            <h2>Activity</h2>
+            <span className="eyebrow">{t("WALLET / ACTIVITY")}</span>
+            <h2>{t("Activity")}</h2>
           </div>
         </div>
         <GradientPanel className="ledger-card">
@@ -992,15 +1037,15 @@ function WalletWorkspaceBody({
                   key={`${entry.created_at}-${index}`}
                 >
                   <div>
-                    <strong>{activityLabel(entry.kind, entry.status, amount)}</strong>
+                    <strong>{t(activityLabel(entry.kind, entry.status, amount))}</strong>
                     <small>
-                      {isFlashbackEntryLock(entry.kind) ? "Entry locked until the sealed result is revealed" : isNonFinancial ? "Strategy controls saved · no balance change" : `${entry.asset} / ${entry.status}`}
+                      {isFlashbackEntryLock(entry.kind) ? t("Entry locked until the sealed result is revealed") : isNonFinancial ? t("Strategy controls saved · no balance change") : `${entry.asset} / ${t(entry.status)}`}
                     </small>
                   </div>
                   <span
                     className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
                   >
-                    {entry.status}
+                    {t(entry.status)}
                   </span>
                   <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
                     {isNonFinancial ? "—" : activityAmountDisplay(amount)}
@@ -1012,10 +1057,10 @@ function WalletWorkspaceBody({
             <div className="empty-wallet-state">
               <img
                 src="/illustrations/empty-wallet.png"
-                alt="No wallet activity"
+                alt={t("No activity yet")}
               />
-              <strong>No activity yet</strong>
-              <small>Verified transfers and bot events will appear here.</small>
+              <strong>{t("No activity yet")}</strong>
+              <small>{t("Verified transfers and bot events will appear here.")}</small>
             </div>
           )}
         </GradientPanel>
@@ -1026,11 +1071,11 @@ function WalletWorkspaceBody({
       <GradientPanel className="wallet-balance-overview">
         <div className="wallet-balance-primary">
           <div className="wallet-balance-heading">
-            <h2>Available balance</h2>
+            <h2>{t("Available balance")}</h2>
             <button
               type="button"
               className="visibility"
-              aria-label={balancesVisible ? "Hide wallet balances" : "Show wallet balances"}
+              aria-label={t(balancesVisible ? "Hide wallet balances" : "Show wallet balances")}
               aria-pressed={balancesVisible}
               onClick={() => setBalancesVisible((visible) => !visible)}
             >
@@ -1038,53 +1083,53 @@ function WalletWorkspaceBody({
             </button>
           </div>
           <strong className="mint">{balancesVisible ? money(data.wallet.available) : "••••••"}</strong>
-          <small>Available now</small>
+          <small>{t("Available now")}</small>
         </div>
-        <div className="wallet-balance-facts" aria-label="Wallet balances">
+        <div className="wallet-balance-facts" aria-label={t("Wallet balances")}>
           <div>
-            <span>LOCKED</span>
+            <span>{t("LOCKED")}</span>
             <strong>{balancesVisible ? money(data.wallet.locked) : "••••••"}</strong>
-            <small>Active bots</small>
+            <small>{t("Active bots")}</small>
           </div>
           <div>
-            <span>TOTAL EQUITY</span>
+            <span>{t("TOTAL EQUITY")}</span>
             <strong className="mint">{balancesVisible ? money(data.wallet.equity) : "••••••"}</strong>
-            <small>Account value</small>
+            <small>{t("Account value")}</small>
           </div>
           <div>
-            <span>HIGH-WATER MARK</span>
+            <span>{t("HIGH-WATER MARK")}</span>
             <strong>{balancesVisible ? money(data.wallet.hwm) : "••••••"}</strong>
-            <small>Fee baseline</small>
+            <small>{t("Fee baseline")}</small>
           </div>
         </div>
       </GradientPanel>
-      <div className="wallet-actions" role="group" aria-label="Wallet actions">
+      <div className="wallet-actions" role="group" aria-label={t("Wallet actions")}>
         <button onClick={() => setView("deposit")}>
           <span>
             <Download />
           </span>
-          <strong>Deposit</strong>
+          <strong>{t("Deposits")}</strong>
           <ChevronRight />
         </button>
         <button onClick={() => setView("withdraw")}>
           <span>
             <Send />
           </span>
-          <strong>Withdraw</strong>
+          <strong>{t("WITHDRAW")}</strong>
           <ChevronRight />
         </button>
         <button onClick={() => setView("history")}>
           <span>
             <History />
           </span>
-          <strong>History</strong>
+          <strong>{t("WALLET / HISTORY")}</strong>
           <ChevronRight />
         </button>
         <button onClick={() => setView("activity")}>
           <span>
             <Zap />
           </span>
-          <strong>Activity</strong>
+          <strong>{t("Activity")}</strong>
           <ChevronRight />
         </button>
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatMarketChartTime } from "../../lib/market-chart-time";
+import { DeskLocalized } from "../desk-language";
 import { StateIcon } from "./shared-ui";
 
 export type MarketPoint = { price: number; timestamp?: number };
@@ -202,7 +203,7 @@ export function MarketChart({
   }, [hasCandles]);
   useEffect(() => setOffset((current) => Math.min(current, maxOffset)), [maxOffset]);
   if (!hasCandles) {
-    return <div className="market-chart market-chart-empty" role="status">Waiting for live market data</div>;
+    return <DeskLocalized><div className="market-chart market-chart-empty" role="status">Waiting for live market data</div></DeskLocalized>;
   }
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));
@@ -222,6 +223,7 @@ export function MarketChart({
     .join(" ");
   const visibleTimes = [0, Math.floor((candles.length - 1) / 2), candles.length - 1];
   return (
+    <DeskLocalized>
     <div
       ref={chartRef}
       className="market-chart"
@@ -279,5 +281,6 @@ export function MarketChart({
         <button type="button" onClick={resetView} disabled={zoom === 1 && offset === 0} title="Reset chart (0)">Reset</button>
       </div>
     </div>
+    </DeskLocalized>
   );
 }
