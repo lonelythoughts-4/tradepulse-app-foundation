@@ -28,7 +28,7 @@ import {
 import {
   handoffRefreshDelayMs,
   telegramAppLaunchUrl,
-  telegramInstallUrl,
+  shouldUseTelegramAppLaunch,
 } from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import {
@@ -4990,12 +4990,10 @@ function BrowserBotHandoff() {
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
   const refreshTimer = useRef<number | null>(null);
-  const launchFallbackTimer = useRef<number | null>(null);
   useEffect(
     () => () => {
       if (timer.current) window.clearTimeout(timer.current);
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-      if (launchFallbackTimer.current) window.clearTimeout(launchFallbackTimer.current);
     },
     [],
   );
@@ -5093,8 +5091,6 @@ function BrowserBotHandoff() {
         }
         timer.current = null;
         terminal = true;
-        if (launchFallbackTimer.current) window.clearTimeout(launchFallbackTimer.current);
-        launchFallbackTimer.current = null;
         window.location.replace("/");
       } catch (error) {
         terminal = true;
@@ -5131,10 +5127,8 @@ function BrowserBotHandoff() {
   const retry = () => {
     if (timer.current) window.clearTimeout(timer.current);
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-    if (launchFallbackTimer.current) window.clearTimeout(launchFallbackTimer.current);
     timer.current = null;
     refreshTimer.current = null;
-    launchFallbackTimer.current = null;
     setToken("");
     setBotUrl("");
     setQrSvg("");
@@ -5148,23 +5142,23 @@ function BrowserBotHandoff() {
     setState("waiting");
     setMessage("Confirm this browser in Telegram. Your desk will open here automatically.");
     const appUrl = telegramAppLaunchUrl(botUrl);
-    if (appUrl === botUrl) return;
-    event.preventDefault();
-    const installUrl = telegramInstallUrl(
+    const isMobile = shouldUseTelegramAppLaunch(
       navigator.userAgent,
       /Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1,
     );
-    const appTab = window.open(appUrl, "_blank");
-    if (appTab) appTab.opener = null;
-    launchFallbackTimer.current = window.setTimeout(() => {
-      if (document.visibilityState === "visible" && document.hasFocus()) {
-        if (appTab && !appTab.closed) {
-          appTab.location.replace(installUrl);
-        } else {
-          window.open(installUrl, "_blank", "noopener,noreferrer");
-        }
-      }
-    }, 1_800);
+    // Desktop browsers need Telegram's normal HTTPS page, which can hand off
+    // to the installed desktop client or Telegram Web.  A tg:// URI there
+    // falls through to the install page even when the original QR link works.
+    if (!isMobile || appUrl === botUrl) return;
+    event.preventDefault();
+    const appTab = window.open("about:blank", "_blank");
+    if (!appTab) {
+      setState("ready");
+      setMessage("Your browser blocked Telegram. Allow pop-ups, or scan the QR code instead.");
+      return;
+    }
+    appTab.opener = null;
+    appTab.location.replace(appUrl);
   };
   return (
     <div className="browser-handoff" data-state={state}>
@@ -5183,7 +5177,7 @@ function BrowserBotHandoff() {
       {state === "ready" && botUrl ? (
         <a
           className="primary-action"
-          href={telegramAppLaunchUrl(botUrl)}
+          href={botUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={openTelegram}
