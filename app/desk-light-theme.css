@@ -211,6 +211,115 @@ html[data-theme="light"] .app-shell ::selection {
   color: var(--foreground);
 }
 
+html[data-theme="light"] :where(
+  .fact-block,
+  .product-card,
+  .flow-card,
+  .ledger-card,
+  .activity-card,
+  .gas-card,
+  .market-chart,
+  .synthetic-pilot,
+  .wallet-promo,
+  .choice-grid button,
+  .copy-field,
+  .amount-input,
+  .filter-chips button,
+  .wallet-actions button
+) {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--foreground);
+}
+
+html[data-theme="light"] .fact-block {
+  color: var(--muted-foreground);
+}
+
+html[data-theme="light"] .fact-block b,
+html[data-theme="light"] .copy-field code,
+html[data-theme="light"] .amount-input input,
+html[data-theme="light"] .choice-grid strong {
+  color: var(--foreground);
+}
+
+html[data-theme="light"] :where(
+  .product-card small,
+  .fleet-hero p,
+  .flow-kicker p,
+  .minimum-hint,
+  .confirm-modal p,
+  .demo-terms p,
+  .demo-activation p,
+  .wallet-promo p,
+  .choice-grid small,
+  .fact-block,
+  .gas-meter small,
+  .qr-placeholder small,
+  .copy-field button
+) {
+  color: var(--muted-foreground);
+}
+
+html[data-theme="light"] .amount-input > span {
+  color: var(--primary);
+}
+
+html[data-theme="light"] .wallet-actions span,
+html[data-theme="light"] .coin-mark,
+html[data-theme="light"] .network-mark {
+  background: var(--muted);
+  color: var(--tp-accent-strong);
+}
+
+html[data-theme="light"] .qr-placeholder {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+
+html[data-theme="light"] .qr-grid {
+  background: linear-gradient(90deg, #263044 10%, transparent 10% 20%, #263044 20% 30%, transparent 30% 45%, #263044 45% 60%, transparent 60% 70%, #263044 70%);
+  opacity: 1;
+}
+
+html[data-theme="light"] .status-chip.paused,
+html[data-theme="light"] .activity-status.pending,
+html[data-theme="light"] .activity-status.review,
+html[data-theme="light"] .warning-block strong,
+html[data-theme="light"] .blocking-banner > svg,
+html[data-theme="light"] .blocking-banner button,
+html[data-theme="light"] .minimum-warning strong {
+  color: #745300;
+}
+
+html[data-theme="light"] .status-chip.paused,
+html[data-theme="light"] .activity-status.pending,
+html[data-theme="light"] .activity-status.review {
+  background-color: #fff1be;
+}
+
+html[data-theme="light"] .warning-block,
+html[data-theme="light"] .minimum-warning,
+html[data-theme="light"] .blocking-banner {
+  border-color: color-mix(in srgb, #745300 30%, var(--border));
+  background: #fff8df;
+}
+
+html[data-theme="light"] .filter-chips button {
+  color: var(--muted-foreground);
+}
+
+html[data-theme="light"] .filter-chips button.active {
+  color: var(--tp-accent-strong);
+}
+
+html[data-theme="light"] .warning-block span,
+html[data-theme="light"] .minimum-warning p,
+html[data-theme="light"] .minimum-warning small,
+html[data-theme="light"] .blocking-banner span {
+  color: #5e5134;
+}
+
 @media (max-width: 420px) {
   .icon-button.theme-toggle {
     width: 36px;

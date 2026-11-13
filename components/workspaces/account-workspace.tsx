@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
+import { localizeApiError, translateDesk, type LanguageCode } from "../../lib/desk-i18n";
 import {
   avatarOptions,
   ChevronRight,
@@ -22,8 +23,6 @@ export type AccountDashboard = {
   notifications: Record<string, boolean>;
   whitelist: Array<{ id: string | number; nickname: string; chain: string; address: string; cooling_until?: number }>;
 };
-
-type LanguageCode = "en" | "ru" | "hi" | "es" | "it" | "zh" | "ja" | "ro";
 
 const languages: Array<{ code: LanguageCode; label: string; flag: string }> = [
   { code: "en", label: "English", flag: "locale-en.svg" },
@@ -46,6 +45,7 @@ export function AccountWorkspace({
   openNotificationsRequest = false,
   onNotificationsRequestHandled,
   onOpenHelp,
+  onLanguageChange,
 }: {
   data: AccountDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
@@ -56,6 +56,7 @@ export function AccountWorkspace({
   openNotificationsRequest?: boolean;
   onNotificationsRequestHandled?: () => void;
   onOpenHelp?: () => void;
+  onLanguageChange: (language: LanguageCode) => Promise<void>;
 }) {
   const [modal, setModal] = useState<
     "" | "code" | "language" | "notifications" | "whitelist" | "reset"
@@ -70,7 +71,6 @@ export function AccountWorkspace({
   const [notificationState, setNotificationState] = useState(data.notifications);
   const [securityCodeSet, setSecurityCodeSet] = useState(Boolean(data.user.security_code_set));
   const [language, setLanguage] = useState<LanguageCode>(data.user.language_code || "en");
-  const [languageSaving, setLanguageSaving] = useState(false);
   const enabledNotificationCount = ["fills", "fees", "deposits", "hwm_breaks"].filter((key) => Boolean(notificationState[key])).length;
   const [notificationPending, setNotificationPending] = useState<Record<string, boolean>>({});
   const notificationRequestPending = useRef(new Set<string>());
@@ -120,7 +120,7 @@ export function AccountWorkspace({
       onNotice(message);
     } catch (error) {
       setNotificationState((current) => ({ ...current, [key]: enabled }));
-      const message = error instanceof Error ? error.message : "This notification setting could not be updated. Try again.";
+      const message = error instanceof Error ? error.message : localizeApiError(language, "", 500);
       setModalFeedback({ message, error: true });
       onNotice(message);
     } finally {
@@ -132,18 +132,14 @@ export function AccountWorkspace({
       });
     }
   };
-  const chooseLanguage = async (next: LanguageCode) => {
-    if (next === language || languageSaving) return;
-    setLanguageSaving(true);
-    try {
-      await request("/v1/account/language", { method: "POST", body: JSON.stringify({ language_code: next }) });
-      setLanguage(next);
-      onNotice("Language preference saved.");
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Your language could not be saved. Try again.");
-    } finally {
-      setLanguageSaving(false);
-    }
+  const chooseLanguage = (next: LanguageCode) => {
+    if (next === language) return;
+    setLanguage(next);
+    void onLanguageChange(next).catch((error) => {
+      const message = error instanceof Error ? error.message : localizeApiError(next, "", 500);
+      setModalFeedback({ message, error: true });
+      onNotice(message);
+    });
   };
   const initials = (data.user.first_name || data.user.username || "U")
     .slice(0, 1)
@@ -167,7 +163,7 @@ export function AccountWorkspace({
       if (closeModal) setModal("");
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "TradePulse could not save this change. Try again.";
+      const message = error instanceof Error ? error.message : localizeApiError(language, "", 500);
       setModalFeedback({ message, error: true });
       onNotice(message);
       return false;
@@ -179,7 +175,7 @@ export function AccountWorkspace({
     <div className="account-screen">
       <div className="screen-title">
         <div>
-          <h2>Account settings</h2>
+          <h2>{translateDesk(language, "account.title")}</h2>
         </div>
         <div className="security-chip">
           <StateIcon name="lock" /> {securityCodeSet ? "CODE SET" : "SET CODE"}
@@ -220,7 +216,7 @@ export function AccountWorkspace({
         <button className="account-action" onClick={() => setModal("language")}>
           <span><Settings /></span>
           <div>
-            <strong>Language preference</strong>
+            <strong>{translateDesk(language, "account.language")}</strong>
             <small>{languages.find((item) => item.code === language)?.label || "English"}</small>
           </div>
           <ChevronRight />
@@ -400,8 +396,8 @@ export function AccountWorkspace({
             )}
             {modal === "language" && (
               <>
-                <h2>Language preference</h2>
-                <p>Choose the language used for TradePulse messages and activation screens.</p>
+                <h2>{translateDesk(language, "account.language")}</h2>
+                <p>{translateDesk(language, "account.languageIntro")}</p>
                 <fieldset className="activation-languages account-language-options" aria-label="Choose language">
                   <div className="language-options">
                     {languages.map((item) => (
@@ -410,8 +406,7 @@ export function AccountWorkspace({
                         type="button"
                         className={`language-option ${language === item.code ? "selected" : ""}`}
                         aria-pressed={language === item.code}
-                        disabled={languageSaving}
-                        onClick={() => void chooseLanguage(item.code)}
+                        onClick={() => chooseLanguage(item.code)}
                       >
                         <img className="language-flag" src={`/icons/${item.flag}`} alt="" aria-hidden="true" />
                         <span>{item.label}</span>
