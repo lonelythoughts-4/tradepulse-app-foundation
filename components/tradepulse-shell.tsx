@@ -7353,8 +7353,9 @@ function LiveTradePulse() {
         deskStore.applyResource("synthetic", null, Date.now());
         setAdmin(null);
       }
-      await load(nextEnvironment, true);
-      const overview = await request("/v1/admin/overview", {}, nextEnvironment);
+      const overviewRequest = request("/v1/admin/overview", {}, nextEnvironment);
+      const dashboardRequest = load(nextEnvironment, true);
+      const [overview] = await Promise.all([overviewRequest, dashboardRequest]);
       if (
         revision === environmentSwitchRevisionRef.current &&
         shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)

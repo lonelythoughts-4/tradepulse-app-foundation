@@ -40,7 +40,10 @@ test("admin testnet selection persists across tabs while non-admin access return
   const switchStart = shell.indexOf("const switchAdminEnvironment = async");
   const switchEnd = shell.indexOf("const refreshAdmin", switchStart);
   const switcher = shell.slice(switchStart, switchEnd);
-  assert.ok(switcher.indexOf("setWebEnvironment(nextEnvironment)") < switcher.indexOf("await request("));
+  assert.ok(switcher.indexOf("setWebEnvironment(nextEnvironment)") < switcher.indexOf("const save ="));
   assert.match(switcher, /environmentSwitchRevisionRef\.current/);
   assert.match(switcher, /setWebEnvironment\(priorEnvironment\)/);
+  assert.match(switcher, /const overviewRequest = request\("\/v1\/admin\/overview"/);
+  assert.match(switcher, /const dashboardRequest = load\(nextEnvironment, true\)/);
+  assert.match(switcher, /Promise\.all\(\[overviewRequest, dashboardRequest\]\)/);
 });
