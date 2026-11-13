@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    cpus: 1,
+  },
   typescript: {
     // The repository has pre-existing TypeScript debt outside this release.
     // Keep the established production build behavior while that work is
