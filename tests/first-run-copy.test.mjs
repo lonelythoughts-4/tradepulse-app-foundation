@@ -25,3 +25,9 @@ test("first-run copy does not expose implementation or roadmap notes", () => {
     assert.doesNotMatch(auth, new RegExp(phrase));
   }
 });
+
+test("activation panels keep step counts without the TradePulse mark", () => {
+  assert.match(shell, /Activation \{step \+ 1\} of 5/);
+  assert.match(shell, /Activation 5 of 5/);
+  assert.doesNotMatch(shell, /className="activation-mark"/);
+});
