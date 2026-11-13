@@ -33,6 +33,9 @@ test("dynamic phrases are translated without changing their values", () => {
     translateDeskPhrase("es", "Loading testnet deposit assets…"),
     "Cargando activos de depósito de testnet…",
   );
+  assert.equal(translateDeskPhrase("es", "Confirming deposit"), "Confirmando el depósito");
+  assert.equal(translateDeskPhrase("es", "Processing deposit"), "Depósito en proceso");
+  assert.equal(translateDeskPhrase("ja", "Under review"), "確認中");
 });
 
 test("bot onboarding, demo, and notification copy follows the selected language", () => {
