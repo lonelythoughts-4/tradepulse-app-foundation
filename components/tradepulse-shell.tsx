@@ -31,8 +31,8 @@ import {
   shouldUseTelegramAppLaunch,
 } from "../lib/browser-handoff.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
-import { localizeApiError, translateDesk, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
-import { DeskLanguageProvider, DeskLocalized } from "./desk-language";
+import { localizeApiError, translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
+import { DeskLanguageProvider, DeskLocalized, useDeskLanguage } from "./desk-language";
 import {
   DESK_THEME_STORAGE_KEY,
   nextDeskTheme,
@@ -1340,13 +1340,23 @@ function DemoBanner({
   onStart?: () => void;
   hasFundedDesk?: boolean;
 }) {
+  const language = useDeskLanguage();
   const active = (demo?.pool_state || demo?.state) === "active";
   const grant = Number(demo?.grant_usd || 0);
-  const grantLabel = grant > 0 ? money(grant) : "shared";
   const available = Number(demo?.pool_available_usd || 0);
   const locked = Number(demo?.pool_locked_usd || 0);
   const realised = Number(demo?.pool_realised_pnl_usd || 0);
   const activeEndsAt = Number(demo?.expires_at || 0);
+  const activeDemoSummary = translateDeskPhrase(
+    language,
+    "Virtual funds: {available} available · {locked} locked. Realized demo profit: {realised}.",
+    { available: money(available), locked: money(locked), realised: money(realised) },
+  );
+  const activeDemoExpiry = activeEndsAt
+    ? ` ${translateDeskPhrase(language, "Ends {expiry}.", {
+        expiry: new Date(activeEndsAt * 1000).toLocaleString(language),
+      })}`
+    : "";
   // A zero authoritative balance means the credit was spent or is locked in
   // an open position.  Only older payloads without the new field may fall
   // back to the historical issued amount.
@@ -1373,13 +1383,15 @@ function DemoBanner({
             ? `${money(tradingCredit)} trading credit available`
             : active
               ? "Your virtual demo is active"
-              : `Start a ${grantLabel} virtual demo`}
+              : grant > 0
+                ? translateDeskPhrase(language, "Start a {grant} virtual demo", { grant: money(grant) })
+                : "Start shared virtual demo"}
         </h2>
         <p>
           {tradingCredit > 0
             ? "Non-withdrawable trading credit for eligible Memecoin and Synthetic orders. It is not cash or wallet balance."
             : active
-              ? `Virtual funds: ${money(available)} available · ${money(locked)} locked. Realized demo profit: ${money(realised)}.${activeEndsAt ? ` Ends ${new Date(activeEndsAt * 1000).toLocaleString()}.` : ""}`
+              ? `${activeDemoSummary}${activeDemoExpiry}`
               : "One shared virtual pool can be assigned across supported Memecoin and Synthetic activity. It is separate from your wallet."}
         </p>
       </div>
@@ -2739,6 +2751,7 @@ function OnboardingScreen() {
 
 function DemoScreen() {
   return (
+    <DeskLocalized>
     <div className="demo-screen">
       <GradientPanel className="demo-terms">
         <span className="eyebrow">PRACTICE MODE · DEMO</span>
@@ -2776,6 +2789,7 @@ function DemoScreen() {
         <div className="demo-countdown mono">23:59:42</div>
       </GradientPanel>
     </div>
+    </DeskLocalized>
   );
 }
 function BotsScreen({

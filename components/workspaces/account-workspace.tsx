@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
-import { localizeApiError, translateDesk, type LanguageCode } from "../../lib/desk-i18n";
+import { localizeApiError, translateDesk, translateDeskPhrase, type LanguageCode } from "../../lib/desk-i18n";
 import { DeskLocalized, useDeskLanguage } from "../desk-language";
 import {
   avatarOptions,
@@ -113,7 +113,10 @@ export function AccountWorkspace({
       if (result.notifications && typeof result.notifications === "object") {
         setNotificationState((current) => ({ ...current, [key]: Boolean(result.notifications[key]) }));
       }
-      const message = `${label} notification ${next ? "enabled" : "disabled"}.`;
+      const message = translateDeskPhrase(language, "{label} notification {state}.", {
+        label: translateDeskPhrase(language, label),
+        state: translateDeskPhrase(language, next ? "enabled" : "disabled"),
+      });
       setModalFeedback({ message, error: false });
       onNotice(message);
     } catch (error) {
@@ -240,7 +243,9 @@ export function AccountWorkspace({
           <div>
             <strong>Notifications</strong>
             <small>
-              {enabledNotificationCount} of 4 preferences enabled
+              {translateDeskPhrase(language, "{count} of 4 preferences enabled", {
+                count: enabledNotificationCount,
+              })}
             </small>
           </div>
           <ChevronRight />

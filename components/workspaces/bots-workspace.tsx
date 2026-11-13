@@ -3,7 +3,8 @@
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
-import { DeskLocalized } from "../desk-language";
+import { DeskLocalized, useDeskLanguage } from "../desk-language";
+import { translateDeskPhrase } from "../../lib/desk-i18n";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
@@ -12,10 +13,10 @@ import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } f
 import { ChevronRight, GradientPanel, PaymentMark, Plus, StateIcon, StateSwapIcon, X, Zap, money } from "./shared-ui";
 
 function BotProductCard({ name, description, icon, selected, onClick }: { name: string; description: string; icon: string; selected?: boolean; onClick: () => void }) {
-  return <button className={`product-card ${selected ? "selected" : ""}`} onClick={onClick}><span className="product-icon">{icon}</span><span><strong>{name}</strong><small>{description}</small></span><ChevronRight /></button>;
+  return <DeskLocalized><button className={`product-card ${selected ? "selected" : ""}`} onClick={onClick}><span className="product-icon">{icon}</span><span><strong>{name}</strong><small>{description}</small></span><ChevronRight /></button></DeskLocalized>;
 }
 function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
-  return <GradientPanel className="empty-bots"><img src="/illustrations/empty-bots.png" alt="Empty wallet scene with a butterfly" className="illustration-empty-bots pointer-events-none select-none" draggable={false} decoding="async" loading="eager" /><p>No bots are running yet.</p><button className="empty-bots-action" onClick={onLaunch}>Launch your first bot <ChevronRight size={14} /></button></GradientPanel>;
+  return <DeskLocalized><GradientPanel className="empty-bots"><img src="/illustrations/empty-bots.png" alt="Empty wallet scene with a butterfly" className="illustration-empty-bots pointer-events-none select-none" draggable={false} decoding="async" loading="eager" /><p>No bots are running yet.</p><button className="empty-bots-action" onClick={onLaunch}>Launch your first bot <ChevronRight size={14} /></button></GradientPanel></DeskLocalized>;
 }
 
 const memecoinNames: Record<string, string> = {
@@ -110,6 +111,7 @@ export function BotsWorkspace({
   onOpenDemo: () => void;
   initialBotId?: string | null;
 }) {
+  const language = useDeskLanguage();
   const [view, setView] = useState<"fleet" | "create" | "detail" | "flashback">(
     initialBotId ? "detail" : "fleet",
   );
@@ -1365,13 +1367,20 @@ ealed Return entry amount" /></div></label>
           className="demo-link"
           onClick={onOpenDemo}
         >
-          Start the {Number(data?.demo?.grant_usd || 0) > 0 ? money(Number(data?.demo?.grant_usd)) : "shared"} virtual demo{" "}
+          {Number(data?.demo?.grant_usd || 0) > 0
+            ? translateDeskPhrase(language, "Start the {amount} virtual demo", {
+                amount: money(Number(data?.demo?.grant_usd)),
+              })
+            : translateDeskPhrase(language, "Start shared virtual demo")}{" "}
           <ChevronRight />
         </button>
       )}
       {data?.demo?.state === "active" && (
         <p className="demo-link" role="status">
-          Shared virtual demo · {money(Number(data?.demo?.pool_available_usd || 0))} available · {money(Number(data?.demo?.pool_locked_usd || 0))} locked · isolated from wallet
+          {translateDeskPhrase(language, "Shared virtual demo · {available} available · {locked} locked · isolated from wallet", {
+            available: money(Number(data?.demo?.pool_available_usd || 0)),
+            locked: money(Number(data?.demo?.pool_locked_usd || 0)),
+          })}
         </p>
       )}
     </div>
