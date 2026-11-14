@@ -203,7 +203,7 @@ function WalletWorkspaceBody({
       return;
     }
     let cancelled = false;
-    void request(`/v1/deposits/${intent.id}/qr`)
+    void request(`/v1/deposits/${intent.id}/qr`, {}, environment)
       .then((result) => {
         if (!cancelled) setQrDataUrl(String(result.data_url || ""));
       })
@@ -213,7 +213,7 @@ function WalletWorkspaceBody({
     return () => {
       cancelled = true;
     };
-  }, [intent?.id]);
+  }, [environment, intent?.id, request]);
   useEffect(() => {
     const trackedStatuses = new Set([
       "watching",
@@ -228,7 +228,7 @@ function WalletWorkspaceBody({
     if (!intent?.watch_enabled || !trackedStatuses.has(intent.status.toLowerCase())) return;
     let cancelled = false;
     const refreshDepositStatus = () => {
-      void requestRef.current("/v1/dashboard")
+      void requestRef.current("/v1/dashboard", {}, environment)
         .then((snapshot: LiveDashboard) => {
           const updatedIntent = snapshot.deposits.find((row) => row.id === intent.id);
           if (cancelled || !updatedIntent) return;
@@ -246,7 +246,7 @@ function WalletWorkspaceBody({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [intent?.id, intent?.status, intent?.watch_enabled]);
+  }, [environment, intent?.id, intent?.status, intent?.watch_enabled]);
   const withdrawNetworks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -632,6 +632,7 @@ function WalletWorkspaceBody({
                     const result = await request(
                       `/v1/deposits/${intent.id}/watch`,
                       { method: "POST", body: "{}" },
+                      environment,
                     );
                     setIntent((current) =>
                       current
