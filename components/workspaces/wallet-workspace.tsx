@@ -86,6 +86,14 @@ const depositNetworkNames: Record<string, string> = {
   SOL_DEVNET: "Solana Devnet",
 };
 
+const terminalDepositStatuses = new Set([
+  "credited_and_closed",
+  "quarantined",
+  "failed_manual_review",
+  "failed",
+  "expired",
+]);
+
 export function WalletWorkspace({
   store,
   poll,
@@ -198,7 +206,7 @@ function WalletWorkspaceBody({
     walletUpdateRef.current = onWalletUpdate;
   }, [request, onWalletUpdate]);
   useEffect(() => {
-    if (!intent) {
+    if (!intent || terminalDepositStatuses.has(intent.status.toLowerCase())) {
       setQrDataUrl("");
       return;
     }
@@ -304,6 +312,9 @@ function WalletWorkspaceBody({
     ...listedDepositAssets.filter((item) => !preferredDepositAssets.includes(item)),
   ];
   const depositNetworks = depositRoutes.filter((route) => route.asset === asset);
+  const activeDeposits = data.deposits.filter(
+    (route) => !terminalDepositStatuses.has(route.status.toLowerCase()),
+  );
   const depositNetworkName = (network: string) => {
     const name =
       depositRoutes.find((route) => route.chain === network)?.network ||
@@ -704,10 +715,10 @@ function WalletWorkspaceBody({
             </>
           )}
         </GradientPanel>
-        {data.deposits.length > 0 && (
+        {activeDeposits.length > 0 && (
           <GradientPanel className="ledger-card">
             <span className="eyebrow">{t("MY DEPOSITS")}</span>
-            {data.deposits.map((route) => (
+            {activeDeposits.map((route) => (
               <div className="ledger-row" key={route.id}>
                 <div>
                   <strong>
