@@ -6,17 +6,16 @@ import { AccessibleDialog } from "../accessible-dialog";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { DeskState } from "../../lib/desk-types";
 import { translateDeskPhrase } from "../../lib/desk-i18n";
+import { describeActivity } from "../../lib/activity-presentation";
 import { useDeskLanguage } from "../desk-language";
 import { useResourcePoller } from "./use-resource-poller";
 import {
   activityAmountDisplay,
-  activityLabel,
   activityTone,
   ChevronRight,
   Download,
   GradientPanel,
   History,
-  isFlashbackEntryLock,
   isNonFinancialActivity,
   money,
   PaymentMark,
@@ -1013,18 +1012,19 @@ function WalletWorkspaceBody({
             filteredLedger.map((entry, index) => {
               const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
               const isNonFinancial = isNonFinancialActivity(entry.kind);
+              const presentation = describeActivity(entry);
               return (
               <div className="ledger-row" key={`${entry.created_at}-${index}`}>
                 <div>
-                  <strong>{t(activityLabel(entry.kind, entry.status, amount))}</strong>
+                  <strong>{t(presentation.title)}</strong>
                   <small>
-                    {isFlashbackEntryLock(entry.kind) ? t("Entry locked until the sealed result is revealed") : isNonFinancial ? t("Strategy controls saved · no balance change") : `${entry.asset} / ${t(entry.status)}`}
+                    {t(presentation.summary)}
                   </small>
                 </div>
                 <span
                   className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
                 >
-                  {t(entry.status)}
+                  {t(presentation.status)}
                 </span>
                 <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
                   {isNonFinancial ? "—" : activityAmountDisplay(amount)}
@@ -1060,8 +1060,8 @@ function WalletWorkspaceBody({
           {[...data.engine, ...data.ledger].length ? (
             [
               ...data.engine.map((entry) => ({
-                kind: entry.status,
-                asset: "Trading",
+                kind: entry.net_realized > 0 ? "trading_profit" : entry.net_realized < 0 ? "trading_loss" : "trading_settlement",
+                asset: "USD",
                 amount_usd: entry.net_realized,
                 status: entry.status,
                 created_at: entry.created_at,
@@ -1072,21 +1072,22 @@ function WalletWorkspaceBody({
               .map((entry, index) => {
                 const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
                 const isNonFinancial = isNonFinancialActivity(entry.kind);
+                const presentation = describeActivity(entry);
                 return (
                 <div
                   className="ledger-row"
                   key={`${entry.created_at}-${index}`}
                 >
                   <div>
-                    <strong>{t(activityLabel(entry.kind, entry.status, amount))}</strong>
+                    <strong>{t(presentation.title)}</strong>
                     <small>
-                      {isFlashbackEntryLock(entry.kind) ? t("Entry locked until the sealed result is revealed") : isNonFinancial ? t("Strategy controls saved · no balance change") : `${entry.asset} / ${t(entry.status)}`}
+                      {t(presentation.summary)}
                     </small>
                   </div>
                   <span
                     className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
                   >
-                    {t(entry.status)}
+                    {t(presentation.status)}
                   </span>
                   <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
                     {isNonFinancial ? "—" : activityAmountDisplay(amount)}
