@@ -821,7 +821,6 @@ function Header({
     <DeskLocalized>
     <header className="topbar">
       <div className="mobile-brand">
-        <PulseMark size={27} />
         <span>
           TRADE<span>PULSE</span>
         </span>

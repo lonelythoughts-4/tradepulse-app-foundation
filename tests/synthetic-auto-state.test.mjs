@@ -26,3 +26,23 @@ test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(styles, /\.synthetic-auto-fields\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-fields,\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
+
+test("Synthetic contract and action controls keep readable theme-aware states", () => {
+  assert.match(styles, /\.synthetic-contract-options button\{[^}]*background:var\(--tp-surface-raised\);color:var\(--tp-ink\)/);
+  assert.match(styles, /\.synthetic-contract-options button:focus-visible\{outline:2px solid var\(--tp-accent-strong\)/);
+  assert.match(styles, /\.synthetic-pilot \.activity-row>\.small-action\{[^}]*min-height:44px/);
+  assert.match(styles, /\.synthetic-pilot \.activity-row>\.small-action:disabled\{[^}]*opacity:1/);
+});
+
+test("the mobile brand keeps its wordmark without the marked SVG", () => {
+  const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
+  const mobileBrand = shell.match(/<div className="mobile-brand">([\s\S]*?)<\/div>/)?.[1] || "";
+  assert.match(mobileBrand, /TRADE<span>PULSE<\/span>/);
+  assert.doesNotMatch(mobileBrand, /PulseMark/);
+});
+
+test("Auto activity explains when a risk circuit breaker blocks new entries", () => {
+  assert.match(source, /A protective loss-streak check is blocking new entries/);
+  assert.match(source, /A daily-loss limit is blocking new entries/);
+  assert.match(source, /"Auto entries paused"/);
+});

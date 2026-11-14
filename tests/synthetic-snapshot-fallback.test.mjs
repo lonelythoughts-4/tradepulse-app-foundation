@@ -21,6 +21,7 @@ test("the fast stream seeds a read-only partial view until the snapshot arrives"
 
 test("the verified live quote seeds the chart while history catches up", () => {
   assert.match(source, /const chartTicks = snapshot\?\.ticks\?\.length \? snapshot\.ticks : snapshot\?\.latest \? \[snapshot\.latest\] : \[\];/);
+  assert.match(source, /snapshot\.history_available === false && <p role="status">Chart history is delayed\. The live quote remains current\./);
 });
 
 test("a one-tick chart keeps the current price visible across the plot", () => {
