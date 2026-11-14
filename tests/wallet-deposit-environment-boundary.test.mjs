@@ -7,10 +7,16 @@ test("all deposit follow-up calls stay bound to the selected environment", async
     new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),
     "utf8",
   );
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
 
   assert.match(wallet, /request\(`\/v1\/deposits\/\$\{intent\.id\}\/qr`\s*,\s*\{\}\s*,\s*environment\)/);
-  assert.match(wallet, /requestRef\.current\("\/v1\/dashboard",\s*\{\}\s*,\s*environment\)/);
   assert.match(wallet, /`\/v1\/deposits\/\$\{intent\.id\}\/watch`\s*,\s*\{ method: "POST", body: "\{\}" \}\s*,\s*environment/);
+  assert.match(shell, /const walletEnvironment = data\.user\.is_admin \? webEnvironment : "mainnet"/);
+  assert.match(shell, /poll=\{\(signal\) => request\("\/v1\/dashboard", \{ signal \}, walletEnvironment\)\}/);
+  assert.match(shell, /environment=\{walletEnvironment\}/);
 });
 
 test("the duplicate Vercel hostname redirects to the canonical desk", async () => {

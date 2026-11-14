@@ -7421,6 +7421,7 @@ function LiveTradePulse() {
     const overview = await request("/v1/admin/overview", {}, selectedAtRequest);
     if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
   };
+  const walletEnvironment = data.user.is_admin ? webEnvironment : "mainnet";
   const workspacePresence = getWorkspacePresencePlan(Boolean(reduceMotion));
   return (
     <DeskLanguageProvider language={uiLanguage}>
@@ -7654,9 +7655,9 @@ function LiveTradePulse() {
           {tab === "Wallet" && (
             <WalletWorkspace
               store={deskStore}
-              poll={(signal) => request("/v1/dashboard", { signal })}
+              poll={(signal) => request("/v1/dashboard", { signal }, walletEnvironment)}
               request={request}
-              environment={data.user.is_admin ? webEnvironment : "mainnet"}
+              environment={walletEnvironment}
               onWalletUpdate={({ wallet, withdrawal, deposits }) =>
                 updateDashboard((current) =>
                   current
