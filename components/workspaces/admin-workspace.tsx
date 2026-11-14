@@ -12,6 +12,14 @@ function money(value: number) {
     currency: "USD",
   }).format(Number(value || 0));
 }
+
+function parseAutoUserAmount(value: string) {
+  const normalized = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount >= 0.01 && amount <= 100_000 ? amount : null;
+}
+
 export type AdminOverview = {
   environment: string;
   members: Array<{ user_id: number; first_name?: string; username?: string }>;
@@ -56,7 +64,7 @@ export type AdminOverview = {
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
-    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number; total_actions?: number; scheduled_actions?: number; completed_actions?: number; blocked_actions?: number; completed_flashback_actions?: number };
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number; total_actions?: number; scheduled_actions?: number; completed_actions?: number; blocked_actions?: number; completed_flashback_actions?: number; failed_imports?: number };
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
@@ -73,6 +81,7 @@ export type AdminOverview = {
       active_event_bots?: number;
       imported_accounts?: number;
       pending_imports?: number;
+      failed_imports?: number;
       next_scheduled_at?: number | null;
       completed_actions?: number;
       scheduled_actions?: number;
@@ -80,7 +89,12 @@ export type AdminOverview = {
       completed_flashback_actions?: number;
       next_action_at?: number | null;
     }>;
-    forecast: Array<{ date: string; deposits: number; withdrawals: number; topups: number; flashbacks?: number; lifecycle?: number; total: number }>;
+    forecast: Array<{ date: string; day?: string; deposits: number; withdrawals: number; topups: number; flashbacks?: number; lifecycle?: number; total: number }>;
+    issues?: Array<{ issue_type: "event" | "action" | "import"; issue_id: string; run_id: string; kind: string; attempts: number; last_error: string; status: string; user_id: number; created_at: number; retryable: number; issue_count: number }>;
+    run_count?: number;
+    run_limit?: number;
+    run_offset?: number;
+    timezone?: string;
   };
   community_cards: {
     config: { group: string; enabled: boolean; stress_test_presentation?: boolean };
@@ -178,7 +192,11 @@ export function AdminWorkspace({
   const [autouserMaximum, setAutouserMaximum] = useState("");
   const [autouserConfirmed, setAutouserConfirmed] = useState(false);
   const [autouserPending, setAutouserPending] = useState(false);
+  const [autouserError, setAutouserError] = useState("");
   const [autouserRunPending, setAutouserRunPending] = useState<Record<string, boolean>>({});
+  const [autouserCancelRun, setAutouserCancelRun] = useState<AdminOverview["autousers"]["runs"][number] | null>(null);
+  const [autouserPage, setAutouserPage] = useState<AdminOverview["autousers"] | null>(null);
+  const [autouserPagePending, setAutouserPagePending] = useState<Record<string, boolean>>({});
   const [communityGroup, setCommunityGroup] = useState("");
   const [adminHelpOpen, setAdminHelpOpen] = useState(false);
   const [adminTicket, setAdminTicket] = useState<(AdminOverview["tickets"][number] & { messages?: Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }> }) | null>(null);
@@ -186,6 +204,9 @@ export function AdminWorkspace({
   const [adminTicketPending, setAdminTicketPending] = useState(false);
   const fundingFieldId = useId();
   const autouserFileId = useId();
+  const autouserMinimumId = useId();
+  const autouserMaximumId = useId();
+  const autouserErrorId = useId();
   const autouserFileRef = useRef<HTMLInputElement>(null);
   const [withdrawalReview, setWithdrawalReview] = useState<{
     row: AdminOverview["withdrawals"][number];
@@ -212,6 +233,9 @@ export function AdminWorkspace({
       window.clearTimeout(adminReconcileTimer.current);
     }
   }, []);
+  useEffect(() => {
+    setAutouserPage(null);
+  }, [admin.autousers]);
   useEffect(() => {
     setWithdrawalReview(null);
     setWithdrawalError("");
@@ -538,13 +562,32 @@ export function AdminWorkspace({
     if (saved) setRecoveryReview(null);
   };
   const submitAutouserRun = async () => {
-    if (!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)) return;
+    if (autouserPending) return;
+    const minimum = parseAutoUserAmount(autouserMinimum);
+    const maximum = parseAutoUserAmount(autouserMaximum);
+    if (!autouserFile) {
+      setAutouserError("Choose a CSV, TSV, TXT, or JSON file no larger than 5 MB.");
+      return;
+    }
+    if (!minimum || !maximum) {
+      setAutouserError("Enter deposit amounts from $0.01 to $100,000.00, using no more than two decimal places.");
+      return;
+    }
+    if (maximum < minimum) {
+      setAutouserError("The maximum deposit must be at least the minimum deposit.");
+      return;
+    }
+    if (!autouserConfirmed) {
+      setAutouserError("Confirm that this run creates testnet-only simulated activity.");
+      return;
+    }
+    setAutouserError("");
     setAutouserPending(true);
     try {
       const form = new FormData();
       form.append("file", autouserFile);
-      form.append("min_amount", autouserMinimum);
-      form.append("max_amount", autouserMaximum);
+      form.append("min_amount", String(minimum));
+      form.append("max_amount", String(maximum));
       form.append("confirmed", "true");
       // The API accepts only the durable import queue here. Account setup and
       // activity expansion happen independently on the server, so a large
@@ -558,7 +601,9 @@ export function AdminWorkspace({
       onNotice(result.message || "Auto-user testnet deposit run scheduled.");
       scheduleReconcile();
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Auto-user run could not be scheduled.");
+      const message = error instanceof Error ? error.message : "Auto-user run could not be scheduled.";
+      setAutouserError(message);
+      onNotice(message);
     } finally {
       setAutouserPending(false);
     }
@@ -571,8 +616,10 @@ export function AdminWorkspace({
       const result = await request(`/v1/admin/autousers/runs/${runId}/actions`, { method: "POST", body: JSON.stringify({ action }) }, "testnet");
       onNotice(result.message || `Auto-user run ${action}d.`);
       scheduleReconcile();
+      return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
+      return false;
     } finally {
       setAutouserRunPending((current) => {
         const next = { ...current };
@@ -580,6 +627,49 @@ export function AdminWorkspace({
         return next;
       });
     }
+  };
+  const retryAutouserIssue = async (issue: NonNullable<AdminOverview["autousers"]["issues"]>[number]) => {
+    const issueKey = `retry:${issue.issue_type}:${issue.issue_id}`;
+    if (autouserRunPending[issueKey]) return;
+    setAutouserRunPending((current) => ({ ...current, [issueKey]: true }));
+    try {
+      const path = issue.issue_type === "import"
+        ? `/v1/admin/autousers/runs/${encodeURIComponent(issue.run_id)}/retry-import`
+        : `/v1/admin/autousers/issues/${issue.issue_type}/${encodeURIComponent(issue.issue_id)}/retry`;
+      const result = await request(path, { method: "POST", body: JSON.stringify({}) }, "testnet");
+      onNotice(result.message || "Auto-user issue queued for retry.");
+      scheduleReconcile();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Auto-user issue could not be retried.");
+    } finally {
+      setAutouserRunPending((current) => {
+        const next = { ...current };
+        delete next[issueKey];
+        return next;
+      });
+    }
+  };
+  const loadAutouserPage = async (offset: number, direction: "previous" | "next") => {
+    const pageKey = `page:${direction}`;
+    if (autouserPagePending[pageKey]) return;
+    setAutouserPagePending((current) => ({ ...current, [pageKey]: true }));
+    try {
+      const limit = Math.max(1, Number(admin.autousers?.run_limit || 12));
+      const page = await request(`/v1/admin/autousers/runs?limit=${limit}&offset=${Math.max(0, offset)}`, {}, "testnet");
+      setAutouserPage(page);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Auto-user run history could not be loaded.");
+    } finally {
+      setAutouserPagePending((current) => {
+        const next = { ...current };
+        delete next[pageKey];
+        return next;
+      });
+    }
+  };
+  const confirmAutouserCancel = async () => {
+    if (!autouserCancelRun || autouserRunPending[`${autouserCancelRun.id}:cancel`]) return;
+    if (await updateAutouserRun(autouserCancelRun.id, "cancel")) setAutouserCancelRun(null);
   };
   const sendBroadcast = async () => {
     if (!canSendBroadcast) return;
@@ -605,9 +695,37 @@ export function AdminWorkspace({
       setBroadcastPending(false);
     }
   };
+  const autouserData = autouserPage || admin.autousers;
+  const autouserRunOffset = Number(autouserData?.run_offset || 0);
+  const autouserRunLimit = Math.max(1, Number(autouserData?.run_limit || 12));
+  const autouserRunCount = Number(autouserData?.run_count ?? autouserData?.runs?.length ?? 0);
+  const autouserRuns = autouserData?.runs || [];
+  const autouserMinimumValue = parseAutoUserAmount(autouserMinimum);
+  const autouserMaximumValue = parseAutoUserAmount(autouserMaximum);
+  const autouserInputHint = autouserMinimum && autouserMaximum
+    ? autouserMinimumValue === null || autouserMaximumValue === null
+      ? "Use amounts from $0.01 to $100,000.00 with whole cents."
+      : autouserMaximumValue < autouserMinimumValue
+        ? "The maximum deposit must be at least the minimum deposit."
+        : "Deposit amounts are valid. Upload a UTF-8 names file no larger than 5 MB."
+    : "Deposit amounts must be $0.01–$100,000.00 with whole cents; names files must be UTF-8 and no larger than 5 MB.";
+  const canQueueAutouserRun = Boolean(autouserFile) && !autouserPending && autouserConfirmed
+    && autouserMinimumValue !== null && autouserMaximumValue !== null
+    && autouserMaximumValue >= autouserMinimumValue;
   return (
     <DeskLocalized>
     <div className="admin-screen">
+      {autouserCancelRun && <AccessibleDialog label="Confirm auto-user run cancellation" onClose={() => setAutouserCancelRun(null)} dismissible={!autouserRunPending[`${autouserCancelRun.id}:cancel`]}>
+        <span className="eyebrow">TESTNET RUN / DESTRUCTIVE ACTION</span>
+        <h2>Cancel this auto-user run?</h2>
+        <p>Run {autouserCancelRun.id.slice(0, 8)} will stop scheduling activity. Any open event positions will be handled by the existing safe-close process; already completed history remains unchanged.</p>
+        <div className="admin-actions">
+          <button className="danger-action" disabled={Boolean(autouserRunPending[`${autouserCancelRun.id}:cancel`])} aria-busy={Boolean(autouserRunPending[`${autouserCancelRun.id}:cancel`])} onClick={() => void confirmAutouserCancel()}>
+            {autouserRunPending[`${autouserCancelRun.id}:cancel`] ? "Cancelling…" : "Confirm cancellation"}
+          </button>
+          <button className="ghost-action" disabled={Boolean(autouserRunPending[`${autouserCancelRun.id}:cancel`])} onClick={() => setAutouserCancelRun(null)}>Keep run</button>
+        </div>
+      </AccessibleDialog>}
       {adminHelpOpen && <AccessibleDialog label="Admin control room guide" onClose={() => setAdminHelpOpen(false)}>
         <h2>Control room guide</h2>
         <p>Use this workspace to review and act on the selected environment. Mainnet changes affect live operations; testnet changes affect isolated testing only.</p>
@@ -1202,28 +1320,58 @@ export function AdminWorkspace({
           </div>
           <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / TESTNET ACTIVITY CARDS ONLY</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
-          <input ref={autouserFileRef} id={autouserFileId} type="file" accept=".csv,.tsv,.txt,.json,text/csv,text/tab-separated-values,text/plain,application/json" aria-label="Auto-user names file upload" onChange={(event) => setAutouserFile(event.target.files?.[0] || null)} />
-          <label className="amount-field">Minimum testnet deposit in USD
-            <input value={autouserMinimum} inputMode="decimal" onChange={(event) => setAutouserMinimum(event.target.value)} placeholder="Minimum / USD" />
+          <input
+            ref={autouserFileRef}
+            id={autouserFileId}
+            type="file"
+            accept=".csv,.tsv,.txt,.json,text/csv,text/tab-separated-values,text/plain,application/json"
+            aria-describedby={autouserError ? autouserErrorId : undefined}
+            onChange={(event) => {
+              const file = event.target.files?.[0] || null;
+              if (!file) {
+                setAutouserFile(null);
+                return;
+              }
+              const extension = file.name.toLowerCase().split(".").pop();
+              if (!extension || !["csv", "tsv", "txt", "json"].includes(extension)) {
+                setAutouserFile(null);
+                event.currentTarget.value = "";
+                setAutouserError("Choose a CSV, TSV, TXT, or JSON file.");
+                return;
+              }
+              if (file.size > 5 * 1024 * 1024) {
+                setAutouserFile(null);
+                event.currentTarget.value = "";
+                setAutouserError("The names file is larger than 5 MB. Split it into smaller uploads.");
+                return;
+              }
+              setAutouserFile(file);
+              setAutouserError("");
+            }}
+          />
+          <label className="amount-field" htmlFor={autouserMinimumId}>Minimum testnet deposit in USD
+            <input id={autouserMinimumId} value={autouserMinimum} inputMode="decimal" aria-describedby={autouserError ? autouserErrorId : undefined} onChange={(event) => { setAutouserMinimum(event.target.value); setAutouserError(""); }} placeholder="Minimum / USD" />
           </label>
-          <label className="amount-field">Maximum testnet deposit in USD
-            <input value={autouserMaximum} inputMode="decimal" onChange={(event) => setAutouserMaximum(event.target.value)} placeholder="Maximum / USD" />
+          <label className="amount-field" htmlFor={autouserMaximumId}>Maximum testnet deposit in USD
+            <input id={autouserMaximumId} value={autouserMaximum} inputMode="decimal" aria-describedby={autouserError ? autouserErrorId : undefined} onChange={(event) => { setAutouserMaximum(event.target.value); setAutouserError(""); }} placeholder="Maximum / USD" />
           </label>
+          <small>{autouserInputHint}</small>
           <label className="check-confirm">
-            <input type="checkbox" checked={autouserConfirmed} onChange={(event) => setAutouserConfirmed(event.target.checked)} />
+            <input type="checkbox" checked={autouserConfirmed} onChange={(event) => { setAutouserConfirmed(event.target.checked); setAutouserError(""); }} />
             I understand this schedules testnet-only deposit, withdrawal, and top-up activity—not real transfers.
           </label>
-          <button className="primary-action" disabled={!autouserFile || autouserPending || !autouserConfirmed || Number(autouserMinimum) <= 0 || Number(autouserMaximum) < Number(autouserMinimum)} onClick={() => void submitAutouserRun()}>
+          <button className="primary-action" disabled={!canQueueAutouserRun} aria-busy={autouserPending} onClick={() => void submitAutouserRun()}>
             {autouserPending ? "Queuing activity run…" : "Queue activity run"}
           </button>
+          {autouserError && <small id={autouserErrorId} className="security-feedback" role="alert">{autouserError}</small>}
           <div className="admin-row">
             <div>
-              <strong>{Number(admin.autousers?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
-              <small className="mono">{Number(admin.autousers?.totals?.completed_events || 0).toLocaleString()} money events complete / {Number(admin.autousers?.totals?.completed_actions || 0).toLocaleString()} lifecycle actions complete / {Number(admin.autousers?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(admin.autousers?.totals?.blocked_events || 0).toLocaleString() + Number(admin.autousers?.totals?.blocked_actions || 0).toLocaleString()} waiting safely</small>
-              {(admin.autousers?.forecast || []).length > 0 && <small className="mono">FULL PLAN: {admin.autousers?.forecast?.[0]?.date} → {admin.autousers?.forecast?.[(admin.autousers?.forecast?.length || 1) - 1]?.date} / {(admin.autousers?.forecast || []).length} ACTIVE DAYS</small>}
+              <strong>{Number(autouserData?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
+              <small className="mono">{Number(autouserData?.totals?.completed_events || 0).toLocaleString()} money events complete / {Number(autouserData?.totals?.completed_actions || 0).toLocaleString()} lifecycle actions complete / {Number(autouserData?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(autouserData?.totals?.blocked_events || 0).toLocaleString() + Number(autouserData?.totals?.blocked_actions || 0).toLocaleString()} waiting safely / {Number(autouserData?.totals?.failed_imports || 0).toLocaleString()} import rows needing retry</small>
+              {(autouserData?.forecast || []).length > 0 && <small className="mono">UPCOMING ACTIVITY ({autouserData?.timezone || "Africa/Lagos"}): {autouserData?.forecast?.[0]?.date} → {autouserData?.forecast?.[Math.min((autouserData?.forecast?.length || 1) - 1, 13)]?.date} / {Math.min((autouserData?.forecast || []).length, 14)} ACTIVE DAYS SHOWN</small>}
             </div>
           </div>
-          {(admin.autousers?.forecast || []).slice(0, 14).map((day) => (
+          {(autouserData?.forecast || []).slice(0, 14).map((day) => (
             <div className="admin-row" key={day.date}>
               <div>
                 <strong>{day.date} / {Number(day.total || 0).toLocaleString()} predicted events</strong>
@@ -1231,17 +1379,40 @@ export function AdminWorkspace({
               </div>
             </div>
           ))}
-          {(admin.autousers?.runs || []).slice(0, 5).map((run) => (
+          <h3>Run history</h3>
+          {autouserRuns.map((run) => (
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status === "paused" && !run.import_complete ? "importing" : run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{run.status === "paused" && !run.import_complete ? `${Number(run.imported_accounts || 0).toLocaleString()}/${Number(run.imported_users || 0).toLocaleString()} accounts prepared / ${Number(run.pending_imports || 0).toLocaleString()} remaining` : `${Number(run.completed_events || 0).toLocaleString()} money events complete / ${Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / ${Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / ${Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / ${Number(run.active_event_bots || 0).toLocaleString()}/${Number(run.event_participants || 0).toLocaleString()} event bots active`}</small>
+                <small className="mono">{run.status === "paused" && !run.import_complete ? `${Number(run.imported_accounts || 0).toLocaleString()}/${Number(run.imported_users || 0).toLocaleString()} accounts prepared / ${Number(run.pending_imports || 0).toLocaleString()} remaining / ${Number(run.failed_imports || 0).toLocaleString()} rows need retry` : `${Number(run.completed_events || 0).toLocaleString()} money events complete / ${Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / ${Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / ${Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / ${Number(run.active_event_bots || 0).toLocaleString()}/${Number(run.event_participants || 0).toLocaleString()} event bots active`}</small>
               </div>
-              {run.status === "scheduled" && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:pause`])} aria-busy={Boolean(autouserRunPending[`${run.id}:pause`])} onClick={() => void updateAutouserRun(run.id, "pause")}>{autouserRunPending[`${run.id}:pause`] ? "Pausing…" : "Pause"}</button>}
-              {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:resume`])} aria-busy={Boolean(autouserRunPending[`${run.id}:resume`])} onClick={() => void updateAutouserRun(run.id, "resume")}>{autouserRunPending[`${run.id}:resume`] ? "Resuming…" : "Resume"}</button>}
-              {(run.status === "scheduled" || run.status === "paused") && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:cancel`])} aria-busy={Boolean(autouserRunPending[`${run.id}:cancel`])} onClick={() => void updateAutouserRun(run.id, "cancel")}>{autouserRunPending[`${run.id}:cancel`] ? "Cancelling…" : "Cancel"}</button>}
+              <div className="admin-actions">
+                {run.status === "scheduled" && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:pause`])} aria-busy={Boolean(autouserRunPending[`${run.id}:pause`])} onClick={() => void updateAutouserRun(run.id, "pause")}>{autouserRunPending[`${run.id}:pause`] ? "Pausing…" : "Pause"}</button>}
+                {run.status === "paused" && Boolean(run.import_complete) && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:resume`])} aria-busy={Boolean(autouserRunPending[`${run.id}:resume`])} onClick={() => void updateAutouserRun(run.id, "resume")}>{autouserRunPending[`${run.id}:resume`] ? "Resuming…" : "Resume"}</button>}
+                {(run.status === "scheduled" || run.status === "paused") && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:cancel`])} onClick={() => setAutouserCancelRun(run)}>{autouserRunPending[`${run.id}:cancel`] ? "Cancelling…" : "Review cancel"}</button>}
+              </div>
             </div>
           ))}
+          <div className="admin-row">
+            <small className="mono">{autouserRunCount === 0 ? "No auto-user runs yet." : `Showing ${autouserRunOffset + 1}–${Math.min(autouserRunOffset + autouserRuns.length, autouserRunCount)} of ${autouserRunCount} runs`}</small>
+            <div className="admin-actions">
+              <button className="small-action" disabled={autouserRunOffset <= 0 || Boolean(autouserPagePending["page:previous"])} aria-busy={Boolean(autouserPagePending["page:previous"])} onClick={() => void loadAutouserPage(Math.max(0, autouserRunOffset - autouserRunLimit), "previous")}>{autouserPagePending["page:previous"] ? "Loading…" : "Previous runs"}</button>
+              <button className="small-action" disabled={autouserRunOffset + autouserRuns.length >= autouserRunCount || Boolean(autouserPagePending["page:next"])} aria-busy={Boolean(autouserPagePending["page:next"])} onClick={() => void loadAutouserPage(autouserRunOffset + autouserRunLimit, "next")}>{autouserPagePending["page:next"] ? "Loading…" : "More runs"}</button>
+            </div>
+          </div>
+          {(autouserData?.issues || []).length > 0 && <>
+            <h3>Auto-retry and blocked issues</h3>
+            {(autouserData.issues || []).map((issue) => {
+              const issueKey = `retry:${issue.issue_type}:${issue.issue_id}`;
+              return <div className="admin-row" key={`${issue.issue_type}:${issue.issue_id}`}>
+                <div>
+                  <strong>{issue.kind.replace(/_/g, " ")} / run {issue.run_id.slice(0, 8)}{issue.issue_count > 1 ? ` / ${issue.issue_count} rows` : ""}</strong>
+                  <small className="mono">{issue.retryable ? "READY FOR MANUAL RETRY" : "AUTOMATIC RETRY OR OPERATOR REVIEW"} / ATTEMPT {issue.attempts} / {issue.last_error}</small>
+                </div>
+                {Boolean(issue.retryable) && <button className="small-action" disabled={Boolean(autouserRunPending[issueKey])} aria-busy={Boolean(autouserRunPending[issueKey])} onClick={() => void retryAutouserIssue(issue)}>{autouserRunPending[issueKey] ? "Retrying…" : "Retry issue"}</button>}
+              </div>;
+            })}
+          </>}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">SETTINGS EDITOR</span>
