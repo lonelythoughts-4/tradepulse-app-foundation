@@ -23,7 +23,9 @@ test("the wallet loads deposit asset/network pairs from the selected environment
   assert.match(wallet, /depositNetworkName\(intent\.chain\)/);
   assert.match(wallet, /error\.name === "AbortError"/);
   assert.match(shell, /Monitoring started\. The background watcher will check this address/);
-  assert.match(shell, /<WalletWorkspace[\s\S]*?environment=\{data\.user\.is_admin \? webEnvironment : "mainnet"\}/);
+  assert.match(shell, /const walletEnvironment = data\.user\.is_admin \? webEnvironment : "mainnet"/);
+  assert.match(shell, /<WalletWorkspace[\s\S]*?environment=\{walletEnvironment\}/);
+  assert.match(shell, /poll=\{\(signal\) => request\("\/v1\/dashboard", \{ signal \}, walletEnvironment\)\}/);
   for (const [assetOrNetwork, icon] of [
     ["ETH_SEPOLIA", "ethereum"],
     ["BNB_TESTNET", "bnb"],
