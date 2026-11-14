@@ -13,7 +13,9 @@ test("Auto changes show a distinct pending state until the server confirms the m
   assert.match(source, /executionTransition === "AUTO" \? "Enabling Auto…" : executionTransition === "MANUAL" \? "Switching to Manual…"/);
   assert.match(source, /execution_mode: response\.execution_mode, execution: \{ \.\.\.current\.execution, \.\.\.response \}/);
   assert.match(source, /executionCapacityRefreshing \? "Updating…" : money/);
-  assert.match(source, /if \(executionCapacityRefreshing\) return onNotice\("Synthetic capacity is refreshing\./);
+  assert.match(source, /Capacity is refreshing\. New orders are checked against current funding before submission\./);
+  assert.match(source, /value > capacity && !\(executionCapacityRefreshing && fundingSource === "wallet"\)/);
+  assert.doesNotMatch(source, /if \(executionCapacityRefreshing && \(path === "\/v1\/synthetic\/orders"/);
   assert.match(source, /Saving the Auto setting\. The state changes to on only after the server confirms the allocation\./);
 });
 
