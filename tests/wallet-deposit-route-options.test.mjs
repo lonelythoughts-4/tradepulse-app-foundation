@@ -16,13 +16,13 @@ test("the wallet loads deposit asset/network pairs from the selected environment
   assert.match(wallet, /const depositNetworks = depositRoutes\.filter\(\(route\) => route\.asset === asset\)/);
   assert.match(wallet, /depositNetworks\.map\(\(route\) =>/);
   assert.match(wallet, /disabled=\{!route\.available\}/);
-  assert.match(wallet, /Temporarily unavailable · \$\{route\.asset\} only/);
+  assert.match(wallet, /t\("Temporarily unavailable · \{asset\} only", \{ asset: route\.asset \}\)/);
   assert.match(wallet, /"ETH", "BNB", "SOL", "MATIC"/);
   assert.match(wallet, /ETH: "Ether"/);
   assert.match(wallet, /SOL_DEVNET: "Solana Devnet"/);
   assert.match(wallet, /depositNetworkName\(intent\.chain\)/);
   assert.match(wallet, /error\.name === "AbortError"/);
-  assert.match(wallet, /background monitoring is enabled/);
+  assert.match(shell, /Monitoring started\. The background watcher will check this address/);
   assert.match(shell, /<WalletWorkspace[\s\S]*?environment=\{data\.user\.is_admin \? webEnvironment : "mainnet"\}/);
   for (const [assetOrNetwork, icon] of [
     ["ETH_SEPOLIA", "ethereum"],

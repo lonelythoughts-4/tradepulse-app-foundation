@@ -6080,7 +6080,7 @@ function LiveWalletScreen({
                     onNotice(
                       result.detected
                         ? `Transfer detected. Status: ${result.status}. Credit happens after confirmation.`
-                        : `Monitoring started. No transfer detected yet; nothing was credited.`,
+                        : `Monitoring started. The background watcher will check this address. No transfer was detected yet; nothing was credited.`,
                     );
                   } catch (error) {
                     onNotice(
