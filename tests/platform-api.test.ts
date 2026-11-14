@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NextRequest } from "next/server";
+import { NextRequest } from "next/server.js";
 
 import { proxyPlatformRequest } from "../lib/platform-api.ts";
 
