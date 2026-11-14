@@ -38,6 +38,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: 'no-store',
       redirect: 'manual',
+      signal: request.signal,
     })
     const contentType = upstream.headers.get('content-type') || ''
     if (!contentType.includes('application/json')) {
