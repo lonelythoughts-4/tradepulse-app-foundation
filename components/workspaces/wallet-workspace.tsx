@@ -315,6 +315,7 @@ function WalletWorkspaceBody({
   const activeDeposits = data.deposits.filter(
     (route) => !terminalDepositStatuses.has(route.status.toLowerCase()),
   );
+  const depositClosed = intent?.status.toLowerCase() === "credited_and_closed";
   const depositNetworkName = (network: string) => {
     const name =
       depositRoutes.find((route) => route.chain === network)?.network ||
@@ -572,6 +573,8 @@ function WalletWorkspaceBody({
                   <small>{t("Your verified transfer is now in your available wallet balance.")}</small>
                 </div>
               )}
+              {!depositClosed && (
+                <>
               {intent.status.toLowerCase() === "pending_dust" && (
                 <div className="below-minimum-card">
                   <img
@@ -650,13 +653,27 @@ function WalletWorkspaceBody({
                         ? {
                             ...current,
                             status: String(result.status || current.status),
-                            watch_enabled: true,
+                            watch_enabled: Boolean(result.watch_enabled),
                           }
                         : current,
                     );
-                    onNotice(
-                      t("Monitoring started. The background watcher will check this address; funds are credited only after on-chain detection and confirmation."),
-                    );
+                    if (result.status === "pending_dust") {
+                      onNotice(
+                        t("Deposit detected below the minimum. Send the remaining amount to this same address on the same network."),
+                      );
+                    } else if (result.checked_now && result.status !== "watching") {
+                      onNotice(
+                        t("Deposit detected. Confirmation is in progress; credit follows after the required on-chain confirmations."),
+                      );
+                    } else if (result.checked_now) {
+                      onNotice(
+                        t("No transfer was detected yet. Monitoring remains active for this same address."),
+                      );
+                    } else {
+                      onNotice(
+                        t("Monitoring remains active. The network check will continue automatically for this same address."),
+                      );
+                    }
                   } catch (error) {
                     onNotice(
                       error instanceof DOMException && error.name === "AbortError"
@@ -670,7 +687,11 @@ function WalletWorkspaceBody({
                   }
                 }}
               >
-                {depositPending ? t("Checking deposit…") : t("I made this deposit")} <ChevronRight />
+                {depositPending
+                  ? t("Checking deposit…")
+                  : intent.watch_enabled
+                    ? t("Check deposit now")
+                    : t("I made this deposit")} <ChevronRight />
               </button>
               <div className="timeline">
                 <span className="eyebrow">{t("DEPOSIT STATUS")}</span>
@@ -712,6 +733,8 @@ function WalletWorkspaceBody({
                   );
                 })}
               </div>
+                </>
+              )}
             </>
           )}
         </GradientPanel>
