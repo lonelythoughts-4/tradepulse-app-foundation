@@ -54,13 +54,29 @@ export function DeskWorkspace({
   const [operator, setOperator] = useState("above");
   const [threshold, setThreshold] = useState("");
   const [alertError, setAlertError] = useState("");
-  const [alertPending, setAlertPending] = useState<string | null>(null);
+  const [alertPending, setAlertPending] = useState<Set<string>>(new Set());
+  const [alerts, setAlerts] = useState(data.alerts);
+  const alertPendingRef = useRef(new Set<string>());
   const [analystBriefing, setAnalystBriefing] = useState("");
   const [analystMessages, setAnalystMessages] = useState<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
   const [analystQuestion, setAnalystQuestion] = useState("");
   const [analystError, setAnalystError] = useState("");
   const [analystLoading, setAnalystLoading] = useState(false);
   const alertErrorId = useId();
+  const beginAlertAction = (key: string) => {
+    if (alertPendingRef.current.has(key)) return false;
+    const next = new Set(alertPendingRef.current);
+    next.add(key);
+    alertPendingRef.current = next;
+    setAlertPending(next);
+    return true;
+  };
+  const endAlertAction = (key: string) => {
+    const next = new Set(alertPendingRef.current);
+    next.delete(key);
+    alertPendingRef.current = next;
+    setAlertPending(next);
+  };
   const analystReady = Boolean(data.analyst?.configured);
   const analystUnavailableReason = !analystReady
     ? "The Desk Analyst is being connected. Try again shortly."
@@ -69,6 +85,9 @@ export function DeskWorkspace({
     const labels = data.memecoin?.market_labels;
     return labels?.[asset] || labels?.[asset.toLowerCase()] || labels?.[asset.toUpperCase()] || "Saved market";
   };
+  useEffect(() => {
+    setAlerts(data.alerts);
+  }, [data.alerts]);
   useEffect(() => {
     if (!selection) return;
     const labels = data.memecoin?.market_labels || {};
@@ -84,21 +103,41 @@ export function DeskWorkspace({
     return () => window.clearTimeout(timer);
   }, [data.environment, data.memecoin?.market_labels, data.user.id, reload, selection]);
   const createAlert = async () => {
-    if (alertPending) return;
     if (!Number.isFinite(Number(threshold)) || Number(threshold) <= 0) {
       setAlertError("Enter a positive price threshold before creating an alert.");
       return;
     }
-    setAlertPending("create");
+    if (!beginAlertAction("create")) return;
     try {
-      await request("/v1/alerts", {
+      const response = await request("/v1/alerts", {
         method: "POST",
         body: JSON.stringify({ asset, operator, threshold: Number(threshold) }),
       });
+      const created = response?.alert;
+      if (
+        !created
+        || !Number.isSafeInteger(Number(created.id))
+        || Number(created.id) <= 0
+        || created.asset !== asset
+        || created.operator !== operator
+        || Number(created.threshold) !== Number(threshold)
+      ) {
+        throw new Error("The alert may have been created, but its saved record could not be confirmed. Refresh alerts before retrying.");
+      }
+      const savedAlert = {
+        id: Number(created.id),
+        asset: String(created.asset),
+        operator: String(created.operator),
+        threshold: Number(created.threshold),
+      };
+      setAlerts((current) => [
+        savedAlert,
+        ...current.filter((item) => item.id !== savedAlert.id),
+      ].slice(0, 20));
       setThreshold("");
       setAlertError("");
-      void reload().catch(() => undefined);
       onNotice("Price alert created.");
+      void reload().catch((error) => onNotice(error instanceof Error ? error.message : "The alert was created, but the list could not be refreshed."));
     } catch (error) {
       setAlertError(
         error instanceof Error ? error.message : "Could not create the alert.",
@@ -106,8 +145,9 @@ export function DeskWorkspace({
       onNotice(
         error instanceof Error ? error.message : "Could not create the alert.",
       );
+      void reload().catch((refreshError) => onNotice(refreshError instanceof Error ? refreshError.message : "Could not refresh alerts."));
     } finally {
-      setAlertPending(null);
+      endAlertAction("create");
     }
   };
   const generateAnalystBriefing = async () => {
@@ -268,10 +308,10 @@ export function DeskWorkspace({
           </div>
           <button
             className="primary-action"
-            disabled={!Number(threshold) || Number(threshold) <= 0 || alertPending === "create"}
+            disabled={!Number(threshold) || Number(threshold) <= 0 || alertPending.has("create")}
             onClick={createAlert}
           >
-            {alertPending === "create" ? "Creating…" : "Create alert"} <Bell />
+            {alertPending.has("create") ? "Creating…" : "Create alert"} <Bell />
           </button>
       </GradientPanel>
       <GradientPanel className="active-alerts">
@@ -280,8 +320,8 @@ export function DeskWorkspace({
             <h2>Active price alerts</h2>
           </div>
         </div>
-        {data.alerts.length ? (
-          data.alerts.map((alert) => (
+        {alerts.length ? (
+          alerts.map((alert) => (
             <div className="audit-row" key={alert.id}>
               <span className="alert-pip" />
               <div>
@@ -293,26 +333,28 @@ export function DeskWorkspace({
               <button
                 className="icon-button"
                 aria-label="Remove alert"
-                disabled={alertPending === `remove:${alert.id}`}
-                aria-busy={alertPending === `remove:${alert.id}`}
+                disabled={alertPending.has(`remove:${alert.id}`)}
+                aria-busy={alertPending.has(`remove:${alert.id}`)}
                 onClick={async () => {
-                  if (alertPending) return;
-                  setAlertPending(`remove:${alert.id}`);
+                  const actionKey = `remove:${alert.id}`;
+                  if (!beginAlertAction(actionKey)) return;
                   try {
                     await request(`/v1/alerts/${alert.id}/remove`, {
                       method: "POST",
                       body: "{}",
                     });
-                    void reload().catch(() => undefined);
+                    setAlerts((current) => current.filter((item) => item.id !== alert.id));
                     onNotice("Alert removed.");
+                    void reload().catch((error) => onNotice(error instanceof Error ? error.message : "The alert was removed, but the list could not be refreshed."));
                   } catch (error) {
                     onNotice(
                       error instanceof Error
                         ? error.message
                         : "Could not remove alert.",
                     );
+                    void reload().catch((refreshError) => onNotice(refreshError instanceof Error ? refreshError.message : "Could not refresh alerts."));
                   } finally {
-                    setAlertPending(null);
+                    endAlertAction(actionKey);
                   }
                 }}
               >
