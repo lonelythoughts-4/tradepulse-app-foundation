@@ -20,7 +20,7 @@ test("Auto changes show a distinct pending state until the server confirms the m
 test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);
-  assert.match(source, />Switch to Manual</);
+  assert.match(source, /"Switch to Manual"/);
   assert.match(styles, /\.synthetic-auto-fields\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-fields,\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
