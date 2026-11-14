@@ -47,6 +47,7 @@ export function AccountWorkspace({
   onNotificationsRequestHandled,
   onOpenHelp,
   onLanguageChange,
+  onLogout,
 }: {
   data: AccountDashboard;
   request: (path: string, options?: RequestInit) => Promise<any>;
@@ -58,9 +59,10 @@ export function AccountWorkspace({
   onNotificationsRequestHandled?: () => void;
   onOpenHelp?: () => void;
   onLanguageChange: (language: LanguageCode) => Promise<void>;
+  onLogout: () => Promise<void>;
 }) {
   const [modal, setModal] = useState<
-    "" | "code" | "language" | "notifications" | "whitelist" | "reset"
+    "" | "code" | "language" | "notifications" | "whitelist" | "reset" | "logout"
   >("");
   const [code, setCode] = useState("");
   const [currentCode, setCurrentCode] = useState("");
@@ -286,11 +288,24 @@ export function AccountWorkspace({
           </div>
           <ChevronRight />
         </button>
+        <button
+          className="account-action danger-row"
+          onClick={() => setModal("logout")}
+        >
+          <span>
+            <X />
+          </span>
+          <div>
+            <strong>Log out</strong>
+            <small>Remove this browser’s TradePulse session</small>
+          </div>
+          <ChevronRight />
+        </button>
       </div>
       {modal && (
         <AccessibleDialog
           className="account-modal"
-          label={{ code: securityCodeSet ? "Change security code" : "Set security code", language: "Language preference", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences" }[modal]}
+          label={{ code: securityCodeSet ? "Change security code" : "Set security code", language: "Language preference", notifications: "Notification preferences", whitelist: "Withdrawal whitelist", reset: "Reset desk preferences", logout: "Log out" }[modal]}
           onClose={() => setModal("")}
           dismissible={!modalPending}
         >
@@ -561,6 +576,39 @@ export function AccountWorkspace({
                 </button>
                 <button className="ghost-action" disabled={accountPending} onClick={() => setModal("")}>
                   Keep my settings
+                </button>
+              </>
+            )}
+            {modal === "logout" && (
+              <>
+                <span className="eyebrow">ACCOUNT / SESSION</span>
+                <h2>Log out?</h2>
+                <p>
+                  This removes the secure session from this browser. Your
+                  balances, positions, deposits, and Telegram account stay unchanged.
+                </p>
+                <button
+                  className="danger-action"
+                  disabled={accountPending}
+                  aria-busy={accountPending}
+                  onClick={async () => {
+                    if (accountPending) return;
+                    setAccountPending(true);
+                    setModalFeedback(null);
+                    try {
+                      await onLogout();
+                    } catch (error) {
+                      const message = error instanceof Error ? error.message : localizeApiError(language, "", 500);
+                      setModalFeedback({ message, error: true });
+                      onNotice(message);
+                      setAccountPending(false);
+                    }
+                  }}
+                >
+                  {accountPending ? "Logging out…" : "Log out"} <X />
+                </button>
+                <button className="ghost-action" disabled={accountPending} onClick={() => setModal("")}>
+                  Stay signed in
                 </button>
               </>
             )}

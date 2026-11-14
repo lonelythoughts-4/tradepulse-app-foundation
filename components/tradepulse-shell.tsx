@@ -7713,6 +7713,11 @@ function LiveTradePulse() {
               onNotificationsRequestHandled={() => setOpenNotificationsRequest(false)}
               onOpenHelp={() => setTab("Help")}
               onLanguageChange={changeLanguage}
+              onLogout={async () => {
+                await request("/v1/auth/logout", { method: "POST" });
+                updateDashboard(null);
+                window.location.assign("/");
+              }}
             />
           )}
           {tab === "Synthetic" && (
