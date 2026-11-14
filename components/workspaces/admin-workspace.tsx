@@ -5,6 +5,7 @@ import { AccessibleDialog } from "../accessible-dialog";
 import { DeskLocalized } from "../desk-language";
 import { GradientPanel, Send, ShieldCheck, X } from "./shared-ui";
 import { fundingFeedback, type FundingOutcome } from "../../lib/admin-funding-feedback";
+import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -147,6 +148,8 @@ export function AdminWorkspace({
   const [target, setTarget] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const fundingIdempotencyKeys = useRef(new Map<string, string>());
+  const fundingFormRevision = useRef(0);
   const [settingKey, setSettingKey] = useState("deposit_min_usd");
   const [settingValue, setSettingValue] = useState("");
   const [broadcast, setBroadcast] = useState("");
@@ -201,7 +204,13 @@ export function AdminWorkspace({
   const [adminHelpOpen, setAdminHelpOpen] = useState(false);
   const [adminTicket, setAdminTicket] = useState<(AdminOverview["tickets"][number] & { messages?: Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }> }) | null>(null);
   const [adminTicketReply, setAdminTicketReply] = useState("");
-  const [adminTicketPending, setAdminTicketPending] = useState(false);
+  const [ticketStatusOverrides, setTicketStatusOverrides] = useState<Record<string, string>>({});
+  const ticketStatusQueues = useRef(new Map<string, Promise<void>>());
+  const ticketStatusVersions = useRef(new Map<string, number>());
+  const ticketStatusPending = useRef(new Set<string>());
+  const adminTicketRequest = useRef(0);
+  const adminReconcileRunning = useRef(false);
+  const adminReconcileQueued = useRef(false);
   const fundingFieldId = useId();
   const autouserFileId = useId();
   const autouserMinimumId = useId();
@@ -215,27 +224,48 @@ export function AdminWorkspace({
   } | null>(null);
   const [withdrawalPending, setWithdrawalPending] = useState(false);
   const withdrawalSubmitting = useRef(false);
-  const adminReconcileTimer = useRef<number | null>(null);
   const [withdrawalError, setWithdrawalError] = useState("");
   const scheduleReconcile = () => {
-    // Do not make a confirmed write compete with an immediate, heavyweight
-    // control-room read.  Several quick actions collapse into one quiet
-    // reconciliation, while the initiating button becomes available as soon
-    // as its own request completes.
-    if (adminReconcileTimer.current !== null) return;
-    adminReconcileTimer.current = window.setTimeout(() => {
-      adminReconcileTimer.current = null;
-      void reload().catch(() => undefined);
-    }, 900);
-  };
-  useEffect(() => () => {
-    if (adminReconcileTimer.current !== null) {
-      window.clearTimeout(adminReconcileTimer.current);
+    if (adminReconcileRunning.current) {
+      adminReconcileQueued.current = true;
+      return;
     }
-  }, []);
+    adminReconcileRunning.current = true;
+    void (async () => {
+      do {
+        adminReconcileQueued.current = false;
+        try {
+          await reload();
+        } catch (error) {
+          onNotice(
+            error instanceof Error
+              ? `The admin action completed, but its overview could not refresh: ${error.message}`
+              : "The admin action completed, but its overview could not refresh.",
+          );
+        }
+      } while (adminReconcileQueued.current);
+      adminReconcileRunning.current = false;
+    })();
+  };
   useEffect(() => {
     setAutouserPage(null);
   }, [admin.autousers]);
+  useEffect(() => {
+    setTicketStatusOverrides((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const ticket of admin.tickets) {
+        if (next[ticket.id] === ticket.status) {
+          delete next[ticket.id];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [admin.tickets]);
+  useEffect(() => {
+    setTicketStatusOverrides({});
+  }, [environment]);
   useEffect(() => {
     setWithdrawalReview(null);
     setWithdrawalError("");
@@ -420,6 +450,9 @@ export function AdminWorkspace({
   const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
   const fundingState = fundingFeedback(pendingAccountActions.fund, fundingOutcome);
+  const adminTicketOpenKey = adminTicket ? `support:${adminTicket.id}:open` : "";
+  const adminTicketReplyKey = adminTicket ? `support:${adminTicket.id}:reply` : "";
+  const adminTicketLoading = Boolean(adminTicket && pendingAdminActions[adminTicketOpenKey]);
   const broadcastNeedsTarget = broadcastScope !== "all";
   const validBroadcastTarget = broadcastScope === "user"
     ? (/^\d+$/.test(broadcastTarget) || /^@[A-Za-z0-9_]{5,32}$/.test(broadcastTarget))
@@ -427,13 +460,18 @@ export function AdminWorkspace({
   const broadcastConfirmed = confirm.trim().toUpperCase() === "SEND ALL";
   const canSendBroadcast = Boolean(broadcast.trim()) && !broadcastPending && (!broadcastNeedsTarget || validBroadcastTarget) && (broadcastScope !== "all" || broadcastConfirmed);
   const isAdminActionPending = (key: string) => Boolean(pendingAdminActions[key]);
-  const post = async (path: string, body: object, message: string, actionKey = path) => {
+  const post = async (
+    path: string,
+    body: object,
+    message: string,
+    actionKey = path,
+    onSuccess?: (response: Record<string, unknown>) => void,
+  ) => {
     if (isAdminActionPending(actionKey)) return false;
     setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
     try {
-      await request(path, { method: "POST", body: JSON.stringify(body) });
-      // Reconcile after the mutation without holding the initiating control
-      // behind a second request or starting one refresh per button click.
+      const response = await request(path, { method: "POST", body: JSON.stringify(body) });
+      onSuccess?.(response);
       scheduleReconcile();
       onNotice(message);
       return true;
@@ -448,17 +486,119 @@ export function AdminWorkspace({
       });
     }
   };
+  const closeAdminTicket = () => {
+    adminTicketRequest.current += 1;
+    setAdminTicket(null);
+  };
   const openAdminTicket = async (ticket: AdminOverview["tickets"][number]) => {
-    setAdminTicketPending(true);
+    const actionKey = `support:${ticket.id}:open`;
+    if (isAdminActionPending(actionKey)) return;
+    const requestId = ++adminTicketRequest.current;
+    setAdminTicket({ ...ticket, messages: [] });
+    setAdminTicketReply("");
+    setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(`/v1/admin/tickets/${ticket.id}`);
+      if (requestId !== adminTicketRequest.current) return;
       setAdminTicket({ ...(response.ticket || ticket), messages: Array.isArray(response.messages) ? response.messages : [] });
-      setAdminTicketReply("");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not load the support conversation.");
+      if (requestId === adminTicketRequest.current) {
+        setAdminTicket(null);
+        onNotice(error instanceof Error ? error.message : "Could not load the support conversation.");
+      }
     } finally {
-      setAdminTicketPending(false);
+      setPendingAdminActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
+  };
+  const refreshAdminTicket = async (ticketId: string, requestId: number) => {
+    try {
+      const response = await request(`/v1/admin/tickets/${ticketId}`);
+      if (requestId === adminTicketRequest.current && adminTicket?.id === ticketId) {
+        setAdminTicket({
+          ...(response.ticket || adminTicket),
+          messages: Array.isArray(response.messages) ? response.messages : [],
+        });
+      }
+    } catch (error) {
+      if (requestId === adminTicketRequest.current && adminTicket?.id === ticketId) {
+        onNotice(
+          error instanceof Error
+            ? `Reply sent, but the conversation could not refresh: ${error.message}`
+            : "Reply sent, but the conversation could not refresh.",
+        );
+      }
+    }
+  };
+  const updateTicketStatus = (
+    ticket: AdminOverview["tickets"][number],
+    status: "in_progress" | "closed",
+  ) => {
+    const action = status === "closed" ? "close" : "take";
+    const actionKey = `support:${ticket.id}:${action}`;
+    if (ticketStatusPending.current.has(actionKey)) return;
+    ticketStatusPending.current.add(actionKey);
+    const version = (ticketStatusVersions.current.get(ticket.id) || 0) + 1;
+    ticketStatusVersions.current.set(ticket.id, version);
+    setTicketStatusOverrides((current) => ({ ...current, [ticket.id]: status }));
+    setAdminTicket((current) => current?.id === ticket.id ? { ...current, status } : current);
+    setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
+    const message = status === "closed"
+      ? `Ticket TP-${ticket.id} closed.`
+      : `Ticket TP-${ticket.id} moved to in progress.`;
+    const previous = ticketStatusQueues.current.get(ticket.id) || Promise.resolve();
+    const operation = previous.then(async () => {
+      try {
+        const response = await request(`/v1/admin/tickets/${ticket.id}`, {
+          method: "POST",
+          body: JSON.stringify({ status }),
+        });
+        const savedTicket = response.ticket;
+        const savedStatus = typeof savedTicket === "object"
+          && savedTicket !== null
+          && "status" in savedTicket
+          && typeof savedTicket.status === "string"
+          ? savedTicket.status
+          : status;
+        if (ticketStatusVersions.current.get(ticket.id) === version) {
+          setTicketStatusOverrides((current) => ({ ...current, [ticket.id]: savedStatus }));
+          setAdminTicket((current) => current?.id === ticket.id
+            ? { ...current, status: savedStatus }
+            : current);
+        }
+        scheduleReconcile();
+        onNotice(message);
+      } catch (error) {
+        if (ticketStatusVersions.current.get(ticket.id) === version) {
+          setTicketStatusOverrides((current) => {
+            const next = { ...current };
+            delete next[ticket.id];
+            return next;
+          });
+          setAdminTicket((current) => current?.id === ticket.id
+            ? { ...current, status: ticket.status }
+            : current);
+        }
+        onNotice(error instanceof Error ? error.message : "Ticket status update failed.");
+        scheduleReconcile();
+      } finally {
+        ticketStatusPending.current.delete(actionKey);
+        setPendingAdminActions((current) => {
+          const next = { ...current };
+          delete next[actionKey];
+          return next;
+        });
+      }
+    });
+    ticketStatusQueues.current.set(ticket.id, operation);
+    void operation.then(() => {
+      if (ticketStatusQueues.current.get(ticket.id) === operation) {
+        ticketStatusQueues.current.delete(ticket.id);
+      }
+    });
   };
   const runAccountAction = async (
     action: "fund" | "onboarding" | "pilot",
@@ -480,13 +620,32 @@ export function AdminWorkspace({
     if (accountActionSubmitting.current.fund) return;
     accountActionSubmitting.current.fund = true;
     setPendingAccountActions((current) => ({ ...current, fund: true }));
+    const fundingPayload = {
+      user_id: Number(target),
+      amount: Number(amount),
+      reason: reason.trim(),
+    };
+    const fingerprint = JSON.stringify([
+      environment,
+      fundingPayload.user_id,
+      fundingPayload.amount,
+      fundingPayload.reason,
+    ]);
+    const idempotencyKey = getIdempotencyKeyForPayload(
+      fundingIdempotencyKeys.current,
+      `admin-fund:${environment}`,
+      fingerprint,
+    );
+    const formRevision = fundingFormRevision.current;
     try {
       const response = await request("/v1/admin/fund", {
         method: "POST",
-        body: JSON.stringify({ user_id: Number(target), amount: Number(amount), reason }),
-      });
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(fundingPayload),
+      }, environment);
       const outcome: FundingOutcome = response.applied ? "applied" : "already-recorded";
-      setFundingOutcome(outcome);
+      if (formRevision === fundingFormRevision.current) setFundingOutcome(outcome);
+      fundingIdempotencyKeys.current.delete(fingerprint);
       scheduleReconcile();
       onNotice(response.message || (outcome === "applied" ? "Funding applied." : "An equivalent funding action was already recorded."));
     } catch (error) {
@@ -737,30 +896,67 @@ export function AdminWorkspace({
         </div>
         <button className="primary-action" onClick={() => setAdminHelpOpen(false)}>Close guide</button>
       </AccessibleDialog>}
-      {adminTicket && <AccessibleDialog className="admin-ticket-dialog" label={`Support ticket TP-${adminTicket.id}`} onClose={() => setAdminTicket(null)} dismissible={!adminTicketPending}>
-        <button className="modal-close" aria-label="Close" disabled={adminTicketPending} onClick={() => setAdminTicket(null)}><X /></button>
+      {adminTicket && <AccessibleDialog className="admin-ticket-dialog" label={`Support ticket TP-${adminTicket.id}`} onClose={closeAdminTicket}>
+        <button className="modal-close" aria-label="Close" onClick={closeAdminTicket}><X /></button>
         <span className="eyebrow">SUPPORT CONVERSATION</span>
         <h2>TP-{adminTicket.id} · {adminTicket.topic || "General"}</h2>
         <p className="mono">USER {adminTicket.user_id} · {adminTicket.status.replace("_", " ")}</p>
-        <div className="support-thread-messages" aria-label={`Messages for support ticket ${adminTicket.id}`}>
-          {(adminTicket.messages || []).map((message) => <div className={`support-message ${message.author_role}`} key={message.id}>
-            <strong>{message.author_role === "admin" ? "Admin" : "User"}</strong><p>{message.body}</p>
-          </div>)}
-        </div>
-        {adminTicket.status !== "closed" && <>
+        {adminTicketLoading ? (
+          <p role="status" aria-live="polite">Loading conversation…</p>
+        ) : (
+          <div className="support-thread-messages" aria-label={`Messages for support ticket ${adminTicket.id}`}>
+            {(adminTicket.messages || []).map((message) => <div className={`support-message ${message.author_role}`} key={message.id}>
+              <strong>{message.author_role === "admin" ? "Admin" : "User"}</strong><p>{message.body}</p>
+            </div>)}
+          </div>
+        )}
+        {!adminTicketLoading && adminTicket.status !== "closed" && <>
           <label className="amount-field">Reply to user
-            <textarea value={adminTicketReply} onChange={(event) => setAdminTicketReply(event.target.value)} placeholder="Write a clear, account-safe reply." rows={4} />
+            <textarea maxLength={1500} value={adminTicketReply} onChange={(event) => setAdminTicketReply(event.target.value)} placeholder="Write a clear, account-safe reply." rows={4} />
           </label>
-          <button className="primary-action" disabled={adminTicketReply.trim().length < 2 || adminTicketPending} onClick={async () => {
-            setAdminTicketPending(true);
+          <button className="primary-action" disabled={adminTicketReply.trim().length < 2 || isAdminActionPending(adminTicketReplyKey)} aria-busy={isAdminActionPending(adminTicketReplyKey)} onClick={async () => {
+            const ticketId = adminTicket.id;
+            const actionKey = `support:${ticketId}:reply`;
+            const reply = adminTicketReply.trim();
+            if (isAdminActionPending(actionKey)) return;
+            const requestId = adminTicketRequest.current;
+            setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
             try {
-              await request(`/v1/admin/tickets/${adminTicket.id}/messages`, { method: "POST", body: JSON.stringify({ message: adminTicketReply.trim() }) });
-              await openAdminTicket(adminTicket);
-              onNotice(`Reply sent on TP-${adminTicket.id}.`);
+              const response = await request(`/v1/admin/tickets/${ticketId}/messages`, {
+                method: "POST",
+                body: JSON.stringify({ message: reply }),
+              });
+              const savedTicket = response.ticket;
+              const savedStatus = typeof savedTicket === "object"
+                && savedTicket !== null
+                && "status" in savedTicket
+                && typeof savedTicket.status === "string"
+                ? savedTicket.status
+                : "in_progress";
+              setAdminTicket((current) => requestId === adminTicketRequest.current && current?.id === ticketId
+                ? {
+                    ...current,
+                    status: savedStatus,
+                    messages: [
+                      ...(current.messages || []),
+                      { id: -Date.now(), author_role: "admin", body: reply, created_at: Math.floor(Date.now() / 1000) },
+                    ],
+                  }
+                : current);
+              if (requestId === adminTicketRequest.current) setAdminTicketReply("");
+              onNotice(`Reply sent on TP-${ticketId}.`);
               scheduleReconcile();
-            } catch (error) { onNotice(error instanceof Error ? error.message : "Could not send the support reply."); }
-            finally { setAdminTicketPending(false); }
-          }}>{adminTicketPending ? "Sending…" : "Send reply"} <Send /></button>
+              void refreshAdminTicket(ticketId, requestId);
+            } catch (error) {
+              onNotice(error instanceof Error ? error.message : "Could not send the support reply.");
+            } finally {
+              setPendingAdminActions((current) => {
+                const next = { ...current };
+                delete next[actionKey];
+                return next;
+              });
+            }
+          }}>{isAdminActionPending(adminTicketReplyKey) ? "Sending…" : "Send reply"} <Send /></button>
         </>}
       </AccessibleDialog>}
       <div className="admin-head">
@@ -1096,48 +1292,51 @@ export function AdminWorkspace({
             <span className="mono">{admin.tickets.length} ROWS</span>
           </div>
           {admin.tickets.length ? (
-            admin.tickets.map((ticket) => (
+            admin.tickets.map((ticket) => {
+              const status = ticketStatusOverrides[ticket.id] || ticket.status;
+              const openKey = `support:${ticket.id}:open`;
+              const takeKey = `support:${ticket.id}:take`;
+              const closeKey = `support:${ticket.id}:close`;
+              return (
               <div className="admin-row" key={ticket.id}>
                 <div>
                   <strong>TP-{ticket.id} / {ticket.topic || "General"}</strong>
                   <small className="mono">
-                    USER {ticket.user_id} / {ticket.first_name || ticket.username || "Telegram user"} / {ticket.status}
+                    USER {ticket.user_id} / {ticket.first_name || ticket.username || "Telegram user"} / {status}
                   </small>
                   <small>{ticket.body}</small>
                 </div>
-                <button className="small-action" onClick={() => void openAdminTicket(ticket)} disabled={adminTicketPending}>
-                  Open conversation
+                <button
+                  className="small-action"
+                  onClick={() => void openAdminTicket(ticket)}
+                  disabled={isAdminActionPending(openKey)}
+                  aria-busy={isAdminActionPending(openKey)}
+                >
+                  {isAdminActionPending(openKey) ? "Opening…" : "Open conversation"}
                 </button>
-                {ticket.status === "open" && (
+                {(status === "open" || isAdminActionPending(takeKey)) && (
                   <button
                     className="small-action"
-                    onClick={() =>
-                      post(
-                        `/v1/admin/tickets/${ticket.id}`,
-                        { status: "in_progress" },
-                        `Ticket TP-${ticket.id} moved to in progress.`,
-                      )
-                    }
+                    disabled={isAdminActionPending(takeKey)}
+                    aria-busy={isAdminActionPending(takeKey)}
+                    onClick={() => updateTicketStatus(ticket, "in_progress")}
                   >
-                    Take
+                    {isAdminActionPending(takeKey) ? "Taking…" : "Take"}
                   </button>
                 )}
-                {ticket.status !== "closed" && (
+                {(status !== "closed" || isAdminActionPending(closeKey)) && (
                   <button
                     className="small-action"
-                    onClick={() =>
-                      post(
-                        `/v1/admin/tickets/${ticket.id}`,
-                        { status: "closed" },
-                        `Ticket TP-${ticket.id} closed.`,
-                      )
-                    }
+                    disabled={isAdminActionPending(closeKey)}
+                    aria-busy={isAdminActionPending(closeKey)}
+                    onClick={() => updateTicketStatus(ticket, "closed")}
                   >
-                    Close
+                    {isAdminActionPending(closeKey) ? "Closing…" : "Close"}
                   </button>
                 )}
               </div>
-            ))
+              );
+            })
           ) : (
             <p>No support tickets.</p>
           )}
@@ -1150,7 +1349,7 @@ export function AdminWorkspace({
             id={`${fundingFieldId}-user`}
             value={target}
             aria-label="Telegram user ID"
-            onChange={(e) => { setTarget(e.target.value.replace(/\D/g, "")); setFundingOutcome(null); }}
+            onChange={(e) => { fundingFormRevision.current += 1; setTarget(e.target.value.replace(/\D/g, "")); setFundingOutcome(null); }}
             placeholder="Telegram user ID"
             inputMode="numeric"
           />
@@ -1159,7 +1358,7 @@ export function AdminWorkspace({
             id={`${fundingFieldId}-amount`}
             value={amount}
             aria-label="Credit amount in USD"
-            onChange={(e) => { setAmount(e.target.value); setFundingOutcome(null); }}
+            onChange={(e) => { fundingFormRevision.current += 1; setAmount(e.target.value); setFundingOutcome(null); }}
             placeholder="Credit amount / USD"
             inputMode="decimal"
           />
@@ -1168,7 +1367,7 @@ export function AdminWorkspace({
             id={`${fundingFieldId}-reason`}
             value={reason}
             aria-label="Funding reason"
-            onChange={(e) => { setReason(e.target.value); setFundingOutcome(null); }}
+            onChange={(e) => { fundingFormRevision.current += 1; setReason(e.target.value); setFundingOutcome(null); }}
             placeholder="Funding reason"
           />
           <p className="security-feedback" role="status">

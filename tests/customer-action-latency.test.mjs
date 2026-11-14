@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const help = fs.readFileSync(path.join(root, "components", "workspaces", "help-workspace.tsx"), "utf8");
 const desk = fs.readFileSync(path.join(root, "components", "workspaces", "desk-workspace.tsx"), "utf8");
+const admin = fs.readFileSync(path.join(root, "components", "workspaces", "admin-workspace.tsx"), "utf8");
+const wallet = fs.readFileSync(path.join(root, "components", "workspaces", "wallet-workspace.tsx"), "utf8");
 
 test("support ticket mutations update the visible thread before background reconciliation", () => {
   const createStart = help.indexOf('const result = await request("/v1/support/tickets"');
@@ -40,4 +42,34 @@ test("alert actions have independent pending keys and reconcile returned state",
   assert.doesNotMatch(desk, /if \(alertPending\) return/);
   assert.match(desk, /setAlerts\(\(current\) => \[\s*savedAlert,/);
   assert.match(desk, /setAlerts\(\(current\) => current\.filter\(\(item\) => item\.id !== alert\.id\)\)/);
+});
+
+test("admin support actions are scoped to one ticket and report reconciliation failures", () => {
+  assert.doesNotMatch(admin, /adminTicketPending/);
+  assert.match(admin, /const openKey = `support:\$\{ticket\.id\}:open`/);
+  assert.match(admin, /disabled=\{isAdminActionPending\(openKey\)\}/);
+  assert.match(admin, /const actionKey = `support:\$\{ticket\.id\}:\$\{action\}`/);
+  assert.match(admin, /The admin action completed, but its overview could not refresh/);
+  assert.doesNotMatch(admin, /void reload\(\)\.catch\(\(\) => undefined\)/);
+});
+
+test("admin ticket status writes are serialized and ignore stale action responses", () => {
+  assert.match(admin, /ticketStatusQueues\.current\.get\(ticket\.id\)/);
+  assert.match(admin, /ticketStatusVersions\.current\.get\(ticket\.id\) === version/);
+  assert.match(admin, /setTicketStatusOverrides\(\(current\) => \(\{ \.\.\.current, \[ticket\.id\]: status \}\)\)/);
+});
+
+test("withdrawal and admin-funding retries reuse stable idempotency keys", () => {
+  assert.match(wallet, /getIdempotencyKeyForPayload\(\s*withdrawalIdempotencyKeys\.current/);
+  assert.match(wallet, /"Idempotency-Key": idempotencyKey/);
+  assert.match(admin, /getIdempotencyKeyForPayload\(\s*fundingIdempotencyKeys\.current/);
+  assert.match(admin, /"Idempotency-Key": idempotencyKey/);
+  assert.match(admin, /formRevision === fundingFormRevision\.current/);
+});
+
+test("background bot reconciliation failures are visible and support refresh stays single-flight", () => {
+  const bots = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
+  assert.doesNotMatch(bots, /void reload\(\)\.catch\(\(\) => undefined\)/);
+  assert.match(help, /if \(cancelled \|\| refreshInFlight\) return/);
+  assert.match(help, /requestId === ticketThreadRequestRef\.current && selectedTicketIdRef\.current === ticket\.id/);
 });

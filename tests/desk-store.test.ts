@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDeskStore, type DeskSnapshot } from "../lib/desk-store.ts";
+import { applyResourceIfUnchanged, createDeskStore, type DeskSnapshot } from "../lib/desk-store.ts";
 
 function snapshot(): DeskSnapshot {
   return {
@@ -53,4 +53,23 @@ test("rejects an older resource response after a newer revision is applied", () 
   assert.equal(store.applyResource("wallet", { availableUsd: 140 }, 2), true);
   assert.equal(store.applyResource("wallet", { availableUsd: 90 }, 1), false);
   assert.deepEqual(store.getState().resources.wallet, { availableUsd: 140 });
+});
+
+test("unversioned dashboard writes share a monotonic revision with explicit writers", () => {
+  const store = createDeskStore(snapshot());
+
+  assert.equal(store.applyResource("dashboard", { source: "poll" }), true);
+  assert.equal(store.applyResource("dashboard", { source: "action" }), true);
+  assert.equal(store.getState().revisions.dashboard, 1);
+  assert.deepEqual(store.getState().resources.dashboard, { source: "action" });
+  assert.equal(store.applyResource("dashboard", { source: "stale" }, 0), false);
+});
+
+test("a dashboard poll cannot overwrite a local update made after the request began", () => {
+  const store = createDeskStore(snapshot());
+  const requestRevision = store.getState().revisions.dashboard ?? -1;
+  store.applyResource("dashboard", { source: "action" });
+
+  assert.equal(applyResourceIfUnchanged(store, "dashboard", { source: "stale-poll" }, requestRevision), false);
+  assert.deepEqual(store.getState().resources.dashboard, { source: "action" });
 });

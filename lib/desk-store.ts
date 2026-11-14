@@ -17,7 +17,7 @@ type SelectorSubscription<T> = {
 };
 
 export interface DeskStore {
-  applyResource(resource: string, value: unknown, revision: number): boolean;
+  applyResource(resource: string, value: unknown, revision?: number): boolean;
   getState(): DeskState;
   runAction<T>(key: ActionKey, request: () => Promise<T>): Promise<T>;
   subscribe(listener: DeskListener): Unsubscribe;
@@ -73,7 +73,8 @@ export function createDeskStore(initial: DeskSnapshot): DeskStore {
   return {
     applyResource(resource, value, revision) {
       const currentRevision = state.revisions[resource] ?? -1;
-      if (revision < currentRevision) return false;
+      const nextRevision = revision ?? currentRevision + 1;
+      if (nextRevision < currentRevision) return false;
 
       update({
         ...state,
@@ -83,7 +84,7 @@ export function createDeskStore(initial: DeskSnapshot): DeskStore {
         },
         revisions: {
           ...state.revisions,
-          [resource]: revision,
+          [resource]: nextRevision,
         },
       });
       return true;
@@ -126,6 +127,16 @@ export function createDeskStore(initial: DeskSnapshot): DeskStore {
       return () => selectorSubscriptions.delete(subscription as SelectorSubscription<unknown>);
     },
   };
+}
+
+export function applyResourceIfUnchanged(
+  store: DeskStore,
+  resource: string,
+  value: unknown,
+  expectedRevision: number,
+): boolean {
+  if ((store.getState().revisions[resource] ?? -1) !== expectedRevision) return false;
+  return store.applyResource(resource, value);
 }
 
 export function useDeskSelector<T>(store: DeskStore, selector: DeskSelector<T>): T {

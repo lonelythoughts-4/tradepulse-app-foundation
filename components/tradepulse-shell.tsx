@@ -6581,7 +6581,6 @@ function LiveTradePulse() {
     deskStoreRef.current = createDeskStore({ resources: { dashboard: null, synthetic: null } });
   }
   const deskStore = deskStoreRef.current;
-  const dashboardRevision = useRef(0);
   const data = useDeskSelector(
     deskStore,
     (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
@@ -6591,7 +6590,7 @@ function LiveTradePulse() {
     const next = typeof update === "function"
       ? (update as (current: LiveDashboard | null) => LiveDashboard | null)(current)
       : update;
-    deskStore.applyResource("dashboard", next, ++dashboardRevision.current);
+    deskStore.applyResource("dashboard", next);
   }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
   const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
@@ -6800,7 +6799,15 @@ function LiveTradePulse() {
     timeoutMs = 15_000,
   ) => {
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const callerSignal = options.signal;
+    let timedOut = false;
+    const abortFromCaller = () => controller.abort();
+    if (callerSignal?.aborted) abortFromCaller();
+    else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
     try {
       const requestHeaders = { ...headers(targetEnvironment), ...(options.headers || {}) } as Record<string, string>;
       const requestId = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -6837,15 +6844,17 @@ function LiveTradePulse() {
       }
       return body;
     } catch (error) {
-      if (controller.signal.aborted) {
+      if (timedOut) {
         throw new Error(translateDesk(languageRef.current, "error.timeout"));
       }
+      if (callerSignal?.aborted) throw error;
       if (error instanceof TypeError) {
         throw new Error(translateDesk(languageRef.current, "error.network"));
       }
       throw error;
     } finally {
       window.clearTimeout(timeout);
+      callerSignal?.removeEventListener("abort", abortFromCaller);
     }
   }, [webEnvironment]);
   const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async () => {
@@ -7511,7 +7520,12 @@ function LiveTradePulse() {
           {tab === "Dashboard" && (
             <DashboardWorkspace
               store={deskStore}
-              poll={() => request("/v1/dashboard")}
+              poll={(signal) => request("/v1/dashboard", { signal })}
+              onPollError={(error) => setNotice(
+                error instanceof Error
+                  ? `Dashboard refresh failed: ${error.message}`
+                  : "Dashboard refresh failed. Check your connection and try again.",
+              )}
               bots={visualBots}
               model={visualModel}
               onManage={() => {
@@ -7640,7 +7654,7 @@ function LiveTradePulse() {
           {tab === "Wallet" && (
             <WalletWorkspace
               store={deskStore}
-              poll={() => request("/v1/dashboard")}
+              poll={(signal) => request("/v1/dashboard", { signal })}
               request={request}
               environment={data.user.is_admin ? webEnvironment : "mainnet"}
               onWalletUpdate={({ wallet, withdrawal, deposits }) =>

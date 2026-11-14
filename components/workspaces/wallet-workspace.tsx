@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AccessibleDialog } from "../accessible-dialog";
-import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
+import { applyResourceIfUnchanged, useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { DeskState } from "../../lib/desk-types";
+import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 import { translateDeskPhrase } from "../../lib/desk-i18n";
 import { describeActivity } from "../../lib/activity-presentation";
 import { useDeskLanguage } from "../desk-language";
@@ -103,7 +104,7 @@ export function WalletWorkspace({
   initialView = "overview",
 }: {
   store: DeskStore;
-  poll: () => Promise<LiveDashboard>;
+  poll: (signal: AbortSignal) => Promise<LiveDashboard>;
   request: (path: string, options?: RequestInit, environment?: "mainnet" | "testnet") => Promise<any>;
   environment: "mainnet" | "testnet";
   onWalletUpdate: (update: {
@@ -118,11 +119,21 @@ export function WalletWorkspace({
     store,
     (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
   );
+  const dashboardPollRevision = useRef(-1);
   useResourcePoller(
-    async () => poll(),
-    (next) => store.applyResource("dashboard", next, Date.now()),
+    async (_token, signal) => {
+      dashboardPollRevision.current = store.getState().revisions.dashboard ?? -1;
+      return poll(signal);
+    },
+    (next) => applyResourceIfUnchanged(store, "dashboard", next, dashboardPollRevision.current),
     15_000,
     true,
+    `wallet-dashboard:${environment}`,
+    (error) => onNotice(
+      error instanceof Error
+        ? `Wallet refresh failed: ${error.message}`
+        : "Wallet refresh failed. Check your connection and try again.",
+    ),
   );
   if (!data) return null;
   return (
@@ -195,15 +206,11 @@ function WalletWorkspaceBody({
   } | null>(null);
   const [balancesVisible, setBalancesVisible] = useState(true);
   const [walletPending, setWalletPending] = useState(false);
+  const withdrawalIdempotencyKeys = useRef(new Map<string, string>());
+  const withdrawalSubmitting = useRef(false);
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
-  const requestRef = useRef(request);
-  const walletUpdateRef = useRef(onWalletUpdate);
-  useEffect(() => {
-    requestRef.current = request;
-    walletUpdateRef.current = onWalletUpdate;
-  }, [request, onWalletUpdate]);
   useEffect(() => {
     if (!intent || terminalDepositStatuses.has(intent.status.toLowerCase())) {
       setQrDataUrl("");
@@ -222,38 +229,10 @@ function WalletWorkspaceBody({
     };
   }, [environment, intent?.id, request]);
   useEffect(() => {
-    const trackedStatuses = new Set([
-      "watching",
-      "confirming",
-      "pending_dust",
-      "under_review",
-      "processing",
-      "confirmed_pending_sweep",
-      "sweeping",
-      "sweep_confirming",
-    ]);
-    if (!intent?.watch_enabled || !trackedStatuses.has(intent.status.toLowerCase())) return;
-    let cancelled = false;
-    const refreshDepositStatus = () => {
-      void requestRef.current("/v1/dashboard", {}, environment)
-        .then((snapshot: LiveDashboard) => {
-          const updatedIntent = snapshot.deposits.find((row) => row.id === intent.id);
-          if (cancelled || !updatedIntent) return;
-          setIntent(updatedIntent);
-          walletUpdateRef.current({
-            wallet: snapshot.wallet,
-            deposits: snapshot.deposits,
-          });
-        })
-        .catch(() => undefined);
-    };
-    refreshDepositStatus();
-    const timer = window.setInterval(refreshDepositStatus, 15_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [environment, intent?.id, intent?.status, intent?.watch_enabled]);
+    if (!intent) return;
+    const latestIntent = data.deposits.find((row) => row.id === intent.id);
+    if (latestIntent) setIntent(latestIntent);
+  }, [data.deposits, intent?.id]);
   const withdrawNetworks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -384,31 +363,46 @@ function WalletWorkspaceBody({
     }
   };
   const submitWithdrawal = async () => {
-    if (walletPending) return;
+    if (walletPending || withdrawalSubmitting.current) return;
+    withdrawalSubmitting.current = true;
     setWithdrawalError("");
     setWalletPending(true);
+    const withdrawalPayload = {
+      asset: withdrawAsset,
+      chain: withdrawChain,
+      address: withdrawAddress,
+      amount: Number(withdrawAmount),
+      security_code: withdrawCode,
+    };
+    const fingerprint = JSON.stringify([
+      environment,
+      withdrawalPayload.asset,
+      withdrawalPayload.chain,
+      withdrawalPayload.address,
+      withdrawalPayload.amount,
+    ]);
+    const idempotencyKey = getIdempotencyKeyForPayload(
+      withdrawalIdempotencyKeys.current,
+      `withdrawal:${environment}`,
+      fingerprint,
+    );
     try {
       const result = await request("/v1/withdrawals", {
         method: "POST",
-        body: JSON.stringify({
-          asset: withdrawAsset,
-          chain: withdrawChain,
-          address: withdrawAddress,
-          amount: Number(withdrawAmount),
-          security_code: withdrawCode,
-        }),
-      });
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify(withdrawalPayload),
+      }, environment);
       onWalletUpdate({
         wallet: result.wallet || {
-          available: Math.max(0, data.wallet.available - Number(withdrawAmount)),
-          locked: data.wallet.locked + Number(withdrawAmount),
+          available: Math.max(0, data.wallet.available - withdrawalPayload.amount),
+          locked: data.wallet.locked + withdrawalPayload.amount,
         },
         withdrawal: result.withdrawal || {
           id: String(result.withdrawal_id || `pending-${Date.now()}`),
-          asset: withdrawAsset,
-          chain: withdrawChain,
-          address: withdrawAddress,
-          amount_usd: Number(withdrawAmount),
+          asset: withdrawalPayload.asset,
+          chain: withdrawalPayload.chain,
+          address: withdrawalPayload.address,
+          amount_usd: withdrawalPayload.amount,
           status: "pending_admin_release",
         },
       });
@@ -418,19 +412,21 @@ function WalletWorkspaceBody({
         }),
       );
       setSubmittedWithdrawal({
-        asset: withdrawAsset,
-        chain: withdrawChain,
-        amount: Number(withdrawAmount),
+        asset: withdrawalPayload.asset,
+        chain: withdrawalPayload.chain,
+        amount: withdrawalPayload.amount,
       });
       setWithdrawAddress("");
       setWithdrawAmount("");
       setWithdrawCode("");
+      withdrawalIdempotencyKeys.current.delete(fingerprint);
       setReviewWithdrawal(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : t("The withdrawal request could not be created. Check the details and try again.");
       setWithdrawalError(message);
       onNotice(message);
     } finally {
+      withdrawalSubmitting.current = false;
       setWalletPending(false);
     }
   };
@@ -872,9 +868,7 @@ function WalletWorkspaceBody({
             <span>{t("DESTINATION ADDRESS")}</span>
             <input
               value={withdrawAddress}
-              onChange={(event) =>
-                setWithdrawAddress(event.target.value.replace(/\s/g, ""))
-              }
+              onChange={(event) => setWithdrawAddress(event.target.value.replace(/\s/g, ""))}
               placeholder={t("Paste the full destination address")}
               autoComplete="off"
             />
@@ -911,9 +905,7 @@ function WalletWorkspaceBody({
             <span>{t("AMOUNT / USD")}</span>
             <input
               value={withdrawAmount}
-              onChange={(event) =>
-                setWithdrawAmount(event.target.value.replace(/[^0-9.]/g, ""))
-              }
+              onChange={(event) => setWithdrawAmount(event.target.value.replace(/[^0-9.]/g, ""))}
               inputMode="decimal"
               placeholder="0.00"
             />
@@ -923,11 +915,7 @@ function WalletWorkspaceBody({
             <input
               type="password"
               value={withdrawCode}
-              onChange={(event) =>
-                setWithdrawCode(
-                  event.target.value.replace(/\D/g, "").slice(0, 6),
-                )
-              }
+              onChange={(event) => setWithdrawCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
               inputMode="numeric"
               placeholder="••••••"
             />

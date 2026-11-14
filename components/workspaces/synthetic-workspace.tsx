@@ -67,22 +67,25 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   useEffect(() => {
     if (fundingSource === "credit" && !Number(snapshot?.demo?.credit_available_usd || 0)) setFundingSource("wallet");
   }, [fundingSource, snapshot?.demo?.credit_available_usd]);
-  useResourcePoller<Snapshot>(async () => {
-    try { return await request("/v1/synthetic/" + market) as Snapshot; }
+  useResourcePoller<Snapshot>(async (_token, signal) => {
+    try { return await request("/v1/synthetic/" + market, { signal }, environment) as Snapshot; }
     catch (error) {
+      if (signal.aborted) throw error;
       // The lightweight stream has a live quote and owned positions even when
       // the fuller history/configuration snapshot is temporarily delayed.
       // Render that safe subset instead of replacing the entire desk with an
       // outage screen.
       try {
-        const stream = await request("/v1/synthetic/stream?market=" + market, {}, environment);
+        const stream = await request("/v1/synthetic/stream?market=" + market, { signal }, environment);
         const latest = stream.latest as Snapshot["latest"];
         const price = Number(latest?.reference ?? latest?.price);
         if (Number.isFinite(price) && price > 0) {
           setLoadError("");
           return { market, latest, ticks: [latest], positions: stream.positions || [], settings: {} } as Snapshot;
         }
-      } catch { /* The normal retry path below remains the final fallback. */ }
+      } catch (fallbackError) {
+        if (signal.aborted) throw fallbackError;
+      }
       setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
       return undefined;
     }
@@ -92,7 +95,9 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     const mode = confirmed && confirmed.revision >= executionRevision.current ? confirmed.mode : undefined;
     setLoadError("");
     update(mode && executionSubmitting.current ? { ...next, execution_mode: mode } : next);
-  }, 5000, true);
+  }, 5000, true, `synthetic:${environment}:${market}`, (error) => {
+    setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
+  });
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {

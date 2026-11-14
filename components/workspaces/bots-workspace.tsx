@@ -9,6 +9,7 @@ import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
+import { useResourcePoller } from "./use-resource-poller";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
 import { ChevronRight, GradientPanel, PaymentMark, Plus, StateIcon, StateSwapIcon, X, Zap, money } from "./shared-ui";
 
@@ -228,25 +229,29 @@ export function BotsWorkspace({
   useEffect(() => {
     if (view !== "flashback" || !activeCountdownSession) return;
     const tick = () => setFlashbackNow(Date.now());
-    const refreshSession = async () => {
-      try {
-        const snapshot = await request("/v1/flashback");
-        if (!snapshot?.session || typeof snapshot.session !== "object") return;
-        onActionResult("/v1/flashback/refresh", {}, snapshot);
-      } catch {
-        // The countdown remains useful while the targeted status check retries.
-      }
-    };
     tick();
     const countdown = window.setInterval(tick, 1_000);
-    // Both 30-second contracts need prompt authoritative status confirmation.
-    // Direction additionally returns its display-only live reference here.
-    const refresh = window.setInterval(() => void refreshSession(), 3_000);
     return () => {
       window.clearInterval(countdown);
-      window.clearInterval(refresh);
     };
-  }, [activeCountdownSession?.expires_at, activeCountdownSession?.id, activeCountdownSession?.product_version, onActionResult, request, view]);
+  }, [activeCountdownSession?.expires_at, activeCountdownSession?.id, activeCountdownSession?.product_version, view]);
+  useResourcePoller(
+    async (_token, signal) => {
+      const snapshot = await request("/v1/flashback", { signal });
+      return snapshot?.session && typeof snapshot.session === "object"
+        ? snapshot
+        : undefined;
+    },
+    (snapshot) => onActionResult("/v1/flashback/refresh", {}, snapshot),
+    3_000,
+    view === "flashback" && Boolean(activeCountdownSession),
+    `flashback:${activeCountdownSession?.id || ""}`,
+    (error) => onNotice(
+      error instanceof Error
+        ? `Flashback status refresh failed: ${error.message}`
+        : "Flashback status refresh failed. Check your connection and try again.",
+    ),
+  );
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
     const assets = Array.isArray(response.assets)
@@ -356,25 +361,21 @@ export function BotsWorkspace({
       setMemecoinMarket(memecoinAssets[0]);
     }
   }, [memecoinAssets, memecoinMarket]);
-  useEffect(() => {
-    if (!selected || selected.product !== "memecoin") return;
-    let cancelled = false;
-    const refresh = () => {
-      void request(`/v1/memecoin/snapshot?bot_id=${selected.id}&symbol=${memecoinMarket}`)
-        .then((snapshot) => { if (!cancelled) setMemecoinSnapshot(snapshot || {}); })
-        .catch(() => {
-          // Keep the last verified candles and marks visible during a short
-          // reconnect; clearing the projection made a healthy feed look empty.
-        });
-    };
-    refresh();
-    // This endpoint includes chart history, positions and events. Polling the
-    // full projection every second can starve an authorization request on a
-    // constrained connection; execution still revalidates the live tick on
-    // the server, independently of this display refresh.
-    const timer = window.setInterval(refresh, 5_000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [selected?.id, selected?.product, memecoinMarket, request]);
+  useResourcePoller(
+    async (_token, signal) => request(
+      `/v1/memecoin/snapshot?bot_id=${selected?.id}&symbol=${memecoinMarket}`,
+      { signal },
+    ),
+    (snapshot) => setMemecoinSnapshot(snapshot || {}),
+    5_000,
+    Boolean(selected && selected.product === "memecoin"),
+    `memecoin:${selected?.id || ""}:${memecoinMarket}`,
+    (error) => onNotice(
+      error instanceof Error
+        ? `Memecoin market refresh failed: ${error.message}`
+        : "Memecoin market refresh failed. Check your connection and try again.",
+    ),
+  );
   useEffect(() => {
     if (!selected || selected.product !== "memecoin" || !memecoinAssets.length) return;
     let cancelled = false;
@@ -430,7 +431,11 @@ export function BotsWorkspace({
       // quiet follow-up read: it is the durable source of truth if a proxy or
       // an earlier desk snapshot arrives out of order.
       if (durableAction || !hasAuthoritativeResult) {
-        void reload().catch(() => undefined);
+        void reload().catch((error) => onNotice(
+          error instanceof Error
+            ? `Your changes were saved, but the latest bot state could not be refreshed: ${error.message}`
+            : "Your changes were saved, but the latest bot state could not be refreshed.",
+        ));
       }
       return true;
     } catch (error) {
@@ -439,7 +444,13 @@ export function BotsWorkspace({
         : error instanceof Error ? error.message : "TradePulse could not complete this action. Review your choices and try again.";
       setReviewError(message);
       onNotice(message);
-      if (path === "/v1/bots") void reload().catch(() => undefined);
+      if (path === "/v1/bots") {
+        void reload().catch((refreshError) => onNotice(
+          refreshError instanceof Error
+            ? `TradePulse could not confirm whether the bot was created: ${refreshError.message}`
+            : "TradePulse could not confirm whether the bot was created. Refresh the fleet before retrying.",
+        ));
+      }
       return false;
     } finally {
       setPendingActions((current) => {

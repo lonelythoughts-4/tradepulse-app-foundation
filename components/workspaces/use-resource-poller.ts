@@ -5,7 +5,8 @@ import { useEffect, useRef } from "react";
 export interface ResourcePollerOptions<T> {
   apply?: (value: T) => void;
   isVisible: () => boolean;
-  poll: (token: number) => Promise<T | void>;
+  onError?: (error: unknown, token: number) => void;
+  poll: (token: number, signal: AbortSignal) => Promise<T | void>;
 }
 
 export interface ResourcePoller<T> {
@@ -17,51 +18,85 @@ export interface ResourcePoller<T> {
 export function createResourcePoller<T>(options: ResourcePollerOptions<T>): ResourcePoller<T> {
   let visible = options.isVisible();
   let latestToken = 0;
-  let activeToken = 0;
+  let active: { token: number; controller: AbortController } | null = null;
+  let refreshWhenVisible = false;
 
   const tick = async () => {
-    if (!visible || activeToken) return;
+    if (!visible || active) return;
     const token = ++latestToken;
-    activeToken = token;
+    const controller = new AbortController();
+    active = { token, controller };
     try {
-      const value = await options.poll(token);
+      const value = await options.poll(token, controller.signal);
       if (token === latestToken && value !== undefined) options.apply?.(value);
+    } catch (error) {
+      if (token === latestToken && !controller.signal.aborted) {
+        if (options.onError) options.onError(error, token);
+        else throw error;
+      }
     } finally {
-      if (activeToken === token) activeToken = 0;
+      if (active?.token === token) active = null;
+      if (refreshWhenVisible && visible) {
+        refreshWhenVisible = false;
+        void tick();
+      }
     }
   };
 
   return {
     invalidate() {
       latestToken += 1;
-      activeToken = 0;
+      refreshWhenVisible = false;
+      active?.controller.abort();
     },
     async setVisible(nextVisible) {
       const changed = visible !== nextVisible;
       visible = nextVisible;
-      if (changed && visible) await tick();
+      if (changed && !visible) {
+        latestToken += 1;
+        refreshWhenVisible = false;
+        active?.controller.abort();
+      }
+      if (changed && visible) {
+        if (active) refreshWhenVisible = true;
+        else await tick();
+      }
     },
     tick,
   };
 }
 
 export function useResourcePoller<T>(
-  poll: (token: number) => Promise<T | void>,
+  poll: (token: number, signal: AbortSignal) => Promise<T | void>,
   apply: (value: T) => void,
   intervalMs: number,
   enabled: boolean,
+  resourceKey: string,
+  onError: (error: unknown) => void,
 ): void {
   const pollRef = useRef(poll);
   const applyRef = useRef(apply);
+  const onErrorRef = useRef(onError);
   pollRef.current = poll;
   applyRef.current = apply;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!enabled) return;
+    let failureNotified = false;
     const poller = createResourcePoller<T>({
       apply: (value) => applyRef.current(value),
       isVisible: () => document.visibilityState === "visible",
-      poll: (token) => pollRef.current(token),
+      onError: (error) => {
+        if (failureNotified) return;
+        failureNotified = true;
+        onErrorRef.current(error);
+      },
+      poll: async (token, signal) => {
+        const value = await pollRef.current(token, signal);
+        failureNotified = false;
+        return value;
+      },
     });
     const onVisibilityChange = () => void poller.setVisible(document.visibilityState === "visible");
     void poller.tick();
@@ -71,6 +106,7 @@ export function useResourcePoller<T>(
       poller.invalidate();
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      poller.invalidate();
     };
-  }, [enabled, intervalMs]);
+  }, [enabled, intervalMs, resourceKey]);
 }

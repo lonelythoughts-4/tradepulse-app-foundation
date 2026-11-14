@@ -24,7 +24,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
   url.search = request.nextUrl.search
 
   const headers = new Headers()
-  for (const name of ['accept', 'content-type', 'cookie', 'x-telegram-init-data', 'x-tradepulse-environment']) {
+  for (const name of ['accept', 'content-type', 'cookie', 'idempotency-key', 'x-telegram-init-data', 'x-tradepulse-environment']) {
     const value = request.headers.get(name)
     if (value) headers.set(name, value)
   }

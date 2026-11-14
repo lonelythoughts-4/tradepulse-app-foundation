@@ -58,6 +58,7 @@ export function HelpWorkspace({
   const ticketReplyPendingRef = useRef(new Set<string>());
   const ticketCreatePendingRef = useRef(false);
   const selectedTicketIdRef = useRef<string | null>(null);
+  const ticketThreadRequestRef = useRef(0);
   const ticketListRequestRef = useRef(0);
   const loadTickets = async () => {
     const requestId = ++ticketListRequestRef.current;
@@ -98,6 +99,7 @@ export function HelpWorkspace({
     setTicketReplyPendingIds(next);
   };
   const openTicket = async (ticket: { id: string; topic?: string; status: string }, managePending = true, resetReply = true, quiet = false) => {
+    const requestId = ++ticketThreadRequestRef.current;
     if (managePending) {
       if (!beginTicketOpen(ticket.id)) return;
       selectedTicketIdRef.current = ticket.id;
@@ -109,7 +111,7 @@ export function HelpWorkspace({
     }
     try {
       const response = await request(`/v1/support/tickets/${ticket.id}`);
-      if (selectedTicketIdRef.current === ticket.id) {
+      if (requestId === ticketThreadRequestRef.current && selectedTicketIdRef.current === ticket.id) {
         const responseTicket = response.ticket
           ? { ...response.ticket, id: String(response.ticket.id ?? ticket.id) }
           : ticket;
@@ -133,8 +135,13 @@ export function HelpWorkspace({
   useEffect(() => {
     if (!activeTicket || activeTicket.status === "closed") return;
     let cancelled = false;
+    let refreshInFlight = false;
     const refreshThread = () => {
-      if (!cancelled) void openTicket(activeTicket, false, false, true);
+      if (cancelled || refreshInFlight) return;
+      refreshInFlight = true;
+      void openTicket(activeTicket, false, false, true).finally(() => {
+        refreshInFlight = false;
+      });
     };
     const timer = window.setInterval(refreshThread, 15_000);
     return () => {
@@ -360,6 +367,7 @@ export function HelpWorkspace({
               };
               setSupportMessage("");
               selectedTicketIdRef.current = ticket.id;
+              ticketThreadRequestRef.current += 1;
               setActiveTicket(ticket);
               setTicketMessages([firstMessage]);
               setTicketReply("");
@@ -398,6 +406,7 @@ export function HelpWorkspace({
               <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status === "closed" ? "Closed" : "Open"}</span>
               <button type="button" className="small-action" onClick={() => {
                 selectedTicketIdRef.current = null;
+                ticketThreadRequestRef.current += 1;
                 setActiveTicket(null);
                 setTicketMessages([]);
               }}>Hide thread</button>
@@ -423,6 +432,7 @@ export function HelpWorkspace({
                 if (!beginTicketReply(ticket.id)) return;
                 try {
                   await request(`/v1/support/tickets/${ticket.id}/messages`, { method: "POST", body: JSON.stringify({ message }) });
+                  ticketThreadRequestRef.current += 1;
                   const reply: SupportMessage = {
                     id: -Date.now(),
                     author_role: "user",
