@@ -9,7 +9,14 @@ const source = fs.readFileSync(path.join(root, "components", "workspaces", "synt
 
 test("a delayed snapshot falls back to the live stream instead of showing an outage", () => {
   assert.match(source, /request\("\/v1\/synthetic\/stream\?market=" \+ market, \{\}, environment\)/);
-  assert.match(source, /return \{ market, latest, ticks: \[latest\], positions: stream\.positions \|\| \[\], settings: \{\} \} as Snapshot/);
+  assert.match(source, /return \{ market, partial: true, latest, ticks: \[latest\], positions: stream\.positions \|\| \[\], settings: \{\} \} as Snapshot/);
+});
+
+test("the fast stream seeds a read-only partial view until the snapshot arrives", () => {
+  assert.match(source, /current\?\.market === market \? current : \{ market, partial: true, latest, ticks: \[latest\], positions: \[\], settings: \{\} \} as Snapshot/);
+  assert.match(source, /snapshot\.partial \? <div className="activity-row" role="status"/);
+  assert.match(source, /if \(!snapshot \|\| snapshot\.partial \|\| environment !== "mainnet"\) return;/);
+  assert.match(source, /if \(snapshot\?\.partial\) \{ onNotice\("Account and trading details are still loading\./);
 });
 
 test("the verified live quote seeds the chart while history catches up", () => {
