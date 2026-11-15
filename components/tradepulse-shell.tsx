@@ -5092,7 +5092,7 @@ async function waitForTelegramWebApp() {
   }
   return undefined;
 }
-function BrowserBotHandoff() {
+function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> }) {
   const [state, setState] = useState<"preparing" | "ready" | "waiting" | "error">("preparing");
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
@@ -5102,6 +5102,9 @@ function BrowserBotHandoff() {
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
   const refreshTimer = useRef<number | null>(null);
+  const hasActiveLink = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
   useEffect(
     () => () => {
       if (timer.current) window.clearTimeout(timer.current);
@@ -5131,6 +5134,7 @@ function BrowserBotHandoff() {
         setToken(handoff.token);
         setBotUrl(handoff.bot_url);
         setQrSvg(handoff.qr_svg);
+        hasActiveLink.current = true;
         const handoffExpiry = Number(handoff.expires_in);
         const validExpiry = Number.isFinite(handoffExpiry) && handoffExpiry > 0 && handoffExpiry <= 600 ? handoffExpiry : 300;
         setExpiresIn(validExpiry);
@@ -5139,12 +5143,23 @@ function BrowserBotHandoff() {
         if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
         refreshTimer.current = window.setTimeout(() => {
           if (cancelled) return;
-          setState("preparing");
-          setMessage("Refreshing secure Telegram link…");
+          refreshTimer.current = null;
+          setMessage("Refreshing the secure link. Your current code remains visible.");
           setAttempt((current) => current + 1);
         }, handoffRefreshDelayMs(validExpiry));
       } catch (error) {
         if (cancelled) return;
+        if (hasActiveLink.current) {
+          const retryDelay = Math.min(15_000, 1_000 * 2 ** Math.min(attempt, 4));
+          setMessage("The secure link could not be refreshed yet. Your current code remains visible; retrying automatically.");
+          if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+          refreshTimer.current = window.setTimeout(() => {
+            if (cancelled) return;
+            refreshTimer.current = null;
+            setAttempt((current) => current + 1);
+          }, retryDelay);
+          return;
+        }
         if (attempt < 1) {
           setState("preparing");
           setMessage("The sign-in service did not respond. Retrying once…");
@@ -5170,15 +5185,19 @@ function BrowserBotHandoff() {
     const deadline = Date.now() + expiresIn * 1_000;
     let inFlight = false;
     let terminal = false;
+    let transientFailures = 0;
     const poll = async () => {
       if (inFlight) return;
       inFlight = true;
       if (Date.now() >= deadline) {
         timer.current = null;
         terminal = true;
-        setState("preparing");
-        setMessage("Creating a secure Telegram link…");
-        window.setTimeout(() => setAttempt((current) => current + 1), 300);
+        setMessage("Refreshing the secure link. Your current code remains visible.");
+        if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = window.setTimeout(() => {
+          refreshTimer.current = null;
+          setAttempt((current) => current + 1);
+        }, 300);
         inFlight = false;
         return;
       }
@@ -5188,6 +5207,7 @@ function BrowserBotHandoff() {
           { credentials: "same-origin", cache: "no-store" },
         );
         if (response.status === 202) {
+          transientFailures = 0;
           inFlight = false;
           timer.current = window.setTimeout(poll, 1000);
           return;
@@ -5197,19 +5217,31 @@ function BrowserBotHandoff() {
           ? await response.json()
           : { error: (await response.text()).slice(0, 240) };
         if (!response.ok || !result.ready) {
-          terminal = true;
-          timer.current = null;
           throw new Error(result.error || "Could not finish browser connection.");
         }
         timer.current = null;
         terminal = true;
-        window.location.replace("/");
-      } catch (error) {
-        terminal = true;
-        timer.current = null;
-        setState("preparing");
-        setMessage("Creating a secure Telegram link…");
-        window.setTimeout(() => setAttempt((current) => current + 1), 1_500);
+        setMessage("Telegram confirmed. Opening your desk…");
+        const opened = await onCompleteRef.current();
+        if (!opened) {
+          setState("error");
+          setMessage("Telegram confirmed, but your desk could not be opened. Try again to reconnect.");
+        }
+      } catch {
+        if (Date.now() >= deadline) {
+          terminal = true;
+          timer.current = null;
+          setMessage("Refreshing the secure link. Your current code remains visible.");
+          if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+          refreshTimer.current = window.setTimeout(() => {
+            refreshTimer.current = null;
+            setAttempt((current) => current + 1);
+          }, 300);
+          return;
+        }
+        transientFailures += 1;
+        setMessage("Connection interrupted. Your current code remains visible; checking again automatically.");
+        timer.current = window.setTimeout(poll, Math.min(8_000, 1_000 * 2 ** Math.min(transientFailures - 1, 3)));
       } finally {
         inFlight = false;
         if (!terminal && timer.current === null && Date.now() < deadline) {
@@ -5241,6 +5273,7 @@ function BrowserBotHandoff() {
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
     timer.current = null;
     refreshTimer.current = null;
+    hasActiveLink.current = false;
     setToken("");
     setBotUrl("");
     setQrSvg("");
@@ -5312,13 +5345,15 @@ function BrowserBotHandoff() {
 function AuthEntryPage({
   theme,
   onThemeChange,
+  onComplete,
 }: {
   theme: DeskTheme;
   onThemeChange: () => void;
+  onComplete: () => Promise<boolean>;
 }) {
   return (
     <TelegramAuthPage theme={theme} onThemeChange={onThemeChange}>
-      <BrowserBotHandoff />
+      <BrowserBotHandoff onComplete={onComplete} />
     </TelegramAuthPage>
   );
 }
@@ -6593,6 +6628,8 @@ function LiveTradePulse() {
   }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
   const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
+  const sessionValidationRef = useRef<((environment: "mainnet" | "testnet") => void) | null>(null);
+  const lastVisibilityRefreshRef = useRef(0);
   const selectedEnvironmentRef = useRef<"mainnet" | "testnet">("mainnet");
   const environmentSwitchRevisionRef = useRef(0);
   const environmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -6831,12 +6868,12 @@ function LiveTradePulse() {
           reference || undefined,
         );
         if (response.status === 401) {
-          // Never leave a previously rendered desk looking operational after
-          // its Telegram proof or browser handoff has expired. The reconnect
-          // surface is the only safe recovery path; retrying market reads
-          // cannot recreate an authenticated session.
           setNotice(message);
-          updateDashboard(null);
+          if (path === "/v1/dashboard") {
+            updateDashboard(null);
+          } else {
+            sessionValidationRef.current?.(targetEnvironment);
+          }
           throw new Error(message);
         }
         throw new Error(message);
@@ -6935,17 +6972,22 @@ function LiveTradePulse() {
       }
     }
   };
+  sessionValidationRef.current = (environment) => {
+    void load(environment);
+  };
   useEffect(() => {
     void load();
   }, []);
   useEffect(() => {
     const refreshVisibleDesk = () => {
-      if (!document.hidden) void load(webEnvironment);
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastVisibilityRefreshRef.current < 15_000) return;
+      lastVisibilityRefreshRef.current = now;
+      void load(webEnvironment);
     };
-    window.addEventListener("focus", refreshVisibleDesk);
     document.addEventListener("visibilitychange", refreshVisibleDesk);
     return () => {
-      window.removeEventListener("focus", refreshVisibleDesk);
       document.removeEventListener("visibilitychange", refreshVisibleDesk);
     };
   }, [webEnvironment]);
@@ -7243,6 +7285,10 @@ function LiveTradePulse() {
       <AuthEntryPage
         theme={deskTheme}
         onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
+        onComplete={async () => {
+          await load();
+          return deskStore.getState().resources.dashboard !== null;
+        }}
       />
     );
   }

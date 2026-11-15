@@ -39,8 +39,39 @@ test("the browser handoff keeps the web link for desktop and never forces an ins
   assert.match(shell, /href=\{botUrl\}/);
   assert.doesNotMatch(shell, /telegramInstallUrl/);
   assert.doesNotMatch(shell, /location\.replace\(installUrl\)/);
-  assert.match(shell, /window\.location\.replace\("\/"\)/);
+  assert.doesNotMatch(shell, /window\.location\.replace\("\/"\)/);
+  assert.match(shell, /onCompleteRef\.current\(\)/);
+  assert.match(shell, /Your current code remains visible/);
   assert.match(shell, /state === "error" \? \(\s*<button className="primary-action" type="button" onClick=\{retry\}>/);
   assert.match(shell, /The sign-in service did not respond\. Retrying once…/);
   assert.match(shell, /Reference: \$\{requestId\}/);
+});
+
+test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const request = shell.slice(
+    shell.indexOf("const request = useCallback"),
+    shell.indexOf("const noticeCenter"),
+  );
+  const poll = shell.slice(
+    shell.indexOf("const poll = async"),
+    shell.indexOf("const resumePoll"),
+  );
+  const pollErrorHandler = poll.slice(
+    poll.indexOf("} catch {"),
+    poll.indexOf("} finally"),
+  );
+
+  assert.match(
+    request,
+    /if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
+  );
+  assert.match(pollErrorHandler, /setTimeout\(poll/);
+  assert.match(pollErrorHandler, /current code remains visible/);
+  assert.doesNotMatch(pollErrorHandler, /setState\("preparing"\)/);
+  assert.match(shell, /document\.addEventListener\("visibilitychange", refreshVisibleDesk\)/);
+  assert.doesNotMatch(shell, /window\.addEventListener\("focus", refreshVisibleDesk\)/);
 });
