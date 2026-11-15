@@ -69,7 +69,7 @@ export type WorkspaceDashboard = {
     created_at: number;
     trade_detail?: unknown;
   }>;
-  engine: Array<{ bot_id?: number; event_key?: string; net_realized: number; status: string; created_at: number }>;
+  engine: Array<{ bot_id?: number; event_key?: string; net_realized: number; fee_usd?: number; status: string; created_at: number }>;
   alerts: Array<{
     id: number;
     asset: string;

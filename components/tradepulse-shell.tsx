@@ -4821,7 +4821,7 @@ export type LiveDashboard = {
     created_at: number;
     trade_detail?: VisualDeskModel["ledger"][number]["trade_detail"];
   }>;
-  engine: Array<{ bot_id?: number; event_key?: string; net_realized: number; status: string; created_at: number }>;
+  engine: Array<{ bot_id?: number; event_key?: string; net_realized: number; fee_usd?: number; status: string; created_at: number }>;
   alerts: Array<{
     id: number;
     asset: string;

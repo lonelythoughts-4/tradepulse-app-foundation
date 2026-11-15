@@ -1275,13 +1275,18 @@ ealed Return entry amount" /></div></label>
             const latestSettlement = latestSyntheticSettlement || latestMemecoinSettlement;
             const latestSettlementPnl = latestSyntheticSettlement
               ? Number(latestSyntheticSettlement.user_net_pnl_usd ?? latestSyntheticSettlement.realized_pnl_usd ?? 0)
-              : Number(latestMemecoinEngine?.net_realized ?? latestMemecoinSettlement?.realized_pnl ?? 0);
+              : latestMemecoinEngine
+                ? Number(latestMemecoinEngine.net_realized || 0) - Number(latestMemecoinEngine.fee_usd || 0)
+                : Number(latestMemecoinSettlement?.realized_pnl ?? 0);
+            const recentMemecoinRuns = data.engine.filter((run) => Number(run.bot_id) === Number(bot.id));
             const settledPnl = isSynthetic
               ? realizedSynthetic
-              : data.engine.filter((run) => Number(run.bot_id) === Number(bot.id)).reduce((total, run) => total + Number(run.net_realized || 0), 0);
+              : recentMemecoinRuns.length
+                ? recentMemecoinRuns.reduce((total, run) => total + Number(run.net_realized || 0) - Number(run.fee_usd || 0), 0)
+                : latestSettlementPnl;
             const hasSettledPnl = isSynthetic
               ? Boolean(latestSyntheticSettlement)
-              : data.engine.some((run) => Number(run.bot_id) === Number(bot.id));
+              : recentMemecoinRuns.length > 0 || Boolean(latestMemecoinSettlement);
             const rawSettlementMarket = latestSyntheticSettlement?.market || latestMemecoinSettlement?.symbol || "";
             // Contract and mint identifiers are audit data, not primary customer
             // copy. The API supplies approved aliases for both the qualified id
@@ -1323,10 +1328,11 @@ ealed Return entry amount" /></div></label>
                   </strong>
                 </div>
                 <div>
-                  <span>{isSynthetic ? "LATEST SETTLEMENT" : "ALL SETTLED P&L"}</span>
+                  <span>{isSynthetic ? "LATEST SETTLEMENT" : "RECENT CUSTOMER NET"}</span>
                   <strong className={latestSettlement ? (latestSettlementPnl >= 0 ? "up" : "down") : hasSettledPnl && settledPnl < 0 ? "down" : "up"}>
                     {isSynthetic ? latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions" : hasSettledPnl ? `${settledPnl >= 0 ? "+" : "−"}${money(Math.abs(settledPnl))}` : "No settled positions"}
                   </strong>
+                  {!isSynthetic && <small>Up to the last 8 account engine records; quote-modeled, not exchange fills.</small>}
                   {latestSettlement && <small>{formatSettlementExitReason(settlementReason)}</small>}
                 </div>
               </div>

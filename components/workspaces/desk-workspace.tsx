@@ -57,11 +57,14 @@ export function DeskWorkspace({
   const [alertPending, setAlertPending] = useState<Set<string>>(new Set());
   const [alerts, setAlerts] = useState(data.alerts);
   const alertPendingRef = useRef(new Set<string>());
-  const [analystBriefing, setAnalystBriefing] = useState("");
   const [analystMessages, setAnalystMessages] = useState<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
   const [analystQuestion, setAnalystQuestion] = useState("");
   const [analystError, setAnalystError] = useState("");
   const [analystLoading, setAnalystLoading] = useState(false);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [analystProviderAvailable, setAnalystProviderAvailable] = useState<boolean | null>(null);
+  const analystRequestId = useRef(0);
+  const analystThreadEndRef = useRef<HTMLDivElement>(null);
   const alertErrorId = useId();
   const beginAlertAction = (key: string) => {
     if (alertPendingRef.current.has(key)) return false;
@@ -77,10 +80,7 @@ export function DeskWorkspace({
     alertPendingRef.current = next;
     setAlertPending(next);
   };
-  const analystReady = Boolean(data.analyst?.configured);
-  const analystUnavailableReason = !analystReady
-    ? "The Desk Analyst is being connected. Try again shortly."
-    : "";
+  const analystConfigured = Boolean(data.analyst?.configured);
   const selectionAssetLabel = (asset: string) => {
     const labels = data.memecoin?.market_labels;
     return labels?.[asset] || labels?.[asset.toLowerCase()] || labels?.[asset.toUpperCase()] || "Saved market";
@@ -88,6 +88,12 @@ export function DeskWorkspace({
   useEffect(() => {
     setAlerts(data.alerts);
   }, [data.alerts]);
+  useEffect(() => {
+    analystThreadEndRef.current?.scrollIntoView({
+      block: "end",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [analystMessages, analystLoading]);
   useEffect(() => {
     if (!selection) return;
     const labels = data.memecoin?.market_labels || {};
@@ -157,48 +163,65 @@ export function DeskWorkspace({
     }
   };
   const generateAnalystBriefing = async () => {
-    if (analystLoading) return;
+    if (analystLoading || !analystConfigured) return;
     const question = analystQuestion.trim();
-    if (/\b(escalate|admin support|support ticket)\b/i.test(question)) {
-      await escalateAnalystIssue(question);
-      return;
-    }
+    if (!question) return;
+    const requestId = ++analystRequestId.current;
     setAnalystLoading(true);
     setAnalystError("");
     try {
       const response = await request("/v1/live-desk/analyst", {
         method: "POST",
-        body: JSON.stringify({ question: question || undefined }),
+        body: JSON.stringify({
+          question,
+          history: analystMessages
+            .filter((message) => message.role !== "system")
+            .map(({ role, text }) => ({ role, content: text })),
+        }),
       }, undefined, 25_000);
       const text = typeof response?.briefing?.text === "string" ? response.briefing.text : "";
       if (!text) throw new Error("No briefing was available. Try again.");
-      setAnalystBriefing(text);
+      if (requestId !== analystRequestId.current) return;
+      setAnalystProviderAvailable(true);
       setAnalystMessages((messages) => [...messages, ...(question ? [{ role: "user" as const, text: question }] : []), { role: "assistant" as const, text }].slice(-8));
       setAnalystQuestion("");
     } catch (error) {
-      setAnalystError(error instanceof Error ? error.message : "The analyst is unavailable right now. Try again shortly.");
+      if (requestId !== analystRequestId.current) return;
+      setAnalystProviderAvailable(false);
+      setAnalystError(error instanceof Error ? error.message : "The AI provider could not answer. Please try again or contact support.");
     } finally {
-      setAnalystLoading(false);
+      if (requestId === analystRequestId.current) setAnalystLoading(false);
     }
   };
   const escalateAnalystIssue = async (issue = analystQuestion.trim()) => {
-    if (analystLoading || issue.length < 10) {
+    if (supportLoading || issue.length < 10) {
       setAnalystError("Add a little more detail so support can investigate.");
       return;
     }
-    setAnalystLoading(true);
+    const requestId = analystRequestId.current;
+    setSupportLoading(true);
     setAnalystError("");
     try {
       const response = await request("/v1/live-desk/analyst/escalate", { method: "POST", body: JSON.stringify({ issue }) });
       const ticketId = Number(response?.ticket_id);
       const text = Number.isFinite(ticketId) ? `Support request TP-${ticketId} was sent.` : "Your issue was sent to support.";
+      if (requestId !== analystRequestId.current) return;
       setAnalystMessages((messages) => [...messages, { role: "user" as const, text: issue }, { role: "system" as const, text }].slice(-8));
       setAnalystQuestion("");
     } catch (error) {
-      setAnalystError(error instanceof Error ? error.message : "The support request could not be sent. Try again.");
+      if (requestId === analystRequestId.current) {
+        setAnalystError(error instanceof Error ? error.message : "The support request could not be sent. Try again.");
+      }
     } finally {
-      setAnalystLoading(false);
+      setSupportLoading(false);
     }
+  };
+  const startNewAnalystConversation = () => {
+    analystRequestId.current += 1;
+    setAnalystMessages([]);
+    setAnalystQuestion("");
+    setAnalystError("");
+    setAnalystLoading(false);
   };
   return (
     <DeskLocalized>
@@ -239,33 +262,81 @@ export function DeskWorkspace({
         ) : (
           <div className="selection-empty"><PulseMark size={25} /><p>Choose a saved Memecoin basket to see its market context here.</p></div>
         )}
-        <div className="analyst-boundary" aria-live="polite">
-          <div className="analyst-identity">
-            <span className="analyst-mark"><PulseMark size={18} /></span>
-            <div><strong>Desk Analyst</strong><small>{analystReady ? "Ready to help" : "Connecting…"}</small></div>
+      </GradientPanel>
+      <GradientPanel className="analyst-chat-panel">
+        <header className="analyst-panel-header">
+          <div className="analyst-panel-title">
+            <span className="analyst-mark"><PulseMark size={19} /></span>
+            <div>
+              <h2>Desk Analyst</h2>
+              <p>Ask about anything, including trading concepts and strategy trade-offs.</p>
+            </div>
           </div>
-          <div className="analyst-copy">
-            {analystMessages.length ? <div className="analyst-thread">{analystMessages.map((message, index) => <p key={`${message.role}-${index}`} className={`analyst-message analyst-message-${message.role}`}>{message.text}</p>)}</div> : analystBriefing ? <p className="analyst-briefing">{analystBriefing}</p> : <p>{analystUnavailableReason || "Ask anything about your strategy, allocations, what to add or remove, activity, market scenarios, or your account. It will explain its reasoning; you always choose and confirm any action."}</p>}
-            {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
-            <label className="analyst-question">
-              <span>Ask the analyst</span>
-              <input
-                value={analystQuestion}
-                maxLength={2000}
-                disabled={!analystReady || analystLoading}
-                onChange={(event) => {
-                  setAnalystQuestion(event.target.value);
-                  if (analystError) setAnalystError("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void generateAnalystBriefing();
-                }}
-                placeholder="What could I add to my strategy, and why?"
-              />
-            </label>
-            <div className="analyst-actions"><button className="small-action analyst-action" disabled={!analystReady || analystLoading} onClick={() => void generateAnalystBriefing()}>{analystLoading ? "Reviewing your account…" : analystQuestion.trim() ? "Send message" : analystBriefing ? "Refresh overview" : "Start conversation"}<StateIcon name="refresh" /></button><button className="small-action analyst-escalate" disabled={analystLoading || analystQuestion.trim().length < 10} onClick={() => void escalateAnalystIssue()}>Contact support</button></div>
+          <div className="analyst-panel-actions">
+            <span className={`analyst-provider-status${!analystConfigured || analystProviderAvailable === false ? " needs-attention" : ""}`} role="status">
+              {!analystConfigured ? "Not configured" : analystProviderAvailable === false ? "Provider needs attention" : analystProviderAvailable ? "Available" : "Provider configured"}
+            </span>
+            <button type="button" className="small-action analyst-new-conversation" onClick={startNewAnalystConversation}>New conversation</button>
           </div>
+        </header>
+        <div className="analyst-thread" role="log" aria-label="Desk Analyst conversation" aria-live="polite" aria-relevant="additions text">
+          {analystMessages.length ? analystMessages.map((message, index) => (
+            <article key={`${message.role}-${index}`} className={`analyst-message analyst-message-${message.role}`}>
+              <span>{message.role === "user" ? "You" : message.role === "assistant" ? "Desk Analyst" : "Support"}</span>
+              <p>{message.text}</p>
+            </article>
+          )) : (
+            <div className="analyst-empty-state">
+              <p>Start a conversation on any topic. For current market claims, the analyst can only use data available to TradePulse.</p>
+            </div>
+          )}
+          {analystLoading && <p className="analyst-thinking" role="status">Thinking through your question…</p>}
+          <div ref={analystThreadEndRef} />
         </div>
+        {analystError && <p className="analyst-error" role="alert">{analystError}</p>}
+        {!analystConfigured && <p className="analyst-error" role="status">The AI provider is not configured. Contact support to restore the analyst.</p>}
+        <form
+          className="analyst-composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void generateAnalystBriefing();
+          }}
+        >
+          <label htmlFor="desk-analyst-question">Your message</label>
+          <textarea
+            id="desk-analyst-question"
+            value={analystQuestion}
+            maxLength={2000}
+            onChange={(event) => {
+              setAnalystQuestion(event.target.value);
+              if (analystError) setAnalystError("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                void generateAnalystBriefing();
+              }
+            }}
+            placeholder="Ask a question or continue the conversation…"
+          />
+          <div className="analyst-composer-footer">
+            <span>Ctrl/Command + Enter to send. AI-generated information is not financial advice.</span>
+            <div className="analyst-panel-actions">
+              <button
+                type="button"
+                className="small-action analyst-escalate"
+                disabled={supportLoading || analystQuestion.trim().length < 10}
+                aria-busy={supportLoading}
+                onClick={() => void escalateAnalystIssue()}
+              >
+                {supportLoading ? "Sending to support…" : "Contact support"}
+              </button>
+              <button type="submit" className="primary-action analyst-send" disabled={!analystConfigured || analystLoading || !analystQuestion.trim()} aria-busy={analystLoading}>
+                {analystLoading ? "Sending…" : "Send message"} <StateIcon name="refresh" />
+              </button>
+            </div>
+          </div>
+        </form>
       </GradientPanel>
       <GradientPanel className="alert-card desk-alert-card">
           <h2>Create a price alert</h2>
