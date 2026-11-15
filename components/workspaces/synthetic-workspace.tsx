@@ -41,6 +41,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [fundingSource, setFundingSource] = useState<"wallet" | "credit">("wallet");
   const [signals, setSignals] = useState<Signal[]>([]);
   const [signalResults, setSignalResults] = useState<Record<string, string>>({});
+  const [signalSubmissions, setSignalSubmissions] = useState<Record<string, Pick<Signal, "market" | "direction">>>({});
   const [signalError, setSignalError] = useState("");
   const signalPollInFlight = useRef(false);
   const signalPollFailures = useRef(0);
@@ -202,11 +203,31 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const confirm = async () => {
     if (!review) return;
     if (snapshot?.partial) { setReviewError("Account and trading details are still loading. Wait for the verified snapshot before submitting."); return; }
-    const key = actionKey(review.path, review.payload);
+    const submission = review;
+    const key = actionKey(submission.path, submission.payload);
     if (reviewSubmitting.current === key || pendingFor(key)) return;
-    if ((review.signal && review.signal.expires_at * 1000 <= Date.now()) || (review.kind === "auto" && !autoAcknowledged)) { setReviewError("This review expired or needs acknowledgement. Go back and review again."); return; }
+    if ((submission.signal && submission.signal.expires_at * 1000 <= Date.now()) || (submission.kind === "auto" && !autoAcknowledged)) { setReviewError("This review expired or needs acknowledgement. Go back and review again."); return; }
     reviewSubmitting.current = key; setReviewError("");
-    try { const submitted = await act(review.path, review.payload); if (submitted && review.signal) setSignalResults((current) => ({ ...current, [review.signal!.id]: "Submitted" })); if (submitted) setReview(null); } catch (error) { const message = error instanceof Error ? error.message : "TradePulse could not submit this request. Review it and try again."; setReviewError(message); if (review.signal && /signal.*(?:expired|no longer)/i.test(message)) { setReview(null); onNotice("That signal is no longer current. A fresh signal will appear when available."); } } finally { if (reviewSubmitting.current === key) reviewSubmitting.current = null; }
+    const signal = submission.signal;
+    if (signal) {
+      const signalId = signal.id;
+      setSignalSubmissions((current) => ({ ...current, [signalId]: { market: signal.market, direction: signal.direction } }));
+      const action = act(submission.path, submission.payload);
+      setReview(null);
+      try {
+        const submitted = await action;
+        if (submitted) setSignalResults((current) => ({ ...current, [signalId]: "Submitted" }));
+        else if (!pendingFor(key)) setReview(submission);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "TradePulse could not submit this request. Review it and try again.";
+        if (/signal.*(?:expired|no longer)/i.test(message)) onNotice("That signal is no longer current. A fresh signal will appear when available.");
+      } finally {
+        setSignalSubmissions((current) => { const next = { ...current }; delete next[signalId]; return next; });
+        if (reviewSubmitting.current === key) reviewSubmitting.current = null;
+      }
+      return;
+    }
+    try { const submitted = await act(submission.path, submission.payload); if (submitted) setReview(null); } catch (error) { const message = error instanceof Error ? error.message : "TradePulse could not submit this request. Review it and try again."; setReviewError(message); } finally { if (reviewSubmitting.current === key) reviewSubmitting.current = null; }
   };
   const chartTicks = snapshot?.ticks?.length ? snapshot.ticks : snapshot?.latest ? [snapshot.latest] : [];
   const points = reconcileSyntheticTicks(chartTicks.map((tick) => ({ market: tick.market || market, sequence: Number(tick.sequence), price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })), market).slice(-80);
@@ -278,7 +299,8 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           {confirmedAuto && !executionTransition && <><p className="synthetic-auto-hint">Automatic uses the confirmed per-order margin within its assigned capacity.</p><div className="activity-row" role="status" aria-live="polite"><div className="activity-info"><strong>{autoActivityTitle}</strong><small>{autoActivityDetail}</small></div></div></>}
         </section>
         <div className="button-row" role="group" aria-label="Manual orders"><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || manualOrderPending("long")} onClick={() => openReview("long")}>{manualOrderPending("long") ? "Submitting…" : "Review Long"}</button><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || manualOrderPending("short")} onClick={() => openReview("short")}>{manualOrderPending("short") ? "Submitting…" : "Review Short"}</button></div>
-        {signals.filter((signal) => signal.expires_at * 1000 > now).slice(0, 3).map((signal) => { const key = "signal:" + signal.id + ":approve"; const submitted = Boolean(signalResults[signal.id]) || snapshot.positions.some((position) => position.signal_id === signal.id); return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - now) / 1000))}s</small></div><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || pendingFor(key) || submitted} onClick={() => openReview("approve", signal)}>{pendingFor(key) ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>; })}
+        {Object.entries(signalSubmissions).map(([id, submission]) => <div className="activity-row" key={"signal-pending:" + id} role="status" aria-live="polite"><div className="activity-info"><strong>{submission.market} · {submission.direction} approval pending</strong><small>Waiting for server confirmation. No order is marked successful until the server confirms it.</small></div></div>)}
+        {signals.filter((signal) => signal.expires_at * 1000 > now).slice(0, 3).map((signal) => { const key = "signal:" + signal.id + ":approve"; const approvalPending = pendingFor(key) || Boolean(signalSubmissions[signal.id]); const submitted = signalResults[signal.id] === "Submitted" || snapshot.positions.some((position) => position.signal_id === signal.id); return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - now) / 1000))}s</small></div><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || approvalPending || submitted} onClick={() => openReview("approve", signal)}>{approvalPending ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>; })}
         {signalError ? <p role="status">{signalError}</p> : !signals.some((signal) => signal.expires_at * 1000 > now) && <p role="status">No current signals. Waiting for the next update.</p>}
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       {!snapshot.partial && snapshot.positions.filter((position) => position.status === "open").map((position) => { const key = "synthetic-position:" + position.id + ":close"; const expiry = Number(position.contract_expires_at); const secondsToExpiry = Number.isFinite(expiry) ? Math.ceil(expiry - now / 1000) : null; const expiryStatus = normaliseManualContractType(position.contract_type) === "fixed" && secondsToExpiry !== null ? secondsToExpiry > 0 ? " · scheduled close in " + secondsToExpiry + "s" : " · expiry reached; awaiting settlement" : ""; return <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{liveNetPnlLabel(Number(position.user_net_unrealized_pnl_usd || 0))} · {money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"}</small><small>Spread {money(position.spread_charged_usd || 0)} · tier fee {money(position.tier_fee_usd || 0)}</small><small className="synthetic-contract-record">{contractTypeLabel(position.contract_type)}{normaliseManualContractType(position.contract_type) === "open_ended" && Number.isFinite(Number(position.maximum_loss_percent)) ? " · max loss " + Number(position.maximum_loss_percent) + "%" : ""}{Number.isFinite(Number(position.manual_stop_loss_percent)) ? " · stop " + Number(position.manual_stop_loss_percent) + "%" : ""}{expiryStatus} · {contractReasonLabel(position.contract_reason)}</small></div><button className="small-action" disabled={pendingFor(key)} onClick={() => void act("/v1/synthetic/positions/" + position.id + "/close", {}).catch(() => undefined)}>{pendingFor(key) ? "Closing…" : "Close"}</button></div>; })}

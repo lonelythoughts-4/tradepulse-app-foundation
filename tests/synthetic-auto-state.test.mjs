@@ -34,6 +34,19 @@ test("Synthetic contract and action controls keep readable theme-aware states", 
   assert.match(styles, /\.synthetic-pilot \.activity-row>\.small-action:disabled\{[^}]*opacity:1/);
 });
 
+test("signal approval closes review immediately and reports pending until server confirmation", () => {
+  const approval = source.match(/if \(signal\) \{([\s\S]*?)\n    \}/)?.[1] || "";
+  const start = approval.indexOf("const action = act(submission.path, submission.payload);");
+  const closeReview = approval.indexOf("setReview(null);", start);
+  const awaitAction = approval.indexOf("await action;", start);
+  assert.ok(start >= 0 && closeReview > start && awaitAction > closeReview);
+  assert.match(approval, /setSignalSubmissions/);
+  assert.match(approval, /if \(submitted\) setSignalResults\(\(current\) => \(\{ \.\.\.current, \[signalId\]: "Submitted" \}\)\)/);
+  assert.match(approval, /delete next\[signalId\]/);
+  assert.match(source, /No order is marked successful until the server confirms it/);
+  assert.match(source, /const approvalPending = pendingFor\(key\) \|\| Boolean\(signalSubmissions\[signal\.id\]\)/);
+});
+
 test("the mobile brand keeps its wordmark without the marked SVG", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
   const mobileBrand = shell.match(/<div className="mobile-brand">([\s\S]*?)<\/div>/)?.[1] || "";
