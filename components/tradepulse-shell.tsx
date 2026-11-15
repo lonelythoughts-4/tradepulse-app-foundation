@@ -5700,7 +5700,6 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
     <div className="account-screen">
       <div className="screen-title">
         <div>
-          <span className="eyebrow">EARN / REFERRALS</span>
           <h2>Referrals</h2>
         </div>
         <button
@@ -5731,23 +5730,22 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
       </GradientPanel>
       <div className="earn-grid">
         <GradientPanel>
-          <span className="eyebrow">ACCRUED EARNINGS</span>
+          <span className="eyebrow">ACCRUED REFERRAL FEES</span>
           <strong className="big-number">
             {money(data.referral.accrued_usd)}
           </strong>
-          <small>Eligible referral earnings</small>
+          <small>Ledger accrual only; not added to your withdrawable wallet balance.</small>
         </GradientPanel>
         <GradientPanel>
-          <span className="eyebrow">ACTIVE REFERRALS</span>
+          <span className="eyebrow">LINKED DIRECT REFERRALS</span>
           <strong className="big-number">{data.referral.count}</strong>
-          <small>Direct invites</small>
+          <small>Users linked when they started through your invite.</small>
         </GradientPanel>
       </div>
       <GradientPanel className="levels-card">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">REFERRAL LEVELS</span>
-            <h2>How referral earnings work</h2>
+            <h2>Referral earning rates</h2>
           </div>
         </div>
         {data.referral_rates.map((rate, index) => (
@@ -6904,6 +6902,8 @@ function LiveTradePulse() {
   const [recoveryHash, setRecoveryHash] = useState("");
   const [recoveryDestination, setRecoveryDestination] = useState("");
   const [admin, setAdmin] = useState<LiveTradePulseAdmin | null>(null);
+  const [adminLoadError, setAdminLoadError] = useState("");
+  const [adminRetryPending, setAdminRetryPending] = useState(false);
   // Keep the pending action identity so a top-up, order, approval, or close
   // cannot make an unrelated control render the wrong loading label.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
@@ -7156,12 +7156,24 @@ function LiveTradePulse() {
   }, [data, notice]);
   useEffect(() => {
     if (tab !== "Admin" || !data?.user.is_admin) return;
+    let active = true;
+    const controller = new AbortController();
     const selectedAtRequest = webEnvironment;
-    request("/v1/admin/overview", {}, selectedAtRequest)
+    setAdminLoadError("");
+    request("/v1/admin/overview", { signal: controller.signal }, selectedAtRequest, 45_000)
       .then((overview) => {
-        if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
+        if (active && shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
       })
-      .catch((error) => setNotice(error.message));
+      .catch((error) => {
+        if (!active || !shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) return;
+        const message = error instanceof Error ? error.message : "The operations overview could not be loaded.";
+        setAdminLoadError(message);
+        setNotice(message);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [tab, data?.user.is_admin, webEnvironment]);
   useEffect(() => {
     if (tab !== "Dashboard" || !data) return;
@@ -7516,6 +7528,7 @@ function LiveTradePulse() {
     // keeps a slow mainnet read from being rendered under a testnet label.
     selectedEnvironmentRef.current = nextEnvironment;
     setWebEnvironment(nextEnvironment);
+    setAdminLoadError("");
     try {
       const save = environmentSaveQueueRef.current.then(() =>
         request("/v1/admin/environment", {
@@ -7534,7 +7547,7 @@ function LiveTradePulse() {
         deskStore.applyResource("synthetic", null, Date.now());
         setAdmin(null);
       }
-      const overviewRequest = request("/v1/admin/overview", {}, nextEnvironment);
+      const overviewRequest = request("/v1/admin/overview", {}, nextEnvironment, 45_000);
       const dashboardRequest = load(nextEnvironment, true);
       const [overview] = await Promise.all([overviewRequest, dashboardRequest]);
       if (
@@ -7554,6 +7567,7 @@ function LiveTradePulse() {
         setWebEnvironment(priorEnvironment);
       }
       if (revision !== environmentSwitchRevisionRef.current) return;
+      setAdminLoadError(error instanceof Error ? error.message : "The operations overview could not be loaded.");
       setNotice(
         error instanceof Error
           ? error.message
@@ -7563,8 +7577,24 @@ function LiveTradePulse() {
   };
   const refreshAdmin = async () => {
     const selectedAtRequest = selectedEnvironmentRef.current;
-    const overview = await request("/v1/admin/overview", {}, selectedAtRequest);
+    const overview = await request("/v1/admin/overview", {}, selectedAtRequest, 45_000);
     if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
+  };
+  const retryAdminOverview = async () => {
+    if (adminRetryPending) return;
+    setAdminRetryPending(true);
+    setAdminLoadError("");
+    const selectedAtRequest = selectedEnvironmentRef.current;
+    try {
+      const overview = await request("/v1/admin/overview", {}, selectedAtRequest, 45_000);
+      if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
+    } catch (error) {
+      if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) {
+        setAdminLoadError(error instanceof Error ? error.message : "The operations overview could not be loaded.");
+      }
+    } finally {
+      setAdminRetryPending(false);
+    }
   };
   const walletEnvironment = data.user.is_admin ? webEnvironment : "mainnet";
   const workspacePresence = getWorkspacePresencePlan(Boolean(reduceMotion));
@@ -7880,7 +7910,17 @@ function LiveTradePulse() {
           )}
           {tab === "Admin" && !admin && (
             <div className="empty-state">
-              <strong>Loading control room…</strong>
+              {adminLoadError ? (
+                <>
+                  <strong>Could not load the operations desk</strong>
+                  <p>{adminLoadError}</p>
+                  <button className="small-action" disabled={adminRetryPending} aria-busy={adminRetryPending} onClick={() => void retryAdminOverview()}>
+                    {adminRetryPending ? "Retrying overview…" : "Retry overview"}
+                  </button>
+                </>
+              ) : (
+                <strong>Loading control room…</strong>
+              )}
             </div>
           )}
           {/* Retained only as a historical reference; the live admin screen above owns these controls. */}

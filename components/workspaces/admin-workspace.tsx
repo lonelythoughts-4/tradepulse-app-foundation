@@ -1122,6 +1122,9 @@ export function AdminWorkspace({
         </AccessibleDialog>
       )}
       <div className="admin-grid">
+        <details className="admin-category" open>
+          <summary><strong>Review queues</strong><span>Sweeps, withdrawals, recovery, and support</span></summary>
+          <div className="admin-category-grid">
         <GradientPanel className="admin-table">
           <div className="section-heading">
             <div>
@@ -1341,6 +1344,11 @@ export function AdminWorkspace({
             <p>No support tickets.</p>
           )}
         </GradientPanel>
+          </div>
+        </details>
+        <details className="admin-category">
+          <summary><strong>Accounts and community</strong><span>Account actions, event cards, and testnet activity</span></summary>
+          <div className="admin-category-grid">
         <GradientPanel className="admin-table">
           <span className="eyebrow">ACCOUNT OPERATIONS</span>
           <h2>Fund or reset a user</h2>
@@ -1613,6 +1621,11 @@ export function AdminWorkspace({
             })}
           </>}
         </GradientPanel>
+          </div>
+        </details>
+        <details className="admin-category">
+          <summary><strong>System controls and activity</strong><span>Runtime settings, markets, notices, treasury, and settlements</span></summary>
+          <div className="admin-category-grid">
         <GradientPanel className="admin-table">
           <span className="eyebrow">SETTINGS EDITOR</span>
           <h2>Runtime controls</h2>
@@ -1920,6 +1933,8 @@ export function AdminWorkspace({
             <p>No engine settlements in this workspace.</p>
           )}
         </GradientPanel>
+          </div>
+        </details>
       </div>
     </div>
     </DeskLocalized>

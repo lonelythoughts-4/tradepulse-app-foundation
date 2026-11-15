@@ -6,6 +6,7 @@ import './tokens.css'
 import './globals.css'
 import './identity.css'
 import './activation.css'
+import './workspaces.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk', display: 'swap' })
