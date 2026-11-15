@@ -468,7 +468,6 @@ function PulseAvatar({
   return (
     <span className={`pulse-avatar avatar-${id} ${className}`} aria-hidden="true">
       <img src={`/identity-assets/${id}-figure.svg`} alt="" />
-      <i />
       <b>{initials?.slice(0, 1) || "T"}</b>
     </span>
   );
@@ -479,7 +478,6 @@ function AvatarPicker({
   onSelect,
   onConfirm,
   onClose,
-  required = false,
   locked = false,
   current,
   fee = 10,
@@ -490,7 +488,6 @@ function AvatarPicker({
   onSelect: (id: AvatarId) => void;
   onConfirm: (id: AvatarId) => void;
   onClose: () => void;
-  required?: boolean;
   locked?: boolean;
   current?: AvatarId;
   fee?: number;
@@ -502,14 +499,12 @@ function AvatarPicker({
     <AccessibleDialog
       label="Choose your TradePulse desk identity"
       onClose={onClose}
-      dismissible={!required && !pending}
+      dismissible={!pending}
     >
       <div className="avatar-picker-dialog">
-        {!required && (
-            <button className="modal-close" type="button" disabled={pending} onClick={onClose} aria-label="Close identity picker">
-            <X size={16} />
-          </button>
-        )}
+        <button className="modal-close" type="button" disabled={pending} onClick={onClose} aria-label="Close identity picker">
+          <X size={16} />
+        </button>
         <span className="eyebrow">YOUR DESK IDENTITY</span>
         <h2>{locked ? "Change your identity" : "Choose your signal"}</h2>
         <p>{locked ? `Your next identity change costs $${fee.toFixed(2)} from your available mainnet wallet.` : "Your first identity is free. It becomes your desk signal once confirmed."}</p>
@@ -4731,7 +4726,49 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
   const advance = async (next: number) => { setStep(next); try { await request("/v1/onboarding/step", { method: "POST", body: JSON.stringify({ step: Math.min(next, 4) }) }); } catch (error) { onNotice(error instanceof Error ? error.message : translateDesk(language, "error.request")); } };
   if (step < 4) {
     const page = pages[step];
-    return <DeskLocalized><main className="activation-shell"><section className="activation-stage" aria-labelledby="activation-title"><p className="activation-progress">{activationProgress[language](step + 1)}</p><h1 id="activation-title">{page[0]}</h1><p>{page[1]}</p><fieldset className="activation-languages" aria-label={activationCopy[language].language}><legend>{activationCopy[language].language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} onClick={() => chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{languageError && <p role="alert">{languageError}</p>}<div className="activation-actions"><button className="primary-action" onClick={() => advance(step + 1)}>{translateDesk(language, "activation.continue")}</button>{step > 0 && <button className="text-action" onClick={() => setStep(step - 1)}>{translateDesk(language, "activation.back")}</button>}</div></section></main></DeskLocalized>;
+    return (
+      <DeskLocalized>
+        <main className="activation-shell">
+          <section className="activation-stage" aria-labelledby="activation-title">
+            <p className="activation-progress">{activationProgress[language](step + 1)}</p>
+            <h1 id="activation-title">{page[0]}</h1>
+            <p>{page[1]}</p>
+            {step === 0 && (
+              <>
+                <fieldset className="activation-languages" aria-label={activationCopy[language].language}>
+                  <legend>{activationCopy[language].language}</legend>
+                  <div className="language-options">
+                    {activationLanguages.map((item) => (
+                      <button
+                        key={item.code}
+                        type="button"
+                        className={`language-option ${language === item.code ? "selected" : ""}`}
+                        aria-pressed={language === item.code}
+                        onClick={() => chooseLanguage(item.code)}
+                      >
+                        <ActivationLanguageFlag language={item.code} />
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+                {languageError && <p role="alert">{languageError}</p>}
+              </>
+            )}
+            <div className="activation-actions">
+              <button className="primary-action" onClick={() => advance(step + 1)}>
+                {translateDesk(language, "activation.continue")}
+              </button>
+              {step > 0 && (
+                <button className="text-action" onClick={() => setStep(step - 1)}>
+                  {translateDesk(language, "activation.back")}
+                </button>
+              )}
+            </div>
+          </section>
+        </main>
+      </DeskLocalized>
+    );
   }
   const gateReady = Boolean(channel?.enabled && channel.configured);
   const copy = activationCopy[language];
@@ -4748,7 +4785,37 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
     } finally { setAccepting(false); }
   };
   const verified = Boolean(channel?.verified || state === "verified");
-  return <DeskLocalized><main className="activation-shell"><section className="activation-stage activation-gate" aria-labelledby="activation-title"><p className="activation-progress">{activationProgress[language](5)}</p><h1 id="activation-title">{copy.title}</h1><p>{copy.intro}{gateReady ? ` ${translateDesk(language, "activation.channelIntro")}` : ""}</p><fieldset className="activation-languages" aria-label={copy.language}><legend>{copy.language}</legend><div className="language-options">{activationLanguages.map((item) => <button key={item.code} type="button" className={`language-option ${language === item.code ? "selected" : ""}`} aria-pressed={language === item.code} onClick={() => chooseLanguage(item.code)}><ActivationLanguageFlag language={item.code} /><span>{item.label}</span></button>)}</div></fieldset>{languageError && <p role="alert">{languageError}</p>}{gateReady && !verified && <div className="activation-channel"><a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">{translateDesk(language, "activation.join")}</a><button className="text-action" disabled={checking} onClick={verify}>{checking ? translateDesk(language, "activation.checking") : translateDesk(language, "activation.recheck")}</button>{state === "not_joined" || state === "restricted" ? <small>{translateDesk(language, "activation.membershipPending")}</small> : null}{state === "unavailable" ? <small>{translateDesk(language, "activation.membershipUnavailable")}</small> : null}</div>}{(!gateReady || verified) && <div className="activation-terms"><p><strong>{copy.terms}</strong><br />{copy.body}</p><button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>{accepting ? copy.opening : copy.accept}</button></div>}</section></main></DeskLocalized>;
+  return (
+    <DeskLocalized>
+      <main className="activation-shell">
+        <section className="activation-stage activation-gate" aria-labelledby="activation-title">
+          <p className="activation-progress">{activationProgress[language](5)}</p>
+          <h1 id="activation-title">{copy.title}</h1>
+          <p>{copy.intro}{gateReady ? ` ${translateDesk(language, "activation.channelIntro")}` : ""}</p>
+          {gateReady && !verified && (
+            <div className="activation-channel">
+              <a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">
+                {translateDesk(language, "activation.join")}
+              </a>
+              <button className="text-action" disabled={checking} onClick={verify}>
+                {checking ? translateDesk(language, "activation.checking") : translateDesk(language, "activation.recheck")}
+              </button>
+              {state === "not_joined" || state === "restricted" ? <small>{translateDesk(language, "activation.membershipPending")}</small> : null}
+              {state === "unavailable" ? <small>{translateDesk(language, "activation.membershipUnavailable")}</small> : null}
+            </div>
+          )}
+          {(!gateReady || verified) && (
+            <div className="activation-terms">
+              <p><strong>{copy.terms}</strong><br />{copy.body}</p>
+              <button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>
+                {accepting ? copy.opening : copy.accept}
+              </button>
+            </div>
+          )}
+        </section>
+      </main>
+    </DeskLocalized>
+  );
 }
 
 export type LiveDashboard = {
@@ -6640,7 +6707,6 @@ function LiveTradePulse() {
   const restoredEnvironmentForUserRef = useRef<number | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
-  const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
   const [tab, setTab] = useState<DeskTab>("Dashboard");
   const [walletEntry, setWalletEntry] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
@@ -6719,15 +6785,8 @@ function LiveTradePulse() {
     const valid = avatarOptions.some((option) => option.id === preferred);
     if (valid) {
       setAvatarId(preferred as AvatarId);
-      if (!accountAvatar) {
-        setAvatarPickerRequired(true);
-        setAvatarPickerOpen(true);
-      }
     }
-    else {
-      setAvatarPickerRequired(true);
-      setAvatarPickerOpen(true);
-    }
+    else setAvatarId("orbit");
   }, [data?.user.id, data?.user.avatar_id]);
   const chooseAvatar = async (next: AvatarId) => {
     if (identityPending) return;
@@ -6749,7 +6808,6 @@ function LiveTradePulse() {
         }
         return;
       }
-      setAvatarPickerRequired(false);
       setAvatarPickerOpen(false);
       setNotice(prior === next ? "Identity unchanged." : `Identity sealed: ${avatarOptions.find((option) => option.id === next)?.name || next}.`);
     } catch {
@@ -7553,7 +7611,6 @@ function LiveTradePulse() {
             onSelect={setAvatarId}
             onConfirm={chooseAvatar}
             onClose={() => setAvatarPickerOpen(false)}
-            required={avatarPickerRequired}
             locked={Boolean(data.user.avatar_id)}
             current={data.user.avatar_id as AvatarId | undefined}
             fee={Number(data.user.identity?.change_fee_usd || 10)}
