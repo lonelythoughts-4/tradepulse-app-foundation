@@ -14,13 +14,15 @@ test("ordinary browsers use the handoff unless signed Telegram data is present",
   assert.equal(isTelegramWebAppContext("Mozilla/5.0 Chrome/140", true), true);
 });
 
-test("a delayed Telegram bridge keeps the app out of the browser auth page", async () => {
+test("a delayed Telegram bridge stays in session-check state without starting browser handoff", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
   );
   assert.match(shell, /const telegramContext = openedInsideTelegram\(\)/);
   assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return;/);
-  assert.match(shell, /if \(telegramIdentityPending\) return <DeskLoading status="Waiting for Telegram to verify this session/);
+  assert.match(shell, /telegramIdentityPending\s*\?\s*"Waiting for Telegram to verify this session/);
+  assert.match(shell, /sessionBootstrapComplete && !telegramLaunchContext/);
+  assert.doesNotMatch(shell, /if \(telegramIdentityPending\) return <DeskLoading/);
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
 });

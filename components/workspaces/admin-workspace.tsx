@@ -754,9 +754,6 @@ export function AdminWorkspace({
       const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 30_000);
       setAutouserFile(null);
       if (autouserFileRef.current) autouserFileRef.current.value = "";
-      setAutouserMinimum("");
-      setAutouserMaximum("");
-      setAutouserConfirmed(false);
       onNotice(result.message || "Auto-user testnet deposit run scheduled.");
       scheduleReconcile();
     } catch (error) {

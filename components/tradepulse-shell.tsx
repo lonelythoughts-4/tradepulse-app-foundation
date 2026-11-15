@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
-import { DeskLoading } from "./desk-loading";
 import { TelegramAuthPage } from "./auth-entry";
 import authEntryStyles from "./auth-entry.module.css";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
@@ -22,7 +21,6 @@ import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, ty
 import { formatMarketChartTime } from "../lib/market-chart-time";
 import {
   shouldApplyEnvironmentProjection,
-  shouldClearEnvironmentProjection,
   shouldResetEnvironmentForAccess,
 } from "../lib/environment-switch.js";
 import {
@@ -404,44 +402,6 @@ export function GradientPanel({
     >
       {children}
     </div>
-  );
-}
-
-function BootScreen({ onComplete }: { onComplete: () => void }) {
-  const [step, setStep] = useState(0);
-  const reduceMotion = useReducedMotion();
-  const steps = ["verifying session…", "syncing ledger…", "loading desk…"];
-  useEffect(() => {
-    const interval = window.setInterval(
-      () => setStep((current) => Math.min(current + 1, 2)),
-      650,
-    );
-    const done = window.setTimeout(onComplete, 2400);
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(done);
-    };
-  }, [onComplete]);
-  return (
-    <motion.div
-      className="boot-screen"
-      exit={{ opacity: 0 }}
-      transition={{ duration: reduceMotion ? 0 : 0.65, ease }}
-    >
-      <div className="boot-mark">
-        <PulseMark size={76} />
-      </div>
-      <div className="boot-line" />
-      <div className="boot-copy">
-        <strong>
-          TRADE<span>PULSE</span>
-        </strong>
-        <div className="boot-status" role="status" aria-live="polite">
-          <span className="status-dot" />
-          {steps[step]}
-        </div>
-      </div>
-    </motion.div>
   );
 }
 
@@ -5415,15 +5375,15 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
 function AuthEntryPage({
   theme,
   onThemeChange,
-  onComplete,
+  children,
 }: {
   theme: DeskTheme;
   onThemeChange: () => void;
-  onComplete: () => Promise<boolean>;
+  children: React.ReactNode;
 }) {
   return (
     <TelegramAuthPage theme={theme} onThemeChange={onThemeChange}>
-      <BrowserBotHandoff onComplete={onComplete} />
+      {children}
     </TelegramAuthPage>
   );
 }
@@ -6719,6 +6679,11 @@ function LiveTradePulse() {
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
   const [loading, setLoading] = useState(true);
   const [telegramIdentityPending, setTelegramIdentityPending] = useState(false);
+  const [telegramLaunchContext, setTelegramLaunchContext] = useState(false);
+  const [sessionBootstrapComplete, setSessionBootstrapComplete] = useState(false);
+  useEffect(() => {
+    setTelegramLaunchContext(openedInsideTelegram());
+  }, []);
   useEffect(() => {
     document.documentElement.lang = uiLanguage;
   }, [uiLanguage]);
@@ -6984,7 +6949,7 @@ function LiveTradePulse() {
     const result = await request("/v1/account/notices");
     return result.notices || [];
   });
-  const load = async (targetEnvironment = webEnvironment, clearPreviousProjection = false) => {
+  const load = async (targetEnvironment = webEnvironment) => {
     // Every view reads the same account projection.  Reuse an in-flight read
     // for its environment instead of letting an alert, account change, or
     // deposit monitor stack several expensive dashboard requests together.
@@ -6992,13 +6957,11 @@ function LiveTradePulse() {
     if (activeLoad?.environment === targetEnvironment) return activeLoad.promise;
     const performLoad = async () => {
     const languageRevisionAtRequest = languageRevisionRef.current;
-    // Keep the current desk mounted during background refreshes. This lets
-    // optimistic toggles and button feedback render immediately instead of
-    // replacing the whole surface with the boot screen after every action.
-    const showBootScreen = clearPreviousProjection || !data;
-    if (showBootScreen) setLoading(true);
+    const checkingSession = !data;
+    const telegramContext = openedInsideTelegram();
+    setTelegramLaunchContext(telegramContext);
+    if (checkingSession) setLoading(true);
     try {
-      const telegramContext = openedInsideTelegram();
       const webApp = telegramContext ? await waitForTelegramWebApp() : undefined;
       webApp?.ready?.();
       webApp?.expand?.();
@@ -7049,7 +7012,10 @@ function LiveTradePulse() {
             : translateDesk(languageRef.current, "error.request"),
       );
     } finally {
-      if (showBootScreen) setLoading(false);
+      if (checkingSession) {
+        setLoading(false);
+        if (!telegramContext) setSessionBootstrapComplete(true);
+      }
     }
     };
     const promise = performLoad();
@@ -7100,7 +7066,7 @@ function LiveTradePulse() {
         const restored = saved.environment === "testnet" ? "testnet" : "mainnet";
         if (restored === selectedEnvironmentRef.current) return;
         selectedEnvironmentRef.current = restored;
-        setWebEnvironment(restored);
+        setAdmin(null);
         void load(restored);
       })
       .catch(() => {
@@ -7114,7 +7080,7 @@ function LiveTradePulse() {
     if (!data || !shouldResetEnvironmentForAccess(data.user.is_admin, webEnvironment)) return;
     selectedEnvironmentRef.current = "mainnet";
     setWebEnvironment("mainnet");
-    void load("mainnet", true);
+    void load("mainnet");
   }, [data?.user.is_admin, webEnvironment]);
   useEffect(() => {
     const demo = data?.demo;
@@ -7390,18 +7356,29 @@ function LiveTradePulse() {
       });
     }
   };
-  if (loading) return <DeskLoading status={telegramIdentityPending ? "Connecting to Telegram…" : undefined} />;
-  if (telegramIdentityPending) return <DeskLoading status="Waiting for Telegram to verify this session…" />;
   if (!data) {
     return (
       <AuthEntryPage
         theme={deskTheme}
         onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
-        onComplete={async () => {
-          await load();
-          return deskStore.getState().resources.dashboard !== null;
-        }}
-      />
+      >
+        {sessionBootstrapComplete && !telegramLaunchContext ? (
+          <BrowserBotHandoff onComplete={async () => {
+            await load();
+            return deskStore.getState().resources.dashboard !== null;
+          }} />
+        ) : (
+          <p className={authEntryStyles.signInIntro} role="status" aria-live="polite">
+            {telegramIdentityPending
+              ? "Waiting for Telegram to verify this session…"
+              : loading
+                ? telegramLaunchContext
+                  ? "Connecting to Telegram…"
+                  : "Checking your saved session…"
+                : notice || "Reopen this page from the TradePulse bot to verify your session."}
+          </p>
+        )}
+      </AuthEntryPage>
     );
   }
   const changeLanguage = (next: LanguageCode): Promise<void> => {
@@ -7527,8 +7504,8 @@ function LiveTradePulse() {
     // Invalidate old responses before the persistence request completes. This
     // keeps a slow mainnet read from being rendered under a testnet label.
     selectedEnvironmentRef.current = nextEnvironment;
-    setWebEnvironment(nextEnvironment);
     setAdminLoadError("");
+    setAdmin(null);
     try {
       const save = environmentSaveQueueRef.current.then(() =>
         request("/v1/admin/environment", {
@@ -7542,14 +7519,14 @@ function LiveTradePulse() {
         revision !== environmentSwitchRevisionRef.current ||
         !shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)
       ) return;
-      if (shouldClearEnvironmentProjection(priorEnvironment, nextEnvironment)) {
-        updateDashboard(null);
-        deskStore.applyResource("synthetic", null, Date.now());
-        setAdmin(null);
-      }
+      deskStore.applyResource("synthetic", null, Date.now());
       const overviewRequest = request("/v1/admin/overview", {}, nextEnvironment, 45_000);
-      const dashboardRequest = load(nextEnvironment, true);
+      const dashboardRequest = load(nextEnvironment);
       const [overview] = await Promise.all([overviewRequest, dashboardRequest]);
+      const loadedDashboard = deskStore.getState().resources.dashboard as LiveDashboard | null;
+      if (loadedDashboard?.environment !== nextEnvironment) {
+        throw new Error("The selected environment could not be loaded.");
+      }
       if (
         revision === environmentSwitchRevisionRef.current &&
         shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)
@@ -7563,8 +7540,11 @@ function LiveTradePulse() {
         revision === environmentSwitchRevisionRef.current &&
         selectedEnvironmentRef.current === nextEnvironment
       ) {
-        selectedEnvironmentRef.current = priorEnvironment;
-        setWebEnvironment(priorEnvironment);
+        const loadedDashboard = deskStore.getState().resources.dashboard as LiveDashboard | null;
+        if (loadedDashboard?.environment !== nextEnvironment) {
+          selectedEnvironmentRef.current = priorEnvironment;
+          setWebEnvironment(priorEnvironment);
+        }
       }
       if (revision !== environmentSwitchRevisionRef.current) return;
       setAdminLoadError(error instanceof Error ? error.message : "The operations overview could not be loaded.");
@@ -7882,7 +7862,6 @@ function LiveTradePulse() {
               onLogout={async () => {
                 await request("/v1/auth/logout", { method: "POST" });
                 updateDashboard(null);
-                window.location.assign("/");
               }}
             />
           )}

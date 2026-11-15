@@ -4,7 +4,6 @@ import test from "node:test";
 
 import {
   shouldApplyEnvironmentProjection,
-  shouldClearEnvironmentProjection,
   shouldResetEnvironmentForAccess,
 } from "../lib/environment-switch.js";
 
@@ -14,11 +13,6 @@ test("a late dashboard response from the previous workspace is ignored", () => {
 
 test("the currently selected workspace may update its own dashboard", () => {
   assert.equal(shouldApplyEnvironmentProjection("testnet", "testnet"), true);
-});
-
-test("clears the old projection before moving to another environment", () => {
-  assert.equal(shouldClearEnvironmentProjection("mainnet", "testnet"), true);
-  assert.equal(shouldClearEnvironmentProjection("testnet", "testnet"), false);
 });
 
 test("admin testnet selection persists across tabs while non-admin access returns to mainnet", async () => {
@@ -40,10 +34,21 @@ test("admin testnet selection persists across tabs while non-admin access return
   const switchStart = shell.indexOf("const switchAdminEnvironment = async");
   const switchEnd = shell.indexOf("const refreshAdmin", switchStart);
   const switcher = shell.slice(switchStart, switchEnd);
-  assert.ok(switcher.indexOf("setWebEnvironment(nextEnvironment)") < switcher.indexOf("const save ="));
+  assert.ok(switcher.indexOf("const save =") < switcher.indexOf("const dashboardRequest = load(nextEnvironment)"));
+  assert.doesNotMatch(switcher, /setWebEnvironment\(nextEnvironment\)/);
+  assert.doesNotMatch(switcher, /updateDashboard\(null\)/);
   assert.match(switcher, /environmentSwitchRevisionRef\.current/);
   assert.match(switcher, /setWebEnvironment\(priorEnvironment\)/);
   assert.match(switcher, /const overviewRequest = request\("\/v1\/admin\/overview"/);
-  assert.match(switcher, /const dashboardRequest = load\(nextEnvironment, true\)/);
+  assert.match(switcher, /const dashboardRequest = load\(nextEnvironment\)/);
+  assert.match(switcher, /loadedDashboard\?\.environment !== nextEnvironment/);
   assert.match(switcher, /Promise\.all\(\[overviewRequest, dashboardRequest\]\)/);
+});
+
+test("session checks do not replace the authentication page with a full-screen desk loader", async () => {
+  const shell = await readFile(new URL("../components/tradepulse-shell.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(shell, /if \(loading\) return <DeskLoading/);
+  assert.match(shell, /if \(!data\) \{\s*return \(\s*<AuthEntryPage/);
+  assert.match(shell, /sessionBootstrapComplete && !telegramLaunchContext/);
+  assert.match(shell, /role="status" aria-live="polite"/);
 });
