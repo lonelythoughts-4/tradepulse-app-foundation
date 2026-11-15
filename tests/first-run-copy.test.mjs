@@ -42,7 +42,7 @@ test("activation asks for a language only on the first step", () => {
   assert.doesNotMatch(finalStep, /activation-languages/);
 });
 
-test("first-run identity is optional and its portraits have no decorative overlays", () => {
+test("first-run identity is required, confirms immediately, and has no decorative portrait overlays", () => {
   const identityStart = shell.indexOf("function PulseAvatar");
   const pickerStart = shell.indexOf("function AvatarPicker", identityStart);
   const sidebarStart = shell.indexOf("function Sidebar", pickerStart);
@@ -50,8 +50,15 @@ test("first-run identity is optional and its portraits have no decorative overla
   const identityStyles = readFileSync(new URL("../app/identity.css", import.meta.url), "utf8");
   const avatarEffectStart = shell.indexOf("const accountAvatar =");
   const avatarEffectEnd = shell.indexOf("const chooseAvatar =", avatarEffectStart);
+  const chooseAvatarEnd = shell.indexOf("const [amount", avatarEffectEnd);
+  const avatarFlow = shell.slice(avatarEffectEnd, chooseAvatarEnd);
 
   assert.doesNotMatch(identityComponents, /<i\s*\/>/);
   assert.doesNotMatch(identityStyles, /pulse-avatar>i\{|avatar-\w+>i\{/);
-  assert.doesNotMatch(shell.slice(avatarEffectStart, avatarEffectEnd), /setAvatarPickerOpen\(true\)/);
+  assert.match(shell.slice(avatarEffectStart, avatarEffectEnd), /if \(!accountAvatar\)[\s\S]*setAvatarPickerRequired\(true\)[\s\S]*setAvatarPickerOpen\(true\)/);
+  assert.match(identityComponents, /dismissible=\{!required && !pending\}/);
+  assert.match(shell, /required=\{avatarPickerRequired\}/);
+  assert.match(avatarFlow, /const firstSelection = !data\?\.user\.avatar_id;/);
+  assert.match(avatarFlow, /setNotice\("Saving your identity…"\);[\s\S]*setAvatarPickerOpen\(false\);[\s\S]*await persistAvatar\(next\)/);
+  assert.match(avatarFlow, /if \(firstSelection\) \{\s*setAvatarPickerRequired\(true\);\s*setAvatarPickerOpen\(true\);/);
 });

@@ -478,6 +478,7 @@ function AvatarPicker({
   onSelect,
   onConfirm,
   onClose,
+  required = false,
   locked = false,
   current,
   fee = 10,
@@ -488,6 +489,7 @@ function AvatarPicker({
   onSelect: (id: AvatarId) => void;
   onConfirm: (id: AvatarId) => void;
   onClose: () => void;
+  required?: boolean;
   locked?: boolean;
   current?: AvatarId;
   fee?: number;
@@ -499,12 +501,14 @@ function AvatarPicker({
     <AccessibleDialog
       label="Choose your TradePulse desk identity"
       onClose={onClose}
-      dismissible={!pending}
+      dismissible={!required && !pending}
     >
       <div className="avatar-picker-dialog">
-        <button className="modal-close" type="button" disabled={pending} onClick={onClose} aria-label="Close identity picker">
-          <X size={16} />
-        </button>
+        {!required && (
+          <button className="modal-close" type="button" disabled={pending} onClick={onClose} aria-label="Close identity picker">
+            <X size={16} />
+          </button>
+        )}
         <span className="eyebrow">YOUR DESK IDENTITY</span>
         <h2>{locked ? "Change your identity" : "Choose your signal"}</h2>
         <p>{locked ? `Your next identity change costs $${fee.toFixed(2)} from your available mainnet wallet.` : "Your first identity is free. It becomes your desk signal once confirmed."}</p>
@@ -515,7 +519,6 @@ function AvatarPicker({
               type="button"
               className={`avatar-choice ${selected === option.id ? "selected" : ""}`}
               aria-pressed={selected === option.id}
-              disabled={pending}
               onClick={() => onSelect(option.id)}
             >
               <PulseAvatar id={option.id} />
@@ -6707,6 +6710,7 @@ function LiveTradePulse() {
   const restoredEnvironmentForUserRef = useRef<number | null>(null);
   const [avatarId, setAvatarId] = useState<AvatarId>("orbit");
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
   const [tab, setTab] = useState<DeskTab>("Dashboard");
   const [walletEntry, setWalletEntry] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
@@ -6787,9 +6791,16 @@ function LiveTradePulse() {
       setAvatarId(preferred as AvatarId);
     }
     else setAvatarId("orbit");
+    if (!accountAvatar) {
+      setAvatarPickerRequired(true);
+      setAvatarPickerOpen(true);
+    } else {
+      setAvatarPickerRequired(false);
+    }
   }, [data?.user.id, data?.user.avatar_id]);
   const chooseAvatar = async (next: AvatarId) => {
     if (identityPending) return;
+    const firstSelection = !data?.user.avatar_id;
     const prior = avatarId;
     setIdentityPending(true);
     setAvatarId(next);
@@ -6797,6 +6808,11 @@ function LiveTradePulse() {
       if (avatarStorageKey) window.localStorage.setItem(avatarStorageKey, next);
     } catch {
       /* in-memory selection still applies */
+    }
+    if (firstSelection) {
+      setNotice("Saving your identity…");
+      setAvatarPickerRequired(false);
+      setAvatarPickerOpen(false);
     }
     try {
       if (!await persistAvatar(next)) {
@@ -6806,12 +6822,21 @@ function LiveTradePulse() {
         } catch {
           /* storage is optional */
         }
+        if (firstSelection) {
+          setAvatarPickerRequired(true);
+          setAvatarPickerOpen(true);
+        }
         return;
       }
+      setAvatarPickerRequired(false);
       setAvatarPickerOpen(false);
-      setNotice(prior === next ? "Identity unchanged." : `Identity sealed: ${avatarOptions.find((option) => option.id === next)?.name || next}.`);
+      setNotice(!firstSelection && prior === next ? "Identity unchanged." : `Identity sealed: ${avatarOptions.find((option) => option.id === next)?.name || next}.`);
     } catch {
       setAvatarId(prior);
+      if (firstSelection) {
+        setAvatarPickerRequired(true);
+        setAvatarPickerOpen(true);
+      }
     } finally {
       setIdentityPending(false);
     }
@@ -7611,6 +7636,7 @@ function LiveTradePulse() {
             onSelect={setAvatarId}
             onConfirm={chooseAvatar}
             onClose={() => setAvatarPickerOpen(false)}
+            required={avatarPickerRequired}
             locked={Boolean(data.user.avatar_id)}
             current={data.user.avatar_id as AvatarId | undefined}
             fee={Number(data.user.identity?.change_fee_usd || 10)}
