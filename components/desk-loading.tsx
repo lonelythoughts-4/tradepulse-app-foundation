@@ -1,7 +1,7 @@
 import styles from "./desk-loading.module.css";
 
 /** Presentation only: the session request decides when this screen leaves. */
-export function DeskLoading() {
+export function DeskLoading({ status = "Opening your desk…" }: { status?: string }) {
   return (
     <main className={styles.screen} aria-label="TradePulse" aria-busy="true">
       <div className={styles.content}>
@@ -10,7 +10,7 @@ export function DeskLoading() {
           <path className={styles.trace} pathLength="100" d="M3 21h7l3-9 6 18 5-14 3 5h10" />
         </svg>
         <h1 className={styles.name}>Trade<span>Pulse</span></h1>
-        <p className={styles.status} role="status">Opening your desk…</p>
+        <p className={styles.status} role="status">{status}</p>
       </div>
     </main>
   );

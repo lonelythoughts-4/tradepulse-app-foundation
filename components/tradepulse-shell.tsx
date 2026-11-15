@@ -30,6 +30,7 @@ import {
   telegramAppLaunchUrl,
   shouldUseTelegramAppLaunch,
 } from "../lib/browser-handoff.js";
+import { isTelegramWebAppContext } from "../lib/telegram-webapp-auth.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
 import { localizeApiError, translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
@@ -5075,17 +5076,16 @@ function telegramInitData() {
   // HttpOnly server session; a signed Mini App always supplies fresh proof.
   return bridgeData || launchData;
 }
-// Telegram can expose a WebApp object in an in-app browser without mounting a
-// signed Mini App. Only signed init data means the desk has a usable Telegram
-// identity; otherwise the browser handoff must remain available.
+// Telegram's signed data may arrive after the WebApp shell begins hydrating.
 function openedInsideTelegram() {
-  return Boolean(telegramInitData());
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  return isTelegramWebAppContext(userAgent, Boolean(telegramInitData()));
 }
 async function waitForTelegramWebApp() {
   // The Mini App bridge is injected asynchronously on some Android and iOS
   // clients. Give it a real chance to arrive before making an unauthenticated
   // dashboard request.
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
     const webApp = telegramWebApp();
     if (webApp?.initData || telegramLaunchData()) return webApp;
     await new Promise((resolve) => window.setTimeout(resolve, 100));
@@ -6650,6 +6650,7 @@ function LiveTradePulse() {
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [telegramIdentityPending, setTelegramIdentityPending] = useState(false);
   useEffect(() => {
     document.documentElement.lang = uiLanguage;
   }, [uiLanguage]);
@@ -6914,9 +6915,15 @@ function LiveTradePulse() {
     const showBootScreen = clearPreviousProjection || !data;
     if (showBootScreen) setLoading(true);
     try {
-      const webApp = openedInsideTelegram() ? await waitForTelegramWebApp() : undefined;
+      const telegramContext = openedInsideTelegram();
+      const webApp = telegramContext ? await waitForTelegramWebApp() : undefined;
       webApp?.ready?.();
       webApp?.expand?.();
+      if (telegramContext && !telegramInitData()) {
+        setTelegramIdentityPending(true);
+        return;
+      }
+      setTelegramIdentityPending(false);
       // A Telegram-authenticated first load has to assemble the complete
       // account projection. Give a healthy, signed desk enough room to finish
       // during a transient database reconnect instead of mislabelling it as
@@ -6975,6 +6982,15 @@ function LiveTradePulse() {
   sessionValidationRef.current = (environment) => {
     void load(environment);
   };
+  useEffect(() => {
+    if (!telegramIdentityPending) return;
+    const timer = window.setInterval(() => {
+      if (!telegramInitData()) return;
+      setTelegramIdentityPending(false);
+      void load();
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [telegramIdentityPending, webEnvironment]);
   useEffect(() => {
     void load();
   }, []);
@@ -7087,12 +7103,12 @@ function LiveTradePulse() {
         ),
         // Synthetic prices are shared market data, so the live graph must not
         // depend on a user already having an open synthetic allocation.
-        request("/v1/synthetic/SYN-25")
+        request("/v1/synthetic/stream?market=SYN-25&include_history=1")
           .then((snapshot) => ({
             product: "synthetic",
             value: {
               market: snapshot.market || "SYN-25",
-              points: reconcileSyntheticTicks((snapshot.ticks || []).map((tick: { market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }) => ({
+              points: reconcileSyntheticTicks((snapshot.ticks?.length ? snapshot.ticks : snapshot.latest ? [snapshot.latest] : []).map((tick: { market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }) => ({
                 market: String(tick.market || snapshot.market || "SYN-25"),
                 sequence: Number(tick.sequence),
                 price: Number(tick.reference ?? tick.price),
@@ -7279,7 +7295,8 @@ function LiveTradePulse() {
       });
     }
   };
-  if (loading) return <DeskLoading />;
+  if (loading) return <DeskLoading status={telegramIdentityPending ? "Connecting to Telegram…" : undefined} />;
+  if (telegramIdentityPending) return <DeskLoading status="Waiting for Telegram to verify this session…" />;
   if (!data) {
     return (
       <AuthEntryPage

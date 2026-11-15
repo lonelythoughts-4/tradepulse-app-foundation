@@ -70,7 +70,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     if (!snapshot?.partial && fundingSource === "credit" && !Number(snapshot?.demo?.credit_available_usd || 0)) setFundingSource("wallet");
   }, [fundingSource, snapshot?.demo?.credit_available_usd]);
   useResourcePoller<Snapshot>(async (_token, signal) => {
-    try { return await request("/v1/synthetic/" + market, { signal }, environment) as Snapshot; }
+    try { return await request("/v1/synthetic/" + market + "?view=trading", { signal }, environment) as Snapshot; }
     catch (error) {
       if (signal.aborted) throw error;
       // The lightweight stream has a live quote and owned positions even when

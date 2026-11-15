@@ -8,6 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "components", "workspaces", "synthetic-workspace.tsx"), "utf8");
 
 test("a delayed snapshot falls back to the live stream instead of showing an outage", () => {
+  assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
   assert.match(source, /request\("\/v1\/synthetic\/stream\?market=" \+ market, \{\}, environment\)/);
   assert.match(source, /return \{ market, partial: true, latest, ticks: \[latest\], positions: stream\.positions \|\| \[\], settings: \{\} \} as Snapshot/);
 });
@@ -27,4 +28,10 @@ test("the verified live quote seeds the chart while history catches up", () => {
 test("a one-tick chart keeps the current price visible across the plot", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
   assert.match(shell, /candles\.length === 1 && <path d=\{`M0 \$\{y\(candles\[0\]\.close\)\}H\$\{chartWidth\}`\}/);
+});
+
+test("the dashboard chart uses the lightweight market stream", () => {
+  const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
+  assert.match(shell, /request\("\/v1\/synthetic\/stream\?market=SYN-25&include_history=1"\)/);
+  assert.match(shell, /snapshot\.ticks\?\.length \? snapshot\.ticks : snapshot\.latest \? \[snapshot\.latest\] : \[\]/);
 });
