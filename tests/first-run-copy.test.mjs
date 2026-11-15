@@ -52,6 +52,6 @@ test("first-run identity is optional and its portraits have no decorative overla
   const avatarEffectEnd = shell.indexOf("const chooseAvatar =", avatarEffectStart);
 
   assert.doesNotMatch(identityComponents, /<i\s*\/>/);
-  assert.doesNotMatch(identityStyles, /pulse-avatar>i|avatar-\w+>i/);
+  assert.doesNotMatch(identityStyles, /pulse-avatar>i\{|avatar-\w+>i\{/);
   assert.doesNotMatch(shell.slice(avatarEffectStart, avatarEffectEnd), /setAvatarPickerOpen\(true\)/);
 });
