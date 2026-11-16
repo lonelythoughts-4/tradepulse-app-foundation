@@ -195,3 +195,93 @@
     grid-row: 1 / span 2;
   }
 }
+
+.ledger-scroll {
+  max-height: min(62vh, 560px);
+  max-height: min(62dvh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 12px;
+  scrollbar-color: color-mix(in srgb, var(--tp-accent) 42%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.wallet-ledger-row {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 5px 12px;
+  padding: 10px 0;
+}
+
+.wallet-ledger-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-areas:
+    "title status"
+    "summary summary";
+  align-items: center;
+  gap: 3px 8px;
+  min-width: 0;
+}
+
+.wallet-ledger-copy > strong {
+  grid-area: title;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-ledger-copy > .activity-status {
+  grid-area: status;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-self: end;
+}
+
+.wallet-ledger-copy > small {
+  grid-area: summary;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-ledger-row > code {
+  grid-column: 2;
+  grid-row: 1;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.ledger-screen > .filter-chips button.active {
+  border-color: color-mix(in srgb, var(--tp-accent) 58%, transparent);
+  background: var(--tp-accent-wash);
+  color: var(--tp-accent);
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .ledger-scroll {
+    max-height: min(58vh, 460px);
+    max-height: min(58dvh, 460px);
+  }
+
+  .wallet-ledger-row {
+    column-gap: 8px;
+    padding-block: 9px;
+  }
+
+  .wallet-ledger-copy {
+    column-gap: 5px;
+  }
+
+  .wallet-ledger-copy > .activity-status {
+    padding: 3px 5px;
+  }
+
+  .wallet-ledger-row > code {
+    font-size: 10px;
+  }
+}

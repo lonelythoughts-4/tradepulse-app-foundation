@@ -293,7 +293,7 @@ function BootScreen({ onComplete }: { onComplete: () => void }) {
       <div className="boot-line" />
       <div className="boot-copy">
         <strong>
-          TRADE<span>PULSE</span>
+          TRADE<span>MEMO</span>
         </strong>
         <div className="boot-status">
           <span className="status-dot" />
@@ -342,7 +342,7 @@ function Sidebar({
       <div className="brand">
         <PulseMark />
         <span>
-          TRADE<span>PULSE</span>
+          TRADE<span>MEMO</span>
         </span>
       </div>
       <div className="desk-label">WORKSPACE</div>
@@ -475,7 +475,7 @@ function Header({
       <div className="mobile-brand">
         <PulseMark size={27} />
         <span>
-          TRADE<span>PULSE</span>
+          TRADE<span>MEMO</span>
         </span>
       </div>
       <div className="page-heading">
@@ -7246,7 +7246,7 @@ function LiveTradePulse() {
       <div className="boot-screen">
         <div className="boot-copy">
           <strong>
-            TRADE<span>PULSE</span>
+            TRADE<span>MEMO</span>
           </strong>
           <div className="boot-status">
             <span className="status-dot" />

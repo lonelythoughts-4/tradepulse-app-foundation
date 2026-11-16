@@ -330,6 +330,25 @@ body {
   --tp-positive: #4ea56f;
   --tp-negative: #d6654c;
 }
+
+.account-screen .invite-card > .earn-copy-link {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--tp-accent);
+  color: #211a0d;
+  font-weight: 600;
+}
+
+.account-screen .invite-card > .earn-copy-link:hover:not(:disabled) {
+  background: var(--tp-accent-strong);
+}
+
+html[data-theme="light"] .account-screen .invite-card > .earn-copy-link {
+  color: #fff;
+}
+
 html, body { background: #090c0d; color: var(--tp-ink); }
 button:focus-visible, a:focus-visible { outline-color: var(--tp-accent-strong); }
 .app-shell { background-image: radial-gradient(ellipse at 70% -10%, rgba(232, 182, 80, .12), transparent 40%), radial-gradient(rgba(244, 239, 227, .025) 1px, transparent 1px); }

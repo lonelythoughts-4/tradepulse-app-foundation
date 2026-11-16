@@ -975,14 +975,19 @@ function WalletWorkspaceBody({
         <div className="ledger-header">
           <div>
             <span className="eyebrow">{t("WALLET / HISTORY")}</span>
-            <h2>{t("Transaction history")}</h2>
+            <h2 id="transaction-history-title">{t("Transaction history")}</h2>
           </div>
         </div>
-        <div className="filter-chips">
+        <div
+          className="filter-chips"
+          role="group"
+          aria-labelledby="transaction-history-title"
+        >
           {(["all", "deposit", "withdraw", "bot"] as const).map((filter) => (
             <button
               key={filter}
               className={historyFilter === filter ? "active" : ""}
+              aria-pressed={historyFilter === filter}
               onClick={() => setHistoryFilter(filter)}
             >
               {filter === "all"
@@ -995,41 +1000,46 @@ function WalletWorkspaceBody({
             </button>
           ))}
         </div>
-        <GradientPanel className="ledger-card">
-          {filteredLedger.length ? (
-            filteredLedger.map((entry, index) => {
-              const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
-              const isNonFinancial = isNonFinancialActivity(entry.kind);
-              const presentation = describeActivity(entry);
-              return (
-              <div className="ledger-row" key={`${entry.created_at}-${index}`}>
-                <div>
-                  <strong>{t(presentation.title)}</strong>
-                  <small>
-                    {t(presentation.summary)}
-                  </small>
-                </div>
-                <span
-                  className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
-                >
-                  {t(presentation.status)}
-                </span>
-                <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
-                  {isNonFinancial ? "—" : activityAmountDisplay(amount)}
-                </code>
+        <div
+          className="ledger-scroll"
+          role="region"
+          aria-labelledby="transaction-history-title"
+          tabIndex={0}
+        >
+          <GradientPanel className="ledger-card">
+            {filteredLedger.length ? (
+              filteredLedger.map((entry, index) => {
+                const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                const isNonFinancial = isNonFinancialActivity(entry.kind);
+                const presentation = describeActivity(entry);
+                return (
+                  <div className="ledger-row wallet-ledger-row" key={`${entry.created_at}-${index}`}>
+                    <div className="wallet-ledger-copy">
+                      <strong title={t(presentation.title)}>{t(presentation.title)}</strong>
+                      <span
+                        className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
+                      >
+                        {t(presentation.status)}
+                      </span>
+                      <small title={t(presentation.summary)}>{t(presentation.summary)}</small>
+                    </div>
+                    <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
+                      {isNonFinancial ? "—" : activityAmountDisplay(amount)}
+                    </code>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="empty-wallet-state">
+                <img src="/illustrations/empty-wallet.png" alt={t("No wallet activity yet")} />
+                <strong>{t("No wallet activity yet")}</strong>
+                <small>
+                  {t("Your verified deposits, withdrawals, and bot allocations will appear here.")}
+                </small>
               </div>
-              );
-            })
-          ) : (
-            <div className="empty-wallet-state">
-              <img src="/illustrations/empty-wallet.png" alt={t("No wallet activity yet")} />
-              <strong>{t("No wallet activity yet")}</strong>
-              <small>
-                {t("Your verified deposits, withdrawals, and bot allocations will appear here.")}
-              </small>
-            </div>
-          )}
-        </GradientPanel>
+            )}
+          </GradientPanel>
+        </div>
       </div>
     );
   if (view === "activity")
@@ -1041,59 +1051,61 @@ function WalletWorkspaceBody({
         <div className="ledger-header">
           <div>
             <span className="eyebrow">{t("WALLET / ACTIVITY")}</span>
-            <h2>{t("Activity")}</h2>
+            <h2 id="wallet-activity-title">{t("Activity")}</h2>
           </div>
         </div>
-        <GradientPanel className="ledger-card">
-          {[...data.engine, ...data.ledger].length ? (
-            [
-              ...data.engine.map((entry) => ({
-                kind: entry.net_realized > 0 ? "trading_profit" : entry.net_realized < 0 ? "trading_loss" : "trading_settlement",
-                asset: "USD",
-                amount_usd: entry.net_realized,
-                status: entry.status,
-                created_at: entry.created_at,
-              })),
-              ...data.ledger,
-            ]
-              .sort((a, b) => b.created_at - a.created_at)
-              .map((entry, index) => {
-                const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
-                const isNonFinancial = isNonFinancialActivity(entry.kind);
-                const presentation = describeActivity(entry);
-                return (
-                <div
-                  className="ledger-row"
-                  key={`${entry.created_at}-${index}`}
-                >
-                  <div>
-                    <strong>{t(presentation.title)}</strong>
-                    <small>
-                      {t(presentation.summary)}
-                    </small>
-                  </div>
-                  <span
-                    className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
-                  >
-                    {t(presentation.status)}
-                  </span>
-                  <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
-                    {isNonFinancial ? "—" : activityAmountDisplay(amount)}
-                  </code>
-                </div>
-                );
-              })
-          ) : (
-            <div className="empty-wallet-state">
-              <img
-                src="/illustrations/empty-wallet.png"
-                alt={t("No activity yet")}
-              />
-              <strong>{t("No activity yet")}</strong>
-              <small>{t("Verified transfers and bot events will appear here.")}</small>
-            </div>
-          )}
-        </GradientPanel>
+        <div
+          className="ledger-scroll"
+          role="region"
+          aria-labelledby="wallet-activity-title"
+          tabIndex={0}
+        >
+          <GradientPanel className="ledger-card">
+            {[...data.engine, ...data.ledger].length ? (
+              [
+                ...data.engine.map((entry) => ({
+                  kind: entry.net_realized > 0 ? "trading_profit" : entry.net_realized < 0 ? "trading_loss" : "trading_settlement",
+                  asset: "USD",
+                  amount_usd: entry.net_realized,
+                  status: entry.status,
+                  created_at: entry.created_at,
+                })),
+                ...data.ledger,
+              ]
+                .sort((a, b) => b.created_at - a.created_at)
+                .map((entry, index) => {
+                  const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                  const isNonFinancial = isNonFinancialActivity(entry.kind);
+                  const presentation = describeActivity(entry);
+                  return (
+                    <div className="ledger-row wallet-ledger-row" key={`${entry.created_at}-${index}`}>
+                      <div className="wallet-ledger-copy">
+                        <strong title={t(presentation.title)}>{t(presentation.title)}</strong>
+                        <span
+                          className={`activity-status ${activityTone(entry.kind, entry.status, amount)}`}
+                        >
+                          {t(presentation.status)}
+                        </span>
+                        <small title={t(presentation.summary)}>{t(presentation.summary)}</small>
+                      </div>
+                      <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
+                        {isNonFinancial ? "—" : activityAmountDisplay(amount)}
+                      </code>
+                    </div>
+                  );
+                })
+            ) : (
+              <div className="empty-wallet-state">
+                <img
+                  src="/illustrations/empty-wallet.png"
+                  alt={t("No activity yet")}
+                />
+                <strong>{t("No activity yet")}</strong>
+                <small>{t("Verified transfers and bot events will appear here.")}</small>
+              </div>
+            )}
+          </GradientPanel>
+        </div>
       </div>
     );
   return (

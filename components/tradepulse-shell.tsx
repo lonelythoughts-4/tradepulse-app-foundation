@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AccessibleDialog } from "./accessible-dialog";
 import { TelegramAuthPage } from "./auth-entry";
 import authEntryStyles from "./auth-entry.module.css";
+import { DeskLoading } from "./desk-loading";
 import { NoticeCenter, useNoticeCenter } from "./notice-center";
 import { createDeskStore, useDeskSelector, type DeskStore } from "../lib/desk-store";
 import type { DeskState } from "../lib/desk-types";
@@ -544,7 +545,7 @@ function Sidebar({
       <div className="brand">
         <PulseMark />
         <span>
-          TRADE<span>PULSE</span>
+          TRADE<span>MEMO</span>
         </span>
       </div>
       <div className="desk-label">{translateDesk(language, "header.workspace")}</div>
@@ -781,7 +782,7 @@ function Header({
     <header className="topbar">
       <div className="mobile-brand">
         <span>
-          TRADE<span>PULSE</span>
+          TRADE<span>MEMO</span>
         </span>
       </div>
       <div className="page-heading">
@@ -5675,6 +5676,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
           <code>{link}</code>
         </div>
         <button
+          className="earn-copy-link"
           onClick={() => {
             navigator.clipboard?.writeText(link);
             setCopied(true);
@@ -7357,6 +7359,9 @@ function LiveTradePulse() {
     }
   };
   if (!data) {
+    if (!sessionBootstrapComplete && !telegramLaunchContext) {
+      return <DeskLoading status="Checking your saved session…" />;
+    }
     return (
       <AuthEntryPage
         theme={deskTheme}
