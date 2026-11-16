@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatMarketPrice, makeMarketCandles } from "../lib/market-chart-series";
+import { formatMarketPrice, makeMarketCandles } from "../lib/market-chart-series.ts";
 
 test("market prices retain enough decimals to display micro-priced assets", () => {
   assert.equal(formatMarketPrice(0.0000000123), "0.0000000123");
