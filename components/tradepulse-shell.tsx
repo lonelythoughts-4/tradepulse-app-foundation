@@ -18,8 +18,9 @@ import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { ProtectionWorkspace } from "./workspaces/protection-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
-import { makeSyntheticCandles, reconcileSyntheticTicks, type SyntheticCandle, type SyntheticTick } from "../lib/synthetic-ticks";
+import { reconcileSyntheticTicks, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
+import { formatMarketPrice, makeMarketCandles, type MarketChartCandle, type MarketChartPoint } from "../lib/market-chart-series";
 import {
   shouldApplyEnvironmentProjection,
   shouldResetEnvironmentForAccess,
@@ -5422,11 +5423,11 @@ export function activityTone(kind: string, status: string, amount?: number) {
   return "complete";
 }
 
-type MarketPoint = { market?: string; sequence?: number; price: number; timestamp?: number };
-type MarketCandle = SyntheticCandle;
+type MarketPoint = MarketChartPoint & { market?: string; sequence?: number };
+type MarketCandle = MarketChartCandle;
 
 function makeCandles(points: MarketPoint[]): MarketCandle[] {
-  return makeSyntheticCandles(points as SyntheticTick[]);
+  return makeMarketCandles(points);
 }
 
 function chartCandles(points: MarketPoint[], supplied?: MarketCandle[]) {
@@ -5458,21 +5459,21 @@ function rsiValues(closes: number[], period = 14) {
   return values;
 }
 
-function formatMarketPrice(value: number) {
-  if (Math.abs(value) >= 1000) return value.toFixed(2);
-  if (Math.abs(value) >= 1) return value.toFixed(4);
-  return value.toFixed(6);
-}
-
 function MarketChart({
   points,
   ohlcCandles,
   market,
+  sourceLabel,
+  emptyMessage = "Waiting for live market ticks",
+  feedError,
   accent = "#34d399",
 }: {
   points: MarketPoint[];
   ohlcCandles?: MarketCandle[];
   market: string;
+  sourceLabel?: string;
+  emptyMessage?: string;
+  feedError?: string;
   accent?: string;
 }) {
   const [zoom, setZoom] = useState(1);
@@ -5563,7 +5564,7 @@ function MarketChart({
   }, [hasCandles]);
   useEffect(() => setOffset((current) => Math.min(current, maxOffset)), [maxOffset]);
   if (!hasCandles) {
-    return <div className="market-chart market-chart-empty" role="status">Waiting for live market ticks</div>;
+    return <div className="market-chart market-chart-empty" role="status">{feedError || emptyMessage}</div>;
   }
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));
@@ -5597,6 +5598,9 @@ function MarketChart({
       onLostPointerCapture={onPointerEnd}
       style={{ touchAction: "none" }}
     >
+      <div className={`market-chart-status ${feedError ? "market-chart-status-stale" : ""}`} role="status">
+        {feedError ? "Feed reconnecting" : `Showing ${sourceLabel || "1-minute"} candles`}
+      </div>
       <div className="market-chart-main">
         <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
           {priceLabels.map((label, index) => {
@@ -6852,6 +6856,7 @@ function LiveTradePulse() {
       {
         market: string;
         points: SyntheticTick[];
+        feedError?: string;
         positions: Array<{
           id: string;
           market: string;
@@ -7158,11 +7163,24 @@ function LiveTradePulse() {
     ];
     let cancelled = false;
     const refresh = () => {
-      const chartRequests: Array<Promise<{ product: string; value: any } | null>> = [
+      const chartRequests: Array<Promise<{ product: string; value: any } | { product: string; error: string } | null>> = [
         ...active.map((product) =>
           request(`/v1/charts/${product}`)
-            .then((value) => ({ product, value }))
-            .catch(() => null),
+            .then((value) => {
+              const points = Array.isArray(value.points) ? value.points : [];
+              return {
+                product,
+                value: {
+                  ...value,
+                  points,
+                  feedError: undefined,
+                },
+              };
+            })
+            .catch((error) => ({
+              product,
+              error: error instanceof Error ? error.message : "Memecoin market data is unavailable. The dashboard will retry.",
+            })),
         ),
         // Synthetic prices are shared market data, so the live graph must not
         // depend on a user already having an open synthetic allocation.
@@ -7186,12 +7204,26 @@ function LiveTradePulse() {
       ];
       return Promise.all(chartRequests).then((results) => {
         if (cancelled) return;
-        setCharts((current) => ({
-          ...current,
-          ...Object.fromEntries(
-            results.filter(Boolean).map((item) => [item!.product, item!.value]),
-          ),
-        }));
+        setCharts((current) => {
+          const next = { ...current };
+          for (const item of results) {
+            if (!item) continue;
+            if ("error" in item) {
+              const previous = next[item.product];
+              next[item.product] = {
+                market: previous?.market || "Memecoin market",
+                points: previous?.points || [],
+                positions: previous?.positions || [],
+                activity: previous?.activity || [],
+                updated_at: Date.now(),
+                feedError: item.error,
+              };
+            } else {
+              next[item.product] = item.value;
+            }
+          }
+          return next;
+        });
       });
     };
     void refresh();
@@ -7705,58 +7737,77 @@ function LiveTradePulse() {
             />
           )}
           {tab === "Dashboard" &&
-            Object.entries(charts).map(([product, chart]) => (
-              <GradientPanel className="synthetic-pilot" key={product}>
-                <div className="section-heading">
-                  <div>
-                    <span className="eyebrow">
-                      {product === "memecoin"
-                        ? "MEMECOIN MARKET"
-                        : "SYNTHETIC INDICES"}
-                    </span>
-                    <h2>{chart.market} live chart</h2>
-                  </div>
-                  <span className="live-indicator">
-                    <i />
-                    {product === "synthetic" ? "LIVE · 1s" : "quotes · 10s"}
-                  </span>
-                </div>
-                <MarketChart
-                  points={chart.points}
-                  market={chart.market}
-                  accent={product === "memecoin" ? "#60a5fa" : "#34d399"}
-                />
-                <div className="activity-row">
-                  <div className="activity-info">
-                    <strong>
-                      {chart.points.length
-                        ? Number(chart.points.at(-1)?.price || 0).toFixed(5)
-                        : "Loading price…"}
-                    </strong>
-                    <small>
-                      {chart.positions.length
-                        ? `${chart.positions.length} open ${chart.positions.length === 1 ? "position" : "positions"} shown below`
-                        : "No open positions for this account"}
-                    </small>
-                  </div>
-                </div>
-                {chart.positions
-                  .filter((position) => position.status === "open")
-                  .map((position) => (
-                    <div className="activity-row" key={position.id}>
-                      <div className="activity-info">
-                        <strong>
-                          {position.market} · {position.direction}
-                        </strong>
-                        <small>
-                          Entry {Number(position.entry_price || 0).toFixed(5)} ·
-                          only visible to you
-                        </small>
-                      </div>
+            Object.entries(charts).map(([product, chart]) => {
+              const isMemecoin = product === "memecoin";
+              const displayMarket = isMemecoin
+                ? data.memecoin?.market_labels?.[chart.market]
+                  || data.memecoin?.market_labels?.[chart.market.toLowerCase()]
+                  || "Memecoin market"
+                : chart.market;
+              return (
+                <GradientPanel className="synthetic-pilot" key={product}>
+                  <div className="section-heading">
+                    <div>
+                      <span className="eyebrow">
+                        {product === "memecoin"
+                          ? "MEMECOIN MARKET"
+                          : "SYNTHETIC INDICES"}
+                      </span>
+                      <h2>{displayMarket} {isMemecoin ? "market chart" : "live chart"}</h2>
                     </div>
-                  ))}
-              </GradientPanel>
-            ))}
+                    <span className="live-indicator">
+                      <i />
+                      {isMemecoin
+                        ? chart.feedError ? "FEED RECONNECTING" : chart.points.length ? "MEMECOIN FEED · 10s" : "WAITING FOR MARKET TICKS"
+                        : "LIVE · 1s"}
+                    </span>
+                  </div>
+                  <MarketChart
+                    points={chart.points}
+                    market={displayMarket}
+                    sourceLabel={isMemecoin ? "Memecoin market" : undefined}
+                    emptyMessage={isMemecoin
+                      ? chart.feedError || "Waiting for the first Memecoin market tick."
+                      : undefined}
+                    feedError={isMemecoin ? chart.feedError : undefined}
+                    accent={isMemecoin ? "#60a5fa" : "#34d399"}
+                  />
+                  <div className="activity-row">
+                    <div className="activity-info">
+                      <strong>
+                        {chart.points.length
+                          ? formatMarketPrice(Number(chart.points.at(-1)?.price || 0))
+                          : "Waiting for ticks"}
+                      </strong>
+                      <small>
+                        {chart.positions.length
+                          ? `${chart.positions.length} open ${chart.positions.length === 1 ? "position" : "positions"} shown below`
+                          : "No open positions for this account"}
+                      </small>
+                    </div>
+                  </div>
+                  {chart.positions
+                    .filter((position) => position.status === "open")
+                    .map((position) => (
+                      <div className="activity-row" key={position.id}>
+                        <div className="activity-info">
+                          <strong>
+                            {(isMemecoin
+                              ? data.memecoin?.market_labels?.[position.market]
+                                || data.memecoin?.market_labels?.[position.market.toLowerCase()]
+                                || "Memecoin market"
+                              : position.market)} · {position.direction}
+                          </strong>
+                          <small>
+                            Entry {formatMarketPrice(Number(position.entry_price || 0))} ·
+                            only visible to you
+                          </small>
+                        </div>
+                      </div>
+                    ))}
+                </GradientPanel>
+              );
+            })}
           {tab === "Dashboard" && !data.bots.length && (
             <GradientPanel className="empty-bots">
               <img

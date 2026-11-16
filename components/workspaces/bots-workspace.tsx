@@ -231,6 +231,7 @@ export function BotsWorkspace({
     : hasActiveSealedReturn
       ? "A Sealed Return contract is already active. It must settle before another can start."
       : flashbackStartBlockedMessage;
+  const flashbackInCreationFlow = flashbackNewSession || flashbackType !== null || !flashback;
   const directionContract = flashback?.product_version === "market-direction-v1";
   const liveDirectionReference = directionContract ? flashback?.live_reference : undefined;
   const directionMultiplier = (amount: number) => Number(flashbackDirection?.schedule?.find((item) => item.up_to_usd === null || amount <= Number(item.up_to_usd))?.multiplier || 0);
@@ -605,6 +606,13 @@ export function BotsWorkspace({
       </div>
     </GradientPanel>
   ) : null;
+  const beginNewFlashbackSession = () => {
+    setFlashbackAmount("20");
+    setFlashbackType(null);
+    setFlashbackDirectionChoice(null);
+    setReviewError("");
+    setFlashbackNewSession(true);
+  };
   const startFlashback = async () => {
     if (!canConfirmFlashback || flashbackType !== "sealed") return;
     const started = await run("/v1/flashback/start", { amount: flashbackAmountNumber });
@@ -612,6 +620,7 @@ export function BotsWorkspace({
       setFlashbackReview(false);
       setFlashbackNewSession(false);
       setFlashbackType(null);
+      setSelectedFlashbackId(null);
       setFlashbackNow(Date.now());
     }
   };
@@ -622,6 +631,7 @@ export function BotsWorkspace({
       setFlashbackReview(false);
       setFlashbackNewSession(false);
       setFlashbackType(null);
+      setSelectedFlashbackId(null);
       setFlashbackNow(Date.now());
     }
   };
@@ -629,19 +639,31 @@ export function BotsWorkspace({
     return (
       <DeskLocalized>
       <div className="bot-detail">
-        <button className="back-action" onClick={() => { setFlashbackNewSession(false); setView("fleet"); }}>
-          <StateIcon name="arrow-left" /> Fleet overview
+        <button className="back-action" onClick={() => {
+          if (flashbackInCreationFlow && flashback) {
+            setFlashbackNewSession(false);
+            setFlashbackType(null);
+            setFlashbackDirectionChoice(null);
+            setReviewError("");
+            return;
+          }
+          setFlashbackNewSession(false);
+          setView("fleet");
+        }}>
+          <StateIcon name="arrow-left" /> {flashbackInCreationFlow && flashback
+            ? flashback.state === "revealed" ? "Back to result" : "Back to current contract"
+            : "Fleet overview"}
         </button>
         <GradientPanel className="detail-hero">
           <div>
             <h2>Flashback</h2>
             <span role="status" aria-live="polite" className={`status-chip ${flashback?.state === "ready_to_reveal" ? "paused" : "running"}`}>
               <i />
-              {flashback?.state === "sealed" ? (directionContract ? "direction active" : sealedReturn ? "sealed return" : "earlier session") : flashback?.state === "ready_to_reveal" ? "finalising" : flashback?.state === "revealed" ? "settled" : "choose a contract"}
+              {flashbackInCreationFlow ? "new contract" : flashback?.state === "sealed" ? (directionContract ? "direction active" : sealedReturn ? "sealed return" : "earlier session") : flashback?.state === "ready_to_reveal" ? "finalising" : flashback?.state === "revealed" ? "settled" : "choose a contract"}
             </span>
           </div>
         </GradientPanel>
-        {flashbackSessionChoices.length > 1 && <GradientPanel className="compound-panel">
+        {flashbackSessionChoices.length > 1 && !flashbackInCreationFlow && <GradientPanel className="compound-panel">
           <h2>Choose a contract</h2>
           <p>Each contract has its own entry, settlement clock, and result. Select one to view its exact outcome.</p>
           <div className="segment-control flashback-session-selector" role="radiogroup" aria-label="Flashback contract" onKeyDown={handleBotChoiceKeyDown}>
@@ -657,12 +679,13 @@ export function BotsWorkspace({
             })}
           </div>
         </GradientPanel>}
-        <GradientPanel className="compound-panel">
+        {!flashbackInCreationFlow && <GradientPanel className="compound-panel">
           <h2>Active contracts</h2>
           <p>One Sealed Return and one Flashback Direction may run together. Each settles on its own 30-second contract clock.</p>
           <div className="fact-block">{activeFlashbacks.length ? activeFlashbacks.map((session) => <span key={session.id}><b>{session.product_version === "market-direction-v1" ? "DIRECTION" : "SEALED RETURN"}</b><b>{session.state === "sealed" ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s` : "SETTLING"}</b></span>) : <span><b>NO ACTIVE CONTRACTS</b><b>READY</b></span>}</div>
-        </GradientPanel>
-        {(flashbackNewSession || flashbackType !== null || !flashback || activeFlashbacks.length < 2) && <>
+          {activeFlashbacks.length > 0 && canStartAnyFlashback && <button type="button" className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>}
+        </GradientPanel>}
+        {flashbackInCreationFlow && <>
           {!flashbackType && canStartAnyFlashback && <div className="flashback-type-grid">
             <GradientPanel className="compound-panel">
               <h2>Sealed Return</h2>
@@ -727,11 +750,11 @@ export function BotsWorkspace({
             <GradientPanel className="compound-panel"><p>Your market and direction are fixed at confirmation. The entry cannot be changed or ended early. There is no performance fee.</p>{currentDirectionMultiplier <= 0 && <p className="security-feedback" role="alert">No published Direction return is available for this entry amount.</p>}<button className="primary-action" disabled={!canConfirmFlashback} onClick={() => { setReviewError(""); setFlashbackReview(true); }}>Review Flashback Direction <ChevronRight /></button><button className="ghost-action" onClick={() => { setFlashbackType(null); setFlashbackDirectionChoice(null); }}>Choose another type</button></GradientPanel>
           </>}
         </>}
-        {flashback?.state === "sealed" && directionContract && <>
+        {flashback?.state === "sealed" && directionContract && !flashbackInCreationFlow && <>
           <div className="detail-stats"><GradientPanel><span>MARKET / CALL</span><strong>{flashback.market}/USD · {String(flashback.direction || "").toUpperCase()}</strong></GradientPanel><GradientPanel><span>SETTLES IN</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></GradientPanel><GradientPanel><span>ENTRY</span><strong>{money(Number(flashback.allocation_usd || 0))}</strong></GradientPanel></div>
           <GradientPanel className="compound-panel"><h2>Direction is active</h2><p>The entry reference was captured at confirmation. This live reference helps you follow the move; it is not the settlement quote, which is captured automatically at expiry.</p><div className="fact-block"><span>ENTRY PRICE <b>{formatMarketPrice(Number(flashback.entry_price || 0))}</b></span><span>CURRENT REFERENCE <b>{liveDirectionReference?.price !== undefined ? formatMarketPrice(Number(liveDirectionReference.price)) : "REFRESHING"}</b></span><span>MOVE <b className={liveDirectionReference?.move_percent === undefined ? undefined : liveDirectionReference.move_percent > 0 ? "up" : liveDirectionReference.move_percent < 0 ? "down" : undefined}>{liveDirectionReference?.move_percent === undefined ? "—" : `${liveDirectionReference.move_percent > 0 ? "+" : ""}${liveDirectionReference.move_percent.toFixed(3)}%`}</b></span><span>YOUR CALL <b className={liveDirectionReference?.call_status === "ahead" ? "up" : liveDirectionReference?.call_status === "behind" ? "down" : undefined}>{liveDirectionReference?.call_status === "ahead" ? "AHEAD" : liveDirectionReference?.call_status === "behind" ? "BEHIND" : liveDirectionReference?.call_status === "flat" ? "LEVEL" : "REFRESHING"}</b></span><span>PUBLISHED RETURN <b>{Number((flashback.payout_table as Record<string, unknown>)?.multiplier || 0).toFixed(2)}×</b></span><span>PRICE SOURCE <b>{liveDirectionReference?.source || flashback.entry_source || "KRAKEN"}</b></span></div></GradientPanel>
         </>}
-        {flashback?.state === "sealed" && !directionContract && <>
+        {flashback?.state === "sealed" && !directionContract && !flashbackInCreationFlow && <>
           <div className="detail-stats">
             <GradientPanel><span>ENTRY</span><strong>{money(Number(flashback.allocation_usd || 0))}</strong></GradientPanel>
             <GradientPanel><span>REVEAL WINDOW</span><strong>{sealedReturn && flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></GradientPanel>
@@ -747,17 +770,17 @@ export function BotsWorkspace({
             </div> : <div className="fact-block"><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span><span>STATUS <b>HISTORICAL TERMS</b></span></div>}
           </GradientPanel>
         </>}
-        {flashback?.state === "ready_to_reveal" && <>
+        {flashback?.state === "ready_to_reveal" && !flashbackInCreationFlow && <>
           <GradientPanel className="compound-panel">
             <h2>Finalising your result</h2>
             <p>The reveal window has closed. TradeMemo is automatically applying the committed result.</p>
             <div className="fact-block"><span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
           </GradientPanel>
         </>}
-        {flashback?.state === "revealed" && !flashbackNewSession && <>
+        {flashback?.state === "revealed" && !flashbackInCreationFlow && <>
           {directionContract ? <>
             <div className="detail-stats"><GradientPanel><span>MARKET / CALL</span><strong>{flashback.market}/USD · {String(flashback.direction || "").toUpperCase()}</strong></GradientPanel><GradientPanel><span>RETURNED</span><strong>{money(Number(flashback.return_usd || 0))}</strong></GradientPanel><GradientPanel><span>NET CHANGE</span><strong className={Number(flashback.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback.user_net_usd || 0))}</strong></GradientPanel></div>
-            <GradientPanel className="compound-panel flashback-reveal"><h2>Flashback Direction settled</h2><div className="fact-block"><span>ENTRY PRICE <b>{Number(flashback.entry_price || 0).toFixed(8)}</b></span><span>SETTLEMENT PRICE <b>{Number(flashback.exit_price || 0).toFixed(8)}</b></span><span>OUTCOME <b>{flashback.close_reason === "tie_refund" ? "TIE · ENTRY RETURNED" : flashback.close_reason === "reference_unavailable_refund" ? "REFERENCE UNAVAILABLE · ENTRY RETURNED" : Number(flashback.user_net_usd || 0) > 0 ? "CORRECT" : "INCORRECT"}</b></span><span>RETURN <b>{Number(flashback.payout_multiplier || 0).toFixed(2)}×</b></span><span>REFERENCE <b>{flashback.exit_source || "KRAKEN"}</b></span><span>FEE <b>$0.00</b></span></div><button className="small-action" onClick={() => { setFlashbackAmount("20"); setFlashbackType(null); setFlashbackDirectionChoice(null); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button></GradientPanel>
+            <GradientPanel className="compound-panel flashback-reveal"><h2>Flashback Direction settled</h2><div className="fact-block"><span>ENTRY PRICE <b>{Number(flashback.entry_price || 0).toFixed(8)}</b></span><span>SETTLEMENT PRICE <b>{Number(flashback.exit_price || 0).toFixed(8)}</b></span><span>OUTCOME <b>{flashback.close_reason === "tie_refund" ? "TIE · ENTRY RETURNED" : flashback.close_reason === "reference_unavailable_refund" ? "REFERENCE UNAVAILABLE · ENTRY RETURNED" : Number(flashback.user_net_usd || 0) > 0 ? "CORRECT" : "INCORRECT"}</b></span><span>RETURN <b>{Number(flashback.payout_multiplier || 0).toFixed(2)}×</b></span><span>REFERENCE <b>{flashback.exit_source || "KRAKEN"}</b></span><span>FEE <b>$0.00</b></span></div><button className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button></GradientPanel>
           </> : sealedReturn ? <>
             <div className="detail-stats">
               <GradientPanel><span>OUTCOME</span><strong>{sealedEntropyRefund ? flashbackSettlement.outcome : Number(flashback.payout_multiplier || 0) === 0 ? "FULL LOSS" : `${Number(flashback.payout_multiplier || 0).toFixed(2)}×`}</strong></GradientPanel>
@@ -775,7 +798,7 @@ export function BotsWorkspace({
                 <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               </div>
               <p>{sealedEntropyRefund ? flashbackSettlement.explanation : "The revealed nonce, commitment, and external entropy hash preserve the sealed rules for this session."}</p>
-              <button className="small-action" onClick={() => { setFlashbackAmount("20"); setFlashbackType(null); setFlashbackDirectionChoice(null); setReviewError(""); setFlashbackNewSession(true); }}>Start another Flashback <Plus /></button>
+              <button className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>
             </GradientPanel>
           </> : <>
             <div className="detail-stats">
@@ -790,7 +813,7 @@ export function BotsWorkspace({
                 <span>STATUS <b>HISTORICAL TERMS</b></span>
               </div>
               <p>This session was settled under earlier terms. Its original record remains available in account activity.</p>
-              <button className="small-action" onClick={() => { setFlashbackAmount("20"); setFlashbackType(null); setFlashbackDirectionChoice(null); setReviewError(""); setFlashbackNewSession(true); }}>Start current Flashback <Plus /></button>
+              <button className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>
             </GradientPanel>
           </>}
         </>}

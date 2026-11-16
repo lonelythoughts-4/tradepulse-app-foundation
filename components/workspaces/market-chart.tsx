@@ -2,61 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatMarketChartTime } from "../../lib/market-chart-time";
+import { formatMarketPrice, makeMarketCandles, type MarketChartPoint } from "../../lib/market-chart-series";
 import { DeskLocalized } from "../desk-language";
 import { StateIcon } from "./shared-ui";
 
-export type MarketPoint = { price: number; timestamp?: number };
-export type MarketCandle = {
-  open: number;
-  close: number;
-  high: number;
-  low: number;
-  timestamp?: number;
-};
+export type MarketPoint = MarketChartPoint;
+export type MarketCandle = ReturnType<typeof makeMarketCandles>[number];
 
 function makeCandles(points: MarketPoint[]): MarketCandle[] {
-  const valid = points
-    .filter((point) => Number.isFinite(Number(point.price)) && Number(point.price) > 0)
-    .map((point, index) => ({
-      ...point,
-      timestamp: Number(point.timestamp) || index,
-    }))
-    .sort((left, right) => Number(left.timestamp) - Number(right.timestamp));
-  // Render a first verified tick immediately as a flat provisional candle;
-  // waiting for the second tick should not look like a failed feed.
-  if (valid.length === 1) {
-    const price = Number(valid[0].price);
-    return [{ open: price, close: price, high: price, low: price, timestamp: valid[0].timestamp }];
-  }
-  if (valid.length < 1) return [];
-
-  // Snapshot polling and the one-second stream can overlap. Retain the most
-  // recent value for each timestamp before creating fixed-time candles, so a
-  // repeated response cannot become a duplicate visual bar.
-  const uniqueByTimestamp = new Map<number, MarketPoint>();
-  for (const point of valid) uniqueByTimestamp.set(Number(point.timestamp), point);
-  const series = [...uniqueByTimestamp.values()];
-  const firstTimestamp = Number(series[0]?.timestamp || 0);
-  const lastTimestamp = Number(series.at(-1)?.timestamp || firstTimestamp);
-  const hasClock = lastTimestamp > firstTimestamp;
-  const bucketSeconds = hasClock ? Math.max(1, Math.ceil((lastTimestamp - firstTimestamp + 1) / 42)) : 1;
-  const candles: MarketCandle[] = [];
-  for (let index = 0; index < series.length;) {
-    const bucketStart = hasClock ? Math.floor((Number(series[index].timestamp) - firstTimestamp) / bucketSeconds) : index;
-    let end = index + 1;
-    while (end < series.length && (hasClock ? Math.floor((Number(series[end].timestamp) - firstTimestamp) / bucketSeconds) : end) === bucketStart) end += 1;
-    const bucket = series.slice(index, end);
-    const prices = bucket.map((point) => Number(point.price));
-    candles.push({
-      open: prices[0],
-      close: prices.at(-1) || prices[0],
-      high: Math.max(...prices),
-      low: Math.min(...prices),
-      timestamp: bucket.at(-1)?.timestamp,
-    });
-    index = end;
-  }
-  return candles;
+  return makeMarketCandles(points);
 }
 
 function chartCandles(points: MarketPoint[], supplied?: MarketCandle[]) {
@@ -88,23 +42,23 @@ function rsiValues(closes: number[], period = 14) {
   return values;
 }
 
-export function formatMarketPrice(value: number) {
-  if (Math.abs(value) >= 1000) return value.toFixed(2);
-  if (Math.abs(value) >= 1) return value.toFixed(4);
-  return value.toFixed(6);
-}
+export { formatMarketPrice };
 
 export function MarketChart({
   points,
   ohlcCandles,
   market,
   sourceLabel,
+  emptyMessage = "Waiting for live market data",
+  feedError,
   accent = "#34d399",
 }: {
   points: MarketPoint[];
   ohlcCandles?: MarketCandle[];
   market: string;
   sourceLabel?: string;
+  emptyMessage?: string;
+  feedError?: string;
   accent?: string;
 }) {
   const [zoom, setZoom] = useState(1);
@@ -160,7 +114,7 @@ export function MarketChart({
   const freshCandles = chartCandles(points, ohlcCandles);
   if (freshCandles.length) lastVerified.current = { market, candles: freshCandles };
   const retainedCandles = lastVerified.current?.market === market ? lastVerified.current.candles : [];
-  // A temporary polling failure must not replace confirmed market history with
+  // A temporary polling failure must not replace received market history with
   // an empty panel. The retained series is explicitly labelled as stale below.
   const sourceCandles = freshCandles.length ? freshCandles : retainedCandles;
   const isShowingLastVerified = !freshCandles.length && retainedCandles.length > 0;
@@ -203,7 +157,7 @@ export function MarketChart({
   }, [hasCandles]);
   useEffect(() => setOffset((current) => Math.min(current, maxOffset)), [maxOffset]);
   if (!hasCandles) {
-    return <DeskLocalized><div className="market-chart market-chart-empty" role="status">Waiting for live market data</div></DeskLocalized>;
+    return <DeskLocalized><div className="market-chart market-chart-empty" role="status">{emptyMessage}</div></DeskLocalized>;
   }
   const low = Math.min(...candles.map((candle) => candle.low));
   const high = Math.max(...candles.map((candle) => candle.high));
@@ -238,8 +192,8 @@ export function MarketChart({
       onLostPointerCapture={onPointerEnd}
       style={{ touchAction: "none" }}
     >
-      <div className={`market-chart-status ${isShowingLastVerified ? "market-chart-status-stale" : ""}`} role="status">
-        {isShowingLastVerified ? `Feed reconnecting · showing last verified ${sourceLabel || "1-minute"} candles` : isWarming ? "Verified live tick · building 1-minute candle" : `Verified ${sourceLabel || "1-minute"} candles`}
+      <div className={`market-chart-status ${isShowingLastVerified || feedError ? "market-chart-status-stale" : ""}`} role="status">
+        {feedError ? "Feed reconnecting" : isShowingLastVerified ? `Feed reconnecting · showing last received ${sourceLabel || "1-minute"} candles` : isWarming ? `First ${sourceLabel || "live"} tick received · building candle` : `Showing ${sourceLabel || "1-minute"} candles`}
       </div>
       <div className="market-chart-main">
         <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
