@@ -1,5 +1,5 @@
 ---
-name: TradePulse
+name: TradeMemo
 description: Light-default operations desk for Telegram-authenticated trading workflows.
 colors:
   background: "#f4f1ea"
@@ -54,11 +54,11 @@ components:
     padding: "18px"
 ---
 
-# Design System: TradePulse
+# Design System: TradeMemo
 
 ## Overview
 
-TradePulse is a dense operations desk for authenticated trading, wallet, and support workflows. The warm-paper light theme is the first-visit default; a saved preference may select the dark palette. Both use indigo actions and semantic mint, amber, and red states, paired with data typography and compact geometric headings.
+TradeMemo is a dense operations desk for authenticated trading, wallet, and support workflows. The warm-paper light theme is the first-visit default; a saved preference may select the dark palette. Both use indigo actions and semantic mint, amber, and red states, paired with data typography and compact geometric headings.
 
 The visual language is task-oriented rather than marketing-oriented: financial state, status, safeguards, and action boundaries appear before decorative treatment. Hand-drawn illustrative assets are reserved for onboarding, recovery, completion, and exception states.
 

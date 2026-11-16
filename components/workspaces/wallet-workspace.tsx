@@ -446,7 +446,7 @@ function WalletWorkspaceBody({
                   ? t("Choose an asset")
                   : step === 1
                     ? t("Choose a network")
-                    : t("Send {asset} to TradePulse", { asset })}
+                    : t("Send {asset} to TradeMemo", { asset })}
               </h2>
             </div>
             <span className="secure-chip">
@@ -560,7 +560,7 @@ function WalletWorkspaceBody({
                 <div className="success-state">
                   <img
                     src="/illustrations/deposit-credited.png"
-                    alt="Deposit credited into TradePulse"
+                    alt="Deposit credited into TradeMemo"
                     className="deposit-credited-art"
                     decoding="async"
                   />

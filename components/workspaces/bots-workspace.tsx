@@ -440,15 +440,15 @@ export function BotsWorkspace({
       return true;
     } catch (error) {
       const message = path === "/v1/bots" && error instanceof DOMException && error.name === "AbortError"
-        ? "TradePulse is still confirming this allocation. Check your fleet before trying again."
-        : error instanceof Error ? error.message : "TradePulse could not complete this action. Review your choices and try again.";
+        ? "TradeMemo is still confirming this allocation. Check your fleet before trying again."
+        : error instanceof Error ? error.message : "TradeMemo could not complete this action. Review your choices and try again.";
       setReviewError(message);
       onNotice(message);
       if (path === "/v1/bots") {
         void reload().catch((refreshError) => onNotice(
           refreshError instanceof Error
-            ? `TradePulse could not confirm whether the bot was created: ${refreshError.message}`
-            : "TradePulse could not confirm whether the bot was created. Refresh the fleet before retrying.",
+            ? `TradeMemo could not confirm whether the bot was created: ${refreshError.message}`
+            : "TradeMemo could not confirm whether the bot was created. Refresh the fleet before retrying.",
         ));
       }
       return false;
@@ -666,7 +666,7 @@ ealed Return entry amount" /></div></label>
           </div>
           <GradientPanel className="compound-panel">
             <h2>{sealedReturn ? "Return is sealed" : "Earlier session"}</h2>
-            <p>{sealedReturn ? "The return table and entry are committed. The future external entropy source is used only after the reveal window ends, and TradePulse reveals the result automatically at expiry." : "This session was created before the current sealed-return product. It will complete at its scheduled reveal time; early settlement is no longer available."}</p>
+            <p>{sealedReturn ? "The return table and entry are committed. The future external entropy source is used only after the reveal window ends, and TradeMemo reveals the result automatically at expiry." : "This session was created before the current sealed-return product. It will complete at its scheduled reveal time; early settlement is no longer available."}</p>
             {sealedReturn ? <div className="fact-block">
               <span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span>
               <span>MAX RETURN <b>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</b></span>
@@ -677,7 +677,7 @@ ealed Return entry amount" /></div></label>
         {flashback?.state === "ready_to_reveal" && <>
           <GradientPanel className="compound-panel">
             <h2>Finalising your result</h2>
-            <p>The reveal window has closed. TradePulse is automatically applying the committed result.</p>
+            <p>The reveal window has closed. TradeMemo is automatically applying the committed result.</p>
             <div className="fact-block"><span>ENTRY <b>{money(Number(flashback.allocation_usd || 0))}</b></span><span>COMMITMENT <b>{String(flashback.commitment || "").slice(0, 16)}…</b></span></div>
           </GradientPanel>
         </>}
@@ -723,7 +723,7 @@ ealed Return entry amount" /></div></label>
         </>}
         {flashbackReview && <AccessibleDialog label={flashbackType === "direction" ? "Review Flashback Direction" : "Review Flashback"} onClose={() => setFlashbackReview(false)} dismissible={!isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")}>
           <h2>{flashbackType === "direction" ? "Confirm Flashback Direction?" : "Start a sealed Flashback?"}</h2>
-          {flashbackType === "direction" ? <><p>TradePulse will lock {money(flashbackAmount)} on {flashbackDirectionMarket}/USD · {String(flashbackDirectionChoice || "").toUpperCase()} for 30 seconds. A correct direction returns {money(flashbackAmount * directionMultiplier(flashbackAmount))} ({directionMultiplier(flashbackAmount).toFixed(2)}×); an incorrect direction loses the full entry. An exact tie returns the full entry. Settlement uses the Kraken USD midpoint. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>SETTLEMENT <b>AUTOMATIC</b></span></div></> : <><p>TradePulse will lock {money(flashbackAmount)} for {Number(flashbackRules?.duration_seconds || 30)} seconds and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>RESULT <b>SEALED</b></span></div></>}
+          {flashbackType === "direction" ? <><p>TradeMemo will lock {money(flashbackAmount)} on {flashbackDirectionMarket}/USD · {String(flashbackDirectionChoice || "").toUpperCase()} for 30 seconds. A correct direction returns {money(flashbackAmount * directionMultiplier(flashbackAmount))} ({directionMultiplier(flashbackAmount).toFixed(2)}×); an incorrect direction loses the full entry. An exact tie returns the full entry. Settlement uses the Kraken USD midpoint. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>SETTLEMENT <b>AUTOMATIC</b></span></div></> : <><p>TradeMemo will lock {money(flashbackAmount)} for {Number(flashbackRules?.duration_seconds || 30)} seconds and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmount * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmount))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmount)}</b></span><span>RESULT <b>SEALED</b></span></div></>}
           {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
           <button className="primary-action" disabled={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start") || flashbackAmount < Number(flashbackRules?.min_entry_usd || 20) || flashbackAmount > Number(flashbackRules?.max_entry_usd || 1000) || flashbackAmount > data.wallet.available || (flashbackType === "direction" && (!flashbackDirectionChoice || !flashbackDirectionMarket))} aria-busy={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")} onClick={() => void (flashbackType === "direction" ? startFlashbackDirection() : startFlashback())}>{isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start") ? "Starting…" : flashbackType === "direction" ? "Confirm Flashback Direction" : "Start sealed Flashback"} <StateIcon name="check" /></button>
           <button className="ghost-action" disabled={isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")} onClick={() => setFlashbackReview(false)}>Go back</button>
@@ -1182,7 +1182,7 @@ ealed Return entry amount" /></div></label>
             <AccessibleDialog label="Choose eligible strategy markets" onClose={() => setBasketPickerOpen(false)} dismissible={!basketPickerLoading}>
               <span className="eyebrow">TRADABLE STRATEGY BASKET</span>
               <h2>Choose eligible markets</h2>
-              <p>Only markets currently passing TradePulse eligibility checks appear here. A selected market is checked again for a fresh price, liquidity, and risk limits before any order opens.</p>
+              <p>Only markets currently passing TradeMemo eligibility checks appear here. A selected market is checked again for a fresh price, liquidity, and risk limits before any order opens.</p>
               <div className="amount-input">
                 <input value={basketQuery} onChange={(event) => setBasketQuery(event.target.value)} placeholder="Search eligible markets" aria-label="Search eligible strategy markets" autoComplete="off" />
               </div>

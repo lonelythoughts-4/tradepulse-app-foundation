@@ -217,7 +217,7 @@ function NavIcon({
 function PulseMark({ size = 34 }: { size?: number }) {
   return (
     <svg
-      aria-label="TradePulse mark"
+      aria-label="TradeMemo mark"
       role="img"
       width={size}
       height={size}
@@ -1081,7 +1081,7 @@ function DepositFlow({ onBack }: { onBack: () => void }) {
                 ? "Choose an asset"
                 : step === 1
                   ? "Choose a network"
-                  : "Send USDC to TradePulse"}
+                  : "Send USDC to TradeMemo"}
             </h2>
           </div>
           <span className="secure-chip">
@@ -2219,12 +2219,12 @@ function OnboardingScreen() {
     <div className="onboarding-screen">
       <img
         src="/illustrations/onboarding-welcome.png"
-        alt="TradePulse onboarding landscape"
+        alt="TradeMemo onboarding landscape"
         className="onboarding-hero"
         decoding="async"
       />
       <div className="onboarding-copy">
-        <span className="eyebrow">WELCOME TO TRADEPULSE</span>
+        <span className="eyebrow">WELCOME TO TRADEMEMO</span>
         <h1>Build your desk with confidence.</h1>
         <p>
           Trade, automate, and move funds with clear controls at every step.
@@ -2462,8 +2462,8 @@ function EarnScreen() {
           className="share-action"
           onClick={() =>
             navigator.share?.({
-              title: "TradePulse",
-              text: "Join my TradePulse desk",
+              title: "TradeMemo",
+              text: "Join my TradeMemo desk",
             })
           }
         >
@@ -3193,7 +3193,7 @@ function AccountSection({
               </label>
             </div>
             <p className="warning-copy">
-              TradePulse does not verify ownership. Cross-check every character,
+              TradeMemo does not verify ownership. Cross-check every character,
               network, and the first and last six characters in your wallet app
               before saving.
             </p>
@@ -3729,7 +3729,7 @@ function LiveDeskFinal() {
             <div className="audit-row" key={item}>
               <div>
                 <strong>{item}</strong>
-                <small>TradePulse operations · pinned</small>
+                <small>TradeMemo operations · pinned</small>
               </div>
             </div>
           ))}
@@ -5295,7 +5295,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
   const share = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: "TradePulse", url: link });
+        await navigator.share({ title: "TradeMemo", url: link });
         return;
       }
       await navigator.clipboard?.writeText(link);
@@ -6273,7 +6273,7 @@ function LiveWalletScreen({
                   ? "Choose an asset"
                   : step === 1
                     ? "Choose a network"
-                    : `Send ${asset} to TradePulse`}
+                    : `Send ${asset} to TradeMemo`}
               </h2>
             </div>
             <span className="secure-chip">
@@ -7268,12 +7268,12 @@ function LiveTradePulse() {
           <h1>
             {openedInsideTelegram()
               ? "Telegram session unavailable."
-              : "Open TradePulse with Telegram."}
+              : "Open TradeMemo with Telegram."}
           </h1>
           <p>
             {notice ||
               (openedInsideTelegram()
-                ? "Close this Mini App, return to @demo1vbot, and open TradePulse again from its menu button."
+                ? "Close this Mini App, return to @demo1vbot, and open TradeMemo again from its menu button."
                 : "Continue once in Telegram. When your identity is confirmed, this browser returns to your desk automatically.")}
           </p>
           {openedInsideTelegram() ? (
@@ -7283,13 +7283,13 @@ function LiveTradePulse() {
               target="_blank"
               rel="noreferrer"
             >
-              Return to TradePulse <ChevronRight />
+              Return to TradeMemo <ChevronRight />
             </a>
           ) : (
             <BrowserBotHandoff />
           )}
           <small>
-            TradePulse never asks for a password, seed phrase, or security code
+            TradeMemo never asks for a password, seed phrase, or security code
             to connect a browser.
           </small>
         </div>
@@ -7300,11 +7300,11 @@ function LiveTradePulse() {
       <div className="onboarding-screen">
         <img
           src="/illustrations/onboarding-welcome.png"
-          alt="TradePulse welcome"
+          alt="TradeMemo welcome"
           className="onboarding-hero"
         />
         <div className="onboarding-copy">
-          <span className="eyebrow">WELCOME TO TRADEPULSE</span>
+          <span className="eyebrow">WELCOME TO TRADEMEMO</span>
           <h1>Before you start</h1>
           <p>
             By continuing, you accept the same Terms and risk disclosures
@@ -7420,7 +7420,7 @@ function LiveTradePulse() {
         active={chromeActive}
         setActive={selectChromeTab}
         profileName={profileName}
-        profileTier={data.user.tier || "TradePulse account"}
+        profileTier={data.user.tier || "TradeMemo account"}
         isAdmin={data.user.is_admin}
       />
       <main className="main-content">
@@ -9323,7 +9323,7 @@ function OriginalDeskShell() {
     ) : (
       <GradientPanel className="announcements">
         <span className="eyebrow">COMMUNITY & HELP</span>
-        <h2>TradePulse support</h2>
+        <h2>TradeMemo support</h2>
         <p>
           Use the Telegram bot for account-specific help and support requests.
         </p>
@@ -9346,7 +9346,7 @@ function OriginalDeskShell() {
  * The original shell above is retained as the visual reference for the v0
  * composition.  The application entry must use the live desk: unlike the
  * reference shell it never renders sample users, balances, bots, deposits or
- * withdrawals and routes every action through the shared TradePulse API.
+ * withdrawals and routes every action through the shared TradeMemo API.
  */
 export default function TradePulseShell() {
   return <LiveTradePulse />;

@@ -297,7 +297,7 @@ export function AccountWorkspace({
           </span>
           <div>
             <strong>Log out</strong>
-            <small>Remove this browser’s TradePulse session</small>
+            <small>Remove this browser’s TradeMemo session</small>
           </div>
           <ChevronRight />
         </button>
@@ -438,7 +438,7 @@ export function AccountWorkspace({
               <>
                 <span className="eyebrow">ACCOUNT / NOTIFICATIONS</span>
                 <h2>Telegram notification preferences</h2>
-                <p>These preferences control the account alerts TradePulse sends through Telegram. Required service notices may still be sent.</p>
+                <p>These preferences control the account alerts TradeMemo sends through Telegram. Required service notices may still be sent.</p>
                   {[
                   ["fills", "Order executions"],
                   ["fees", "Fees charged"],

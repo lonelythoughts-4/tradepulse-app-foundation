@@ -3,7 +3,7 @@ import styles from "./desk-loading.module.css";
 /** Presentation only: the session request decides when this screen leaves. */
 export function DeskLoading({ status = "Opening your desk…" }: { status?: string }) {
   return (
-    <main className={styles.screen} aria-label="TradePulse" aria-busy="true">
+    <main className={styles.screen} aria-label="TradeMemo" aria-busy="true">
       <div className={styles.content}>
         <svg className={styles.mark} viewBox="0 0 40 40" fill="none" aria-hidden="true">
           <path className={styles.track} d="M3 21h7l3-9 6 18 5-14 3 5h10" />

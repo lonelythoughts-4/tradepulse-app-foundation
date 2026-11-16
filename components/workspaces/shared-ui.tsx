@@ -53,7 +53,7 @@ export function GradientPanel({ children, className = "", onPointerDown, onClick
 }
 
 export function PulseMark({ size = 34 }: { size?: number }) {
-  return <svg aria-label="TradePulse mark" role="img" width={size} height={size} viewBox="0 0 40 40" fill="none"><path d="M3 21h7l3-9 6 18 5-14 3 5h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="37" cy="21" r="1.7" fill="#34D399" /></svg>;
+  return <svg aria-label="TradeMemo mark" role="img" width={size} height={size} viewBox="0 0 40 40" fill="none"><path d="M3 21h7l3-9 6 18 5-14 3 5h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="37" cy="21" r="1.7" fill="#34D399" /></svg>;
 }
 
 export function Zap({ size = 18, className = "" }: WorkspaceIconProps) {

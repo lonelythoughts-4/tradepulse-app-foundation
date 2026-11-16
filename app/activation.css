@@ -1,4 +1,4 @@
-/* TradePulse activation journey: a quiet operating threshold, not a marketing page. */
+/* TradeMemo activation journey: a quiet operating threshold, not a marketing page. */
 .activation-shell{min-height:100dvh;display:grid;place-items:center;padding:24px;background:var(--bg,#07090d);overflow-x:clip}
 .activation-stage{width:min(100%,560px);padding:clamp(28px,7vw,56px);border:1px solid rgba(143,158,194,.2);border-radius:16px;background:linear-gradient(145deg,rgba(18,25,38,.98),rgba(9,12,18,.98));box-shadow:0 22px 54px rgba(0,0,0,.32);color:var(--foreground,#e6eaf2)}
 .activation-progress{margin:0 0 12px;font:600 11px/1.4 var(--font-jetbrains-mono,monospace);letter-spacing:.09em;text-transform:uppercase;color:#9aa4b8}.activation-stage h1{max-width:14ch;margin:0 0 16px;font:600 clamp(32px,8vw,48px)/1.03 var(--font-space-grotesk,sans-serif);letter-spacing:-.035em;overflow-wrap:anywhere}.activation-stage>p:not(.activation-progress){max-width:58ch;margin:0;color:#b8c0d0;font:400 16px/1.65 var(--font-inter,sans-serif)}

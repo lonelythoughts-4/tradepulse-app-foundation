@@ -13,8 +13,8 @@ const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space
 const jetBrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'TradePulse — Telegram-confirmed trading desk',
-  description: 'Review your TradePulse wallet, bot, and market controls through a secure Telegram-confirmed desk.',
+  title: 'TradeMemo — Telegram-confirmed trading desk',
+  description: 'Review your TradeMemo wallet, bot, and market controls through a secure Telegram-confirmed desk.',
   icons: {
     icon: [
       {

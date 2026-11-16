@@ -415,7 +415,7 @@ export function HelpWorkspace({
           <div className="support-thread-messages" aria-label={`Messages for support ticket ${activeTicket.id}`}>
             {ticketMessages.map((message) => (
               <div className={`support-message ${message.author_role}`} key={message.id}>
-                <strong>{message.author_role === "admin" ? "TradePulse support" : "You"}</strong>
+                <strong>{message.author_role === "admin" ? "TradeMemo support" : "You"}</strong>
                 <p>{message.body}</p>
               </div>
             ))}

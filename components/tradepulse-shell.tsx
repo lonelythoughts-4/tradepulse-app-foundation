@@ -355,7 +355,7 @@ function NavIcon({
 function PulseMark({ size = 34 }: { size?: number }) {
   return (
     <svg
-      aria-label="TradePulse mark"
+      aria-label="TradeMemo mark"
       role="img"
       width={size}
       height={size}
@@ -459,7 +459,7 @@ function AvatarPicker({
   return (
     <DeskLocalized>
     <AccessibleDialog
-      label="Choose your TradePulse desk identity"
+      label="Choose your TradeMemo desk identity"
       onClose={onClose}
       dismissible={!required && !pending}
     >
@@ -1535,7 +1535,7 @@ function DepositFlow({ onBack }: { onBack: () => void }) {
                 ? "Choose an asset"
                 : step === 1
                   ? "Choose a network"
-                  : "Send USDC to TradePulse"}
+                  : "Send USDC to TradeMemo"}
             </h2>
           </div>
           <span className="secure-chip">
@@ -2673,12 +2673,12 @@ function OnboardingScreen() {
     <div className="onboarding-screen">
       <img
         src="/illustrations/onboarding-welcome.png"
-        alt="TradePulse onboarding landscape"
+        alt="TradeMemo onboarding landscape"
         className="onboarding-hero"
         decoding="async"
       />
       <div className="onboarding-copy">
-        <span className="eyebrow">WELCOME TO TRADEPULSE</span>
+        <span className="eyebrow">WELCOME TO TRADEMEMO</span>
         <h1>Build your desk with confidence.</h1>
         <p>
           Trade, automate, and move funds with clear controls at every step.
@@ -2900,8 +2900,8 @@ function EarnScreen() {
           className="share-action"
           onClick={() =>
             navigator.share?.({
-              title: "TradePulse",
-              text: "Join my TradePulse desk",
+              title: "TradeMemo",
+              text: "Join my TradeMemo desk",
             })
           }
         >
@@ -3631,7 +3631,7 @@ function AccountSection({
               </label>
             </div>
             <p className="warning-copy">
-              TradePulse does not verify ownership. Cross-check every character,
+              TradeMemo does not verify ownership. Cross-check every character,
               network, and the first and last six characters in your wallet app
               before saving.
             </p>
@@ -4167,7 +4167,7 @@ function LiveDeskFinal() {
             <div className="audit-row" key={item}>
               <div>
                 <strong>{item}</strong>
-                <small>TradePulse operations · pinned</small>
+                <small>TradeMemo operations · pinned</small>
               </div>
             </div>
           ))}
@@ -4609,49 +4609,49 @@ const activationProgress: Record<LanguageCode, (step: number) => string> = {
 
 const activationStories: Record<LanguageCode, Array<[string, string]>> = {
   en: [
-    ["Your TradePulse desk", "See your wallet, Memecoin, Synthetic, and account activity in one place."],
+    ["Your TradeMemo desk", "See your wallet, Memecoin, Synthetic, and account activity in one place."],
     ["You stay in control", "Choose each allocation. Pause, resume, or close automation at any time."],
     ["Check every transfer", "Confirm the network, address, and amount. Digital assets and automated trading can lose value. Results are not guaranteed."],
     ["Try the demo first", "Virtual credit is optional, cannot be withdrawn, and never changes your mainnet wallet."],
   ],
   ru: [
-    ["Ваш кабинет TradePulse", "Просматривайте кошелёк, Memecoin, Synthetic и активность аккаунта в одном месте."],
+    ["Ваш кабинет TradeMemo", "Просматривайте кошелёк, Memecoin, Synthetic и активность аккаунта в одном месте."],
     ["Вы всё контролируете", "Выбирайте распределение средств. Приостанавливайте, возобновляйте или останавливайте автоматизацию."],
     ["Проверяйте каждый перевод", "Проверьте сеть, адрес и сумму. Цифровые активы и автоматическая торговля могут привести к убыткам."],
     ["Сначала попробуйте демо", "Виртуальные средства необязательны, их нельзя вывести, и они не меняют основной кошелёк."],
   ],
   hi: [
-    ["आपका TradePulse डेस्क", "वॉलेट, Memecoin, Synthetic और खाते की गतिविधि एक जगह देखें।"],
+    ["आपका TradeMemo डेस्क", "वॉलेट, Memecoin, Synthetic और खाते की गतिविधि एक जगह देखें।"],
     ["नियंत्रण आपके पास है", "हर आवंटन चुनें। ऑटोमेशन को कभी भी रोकें, फिर शुरू करें या बंद करें।"],
     ["हर ट्रांसफ़र जाँचें", "नेटवर्क, पता और राशि की पुष्टि करें। डिजिटल संपत्ति और ऑटोमेटेड ट्रेडिंग में नुकसान हो सकता है।"],
     ["पहले डेमो आज़माएँ", "वर्चुअल क्रेडिट वैकल्पिक है, निकाला नहीं जा सकता और मुख्य वॉलेट नहीं बदलता।"],
   ],
   es: [
-    ["Tu espacio TradePulse", "Consulta tu cartera, Memecoin, Synthetic y la actividad de tu cuenta en un solo lugar."],
+    ["Tu espacio TradeMemo", "Consulta tu cartera, Memecoin, Synthetic y la actividad de tu cuenta en un solo lugar."],
     ["Tú mantienes el control", "Elige cada asignación. Pausa, reanuda o cierra la automatización cuando quieras."],
     ["Comprueba cada transferencia", "Confirma la red, la dirección y el importe. Los activos digitales y el trading automatizado pueden perder valor."],
     ["Prueba primero la demo", "El crédito virtual es opcional, no se puede retirar y no cambia tu cartera principal."],
   ],
   it: [
-    ["Il tuo desk TradePulse", "Consulta portafoglio, Memecoin, Synthetic e attività dell'account in un unico posto."],
+    ["Il tuo desk TradeMemo", "Consulta portafoglio, Memecoin, Synthetic e attività dell'account in un unico posto."],
     ["Il controllo è tuo", "Scegli ogni allocazione. Puoi sospendere, riprendere o chiudere l'automazione in qualsiasi momento."],
     ["Controlla ogni trasferimento", "Verifica rete, indirizzo e importo. Gli asset digitali e il trading automatico possono perdere valore."],
     ["Prova prima la demo", "Il credito virtuale è facoltativo, non è prelevabile e non modifica il portafoglio principale."],
   ],
   zh: [
-    ["您的 TradePulse 工作台", "在一个位置查看钱包、Memecoin、Synthetic 和账户活动。"],
+    ["您的 TradeMemo 工作台", "在一个位置查看钱包、Memecoin、Synthetic 和账户活动。"],
     ["操作由您掌控", "自行选择每项配置。可随时暂停、恢复或关闭自动化。"],
     ["核对每笔转账", "确认网络、地址和金额。数字资产和自动交易可能造成损失。"],
     ["先试用模拟体验", "虚拟额度可选、不可提现，也不会影响主网钱包。"],
   ],
   ja: [
-    ["TradePulse デスク", "ウォレット、Memecoin、Synthetic、アカウントの動きを一か所で確認できます。"],
+    ["TradeMemo デスク", "ウォレット、Memecoin、Synthetic、アカウントの動きを一か所で確認できます。"],
     ["操作はいつでも自分で管理", "配分を選び、自動化をいつでも一時停止・再開・終了できます。"],
     ["送金内容を必ず確認", "ネットワーク、アドレス、金額を確認してください。デジタル資産と自動取引には損失のリスクがあります。"],
     ["まずはデモをお試しください", "仮想クレジットは任意で、出金できず、メインネットのウォレットにも影響しません。"],
   ],
   ro: [
-    ["Spațiul tău TradePulse", "Vezi portofelul, Memecoin, Synthetic și activitatea contului într-un singur loc."],
+    ["Spațiul tău TradeMemo", "Vezi portofelul, Memecoin, Synthetic și activitatea contului într-un singur loc."],
     ["Tu deții controlul", "Alegi fiecare alocare. Poți opri, relua sau închide automatizarea oricând."],
     ["Verifică fiecare transfer", "Confirmă rețeaua, adresa și suma. Activele digitale și tranzacționarea automată pot genera pierderi."],
     ["Încearcă mai întâi demo-ul", "Creditul virtual este opțional, nu poate fi retras și nu schimbă portofelul principal."],
@@ -5645,7 +5645,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
   const share = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: "TradePulse", url: link });
+        await navigator.share({ title: "TradeMemo", url: link });
         return;
       }
       await navigator.clipboard?.writeText(link);
@@ -5966,7 +5966,7 @@ function LiveWalletScreen({
                   ? "Choose an asset"
                   : step === 1
                     ? "Choose a network"
-                    : `Send ${asset} to TradePulse`}
+                    : `Send ${asset} to TradeMemo`}
               </h2>
             </div>
             <span className="secure-chip">
@@ -6056,7 +6056,7 @@ function LiveWalletScreen({
                 <div className="success-state">
                   <img
                     src="/illustrations/deposit-credited.png"
-                    alt="Deposit credited into TradePulse"
+                    alt="Deposit credited into TradeMemo"
                     className="deposit-credited-art"
                     decoding="async"
                   />
@@ -7344,7 +7344,7 @@ function LiveTradePulse() {
     } catch (error) {
       const message = error instanceof DOMException && error.name === "AbortError"
         ? "Confirmation timed out. The request may have reached the server. Check your positions before submitting another order."
-        : error instanceof Error ? error.message : "TradePulse could not complete this action. Review your choices and try again.";
+        : error instanceof Error ? error.message : "TradeMemo could not complete this action. Review your choices and try again.";
       setNotice(message);
       onError?.(message);
       return false;
@@ -7375,7 +7375,7 @@ function LiveTradePulse() {
                 ? telegramLaunchContext
                   ? "Connecting to Telegram…"
                   : "Checking your saved session…"
-                : notice || "Reopen this page from the TradePulse bot to verify your session."}
+                : notice || "Reopen this page from the TradeMemo bot to verify your session."}
           </p>
         )}
       </AuthEntryPage>
@@ -7587,7 +7587,7 @@ function LiveTradePulse() {
         setActive={selectChromeTab}
         language={uiLanguage}
         profileName={profileName}
-        profileTier={data.user.tier || "TradePulse account"}
+        profileTier={data.user.tier || "TradeMemo account"}
         isAdmin={data.user.is_admin}
         avatarId={avatarId}
       />
@@ -7962,7 +7962,7 @@ function OriginalDeskShell() {
     ) : (
       <GradientPanel className="announcements">
         <span className="eyebrow">COMMUNITY & HELP</span>
-        <h2>TradePulse support</h2>
+        <h2>TradeMemo support</h2>
         <p>
           Use the Telegram bot for account-specific help and support requests.
         </p>
@@ -7985,7 +7985,7 @@ function OriginalDeskShell() {
  * The original shell above is retained as the visual reference for the v0
  * composition.  The application entry must use the live desk: unlike the
  * reference shell it never renders sample users, balances, bots, deposits or
- * withdrawals and routes every action through the shared TradePulse API.
+ * withdrawals and routes every action through the shared TradeMemo API.
  */
 export default function TradePulseShell() {
   return <LiveTradePulse />;

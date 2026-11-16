@@ -1,4 +1,4 @@
-# TradePulse identity figure assets
+# TradeMemo identity figure assets
 
 The six local figure SVGs in this directory are adapted, color-treated compositions from Open Doodles by Pablo Stanley:
 
@@ -9,4 +9,4 @@ The six local figure SVGs in this directory are adapted, color-treated compositi
 
 Files: `orbit-figure.svg`, `signal-figure.svg`, `prism-figure.svg`, `current-figure.svg`, `vector-figure.svg`, and `tide-figure.svg`.
 
-The signature trading-object overlays and all layout treatment are authored in TradePulse CSS. No asset is requested at runtime.
+The signature trading-object overlays and all layout treatment are authored in TradeMemo CSS. No asset is requested at runtime.

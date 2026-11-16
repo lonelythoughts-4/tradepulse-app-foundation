@@ -8,11 +8,11 @@ web
 
 ## Users
 
-Inferred from the existing application and confirmed project brief: TradePulse users manage funded Memecoin and Synthetic allocations from Telegram and the web app. Admins operate settlement, risk, support, and treasury controls.
+Inferred from the existing application and confirmed project brief: TradeMemo users manage funded Memecoin and Synthetic allocations from Telegram and the web app. Admins operate settlement, risk, support, and treasury controls.
 
 ## Product Purpose
 
-TradePulse gives users one place to review wallet equity, allocate capital to products, operate bots, trade Synthetic markets, manage deposits and withdrawals, and review activity. Success means a user can understand account state and complete a safe action without ambiguity.
+TradeMemo gives users one place to review wallet equity, allocate capital to products, operate bots, trade Synthetic markets, manage deposits and withdrawals, and review activity. Success means a user can understand account state and complete a safe action without ambiguity.
 
 ## Positioning
 
@@ -33,7 +33,7 @@ Users may arrive from Telegram on a phone, from a desktop browser handoff, or th
 
 ## Brand Commitments
 
-TradePulse's incumbent identity is a dark, restrained operations desk with indigo and mint semantic accents, compact data typography, custom hand-drawn illustrations, and a precise trading-console tone.
+TradeMemo's incumbent identity is a dark, restrained operations desk with indigo and mint semantic accents, compact data typography, custom hand-drawn illustrations, and a precise trading-console tone.
 
 ## Evidence on Hand
 

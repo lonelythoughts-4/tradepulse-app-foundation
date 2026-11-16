@@ -153,8 +153,8 @@ export function TelegramAuthPage({
   return (
     <main className={styles.page} data-theme={theme} id="top">
       <header className={styles.header}>
-        <a className={styles.wordmark} href="#top" aria-label="TradePulse home">
-          <span>TradePulse</span>
+        <a className={styles.wordmark} href="#top" aria-label="TradeMemo home">
+          <span>TradeMemo</span>
         </a>
         <nav className={styles.navigation} aria-label="Page">
           {navigation.map(([label, href]) => (
@@ -180,7 +180,7 @@ export function TelegramAuthPage({
             </svg>
             <span>{theme === "light" ? "Dark mode" : "Light mode"}</span>
           </button>
-          <a className={styles.enterLink} href="#sign-in">Enter TradePulse</a>
+          <a className={styles.enterLink} href="#sign-in">Enter TradeMemo</a>
           <button
             className={styles.menuButton}
             type="button"
@@ -201,7 +201,7 @@ export function TelegramAuthPage({
             {navigation.map(([label, href]) => (
               <a key={href} href={href} onClick={() => setMenuOpen(false)}>{label}</a>
             ))}
-            <a href="#sign-in" onClick={() => setMenuOpen(false)}>Enter TradePulse</a>
+            <a href="#sign-in" onClick={() => setMenuOpen(false)}>Enter TradeMemo</a>
           </nav>
         )}
       </header>
@@ -231,7 +231,7 @@ export function TelegramAuthPage({
               </span>
             </h1>
             <p>
-              One secure entrance to your TradePulse account, wallet, bots,
+              One secure entrance to your TradeMemo account, wallet, bots,
               Memecoin markets, and Synthetic desk.
             </p>
           </div>
@@ -243,7 +243,7 @@ export function TelegramAuthPage({
             </p>
             {children}
             <p className={styles.security}>
-              TradePulse will never ask for your password, recovery phrase, or one-time code.
+              TradeMemo will never ask for your password, recovery phrase, or one-time code.
             </p>
           </section>
         </section>
@@ -257,8 +257,8 @@ export function TelegramAuthPage({
           </div>
           <ol>
             {[
-              ["Create a secure link", "TradePulse prepares a short-lived sign-in link for this browser."],
-              ["Confirm in Telegram", "Open the link and confirm the request with your TradePulse bot."],
+              ["Create a secure link", "TradeMemo prepares a short-lived sign-in link for this browser."],
+              ["Confirm in Telegram", "Open the link and confirm the request with your TradeMemo bot."],
               ["Return to your desk", "This browser completes sign-in automatically after confirmation."],
             ].map(([title, description], index) => (
               <li key={title}>
@@ -274,7 +274,7 @@ export function TelegramAuthPage({
 
         <section className={`${styles.capabilities} ${styles.panel}`} data-auth-panel id="capabilities" aria-labelledby="capabilities-title">
           <div className={styles.sectionIntro}>
-            <h2 id="capabilities-title">One desk for your TradePulse account.</h2>
+            <h2 id="capabilities-title">One desk for your TradeMemo account.</h2>
             <p>Review your account and product activity in one place.</p>
           </div>
           <dl>
@@ -304,12 +304,12 @@ export function TelegramAuthPage({
             </div>
             <div className={styles.helpList}>
               <details>
-                <summary>How do I sign in to TradePulse?</summary>
-                <p>Use the QR code or continue with Telegram. Confirm the request in your TradePulse bot, then this browser will finish signing in automatically.</p>
+                <summary>How do I sign in to TradeMemo?</summary>
+                <p>Use the QR code or continue with Telegram. Confirm the request in your TradeMemo bot, then this browser will finish signing in automatically.</p>
               </details>
               <details>
                 <summary>Can I sign in with email and a password?</summary>
-                <p>Not yet. Email and password sign-in, account registration, and password recovery are not connected to TradePulse. Telegram confirmation is the only sign-in method available on this page.</p>
+                <p>Not yet. Email and password sign-in, account registration, and password recovery are not connected to TradeMemo. Telegram confirmation is the only sign-in method available on this page.</p>
               </details>
               <details>
                 <summary>What if I cannot scan the QR code?</summary>
@@ -323,8 +323,8 @@ export function TelegramAuthPage({
           </section>
 
           <footer className={styles.footer}>
-            <a className={styles.wordmark} href="#top" aria-label="TradePulse home">
-              <span>TradePulse</span>
+            <a className={styles.wordmark} href="#top" aria-label="TradeMemo home">
+              <span>TradeMemo</span>
             </a>
             <span>Trading involves risk. Confirm sign-in requests only in Telegram.</span>
           </footer>

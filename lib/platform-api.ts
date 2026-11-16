@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server.js'
 
 /**
- * Forward a web-desk request to the single TradePulse platform API.
+ * Forward a web-desk request to the single TradeMemo platform API.
  *
  * The bot, Mini App and browser handoff must authenticate against the same
  * source of truth. Keeping this explicit (rather than relying on a Vercel
@@ -13,7 +13,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
   const origin = process.env.TRADEPULSE_API_ORIGIN?.trim().replace(/\/+$/, '')
   if (!origin) {
     return NextResponse.json(
-      { error: 'TradePulse service is not configured.', request_id: requestId },
+      { error: 'TradeMemo service is not configured.', request_id: requestId },
       { status: 503, headers: { 'x-tradepulse-request-id': requestId } },
     )
   }
@@ -45,7 +45,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
       const status = upstream.status >= 400 ? upstream.status : 502
       return NextResponse.json(
         {
-          error: 'TradePulse could not complete this request. The service returned an unexpected response.',
+          error: 'TradeMemo could not complete this request. The service returned an unexpected response.',
           request_id: requestId,
         },
         { status, headers: { 'x-tradepulse-request-id': requestId } },
@@ -64,7 +64,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
     return response
   } catch {
     return NextResponse.json(
-      { error: 'TradePulse service is temporarily unavailable. Please retry.', request_id: requestId },
+      { error: 'TradeMemo service is temporarily unavailable. Please retry.', request_id: requestId },
       { status: 503, headers: { 'x-tradepulse-request-id': requestId } },
     )
   }

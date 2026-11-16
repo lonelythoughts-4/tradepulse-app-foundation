@@ -287,7 +287,7 @@ export function DeskWorkspace({
             </article>
           )) : (
             <div className="analyst-empty-state">
-              <p>Start a conversation on any topic. For current market claims, the analyst can only use data available to TradePulse.</p>
+              <p>Start a conversation on any topic. For current market claims, the analyst can only use data available to TradeMemo.</p>
             </div>
           )}
           {analystLoading && <p className="analyst-thinking" role="status">Thinking through your question…</p>}
