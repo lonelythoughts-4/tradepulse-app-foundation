@@ -30,7 +30,10 @@ import {
   telegramAppLaunchUrl,
   shouldUseTelegramAppLaunch,
 } from "../lib/browser-handoff.js";
-import { isTelegramWebAppContext } from "../lib/telegram-webapp-auth.js";
+import {
+  hasTelegramWebAppLaunchParams,
+  isTelegramWebAppContext,
+} from "../lib/telegram-webapp-auth.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
 import { localizeApiError, translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
@@ -5121,7 +5124,15 @@ function telegramInitData() {
 // Telegram's signed data may arrive after the WebApp shell begins hydrating.
 function openedInsideTelegram() {
   const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
-  return isTelegramWebAppContext(userAgent, Boolean(telegramInitData()));
+  const hasLaunchParams = typeof window !== "undefined" && hasTelegramWebAppLaunchParams(
+    window.location.search,
+    window.location.hash,
+  );
+  return isTelegramWebAppContext(
+    userAgent,
+    Boolean(telegramInitData()),
+    hasLaunchParams,
+  );
 }
 async function waitForTelegramWebApp() {
   // The Mini App bridge is injected asynchronously on some Android and iOS
