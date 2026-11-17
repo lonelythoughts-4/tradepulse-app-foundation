@@ -4,7 +4,29 @@ import test from "node:test";
 import {
   getFlashbackStartAvailability,
   parseFlashbackEntryAmount,
+  shouldPollFlashbackStatus,
 } from "../lib/flashback-controls.ts";
+
+test("Flashback status polling continues while the automatic result is finalising", () => {
+  assert.equal(
+    shouldPollFlashbackStatus(true, [
+      { state: "ready_to_reveal", product_version: "sealed-return-v2" },
+    ]),
+    true,
+  );
+  assert.equal(
+    shouldPollFlashbackStatus(true, [
+      { state: "revealed", product_version: "sealed-return-v2" },
+    ]),
+    false,
+  );
+  assert.equal(
+    shouldPollFlashbackStatus(false, [
+      { state: "sealed", product_version: "sealed-return-v2" },
+    ]),
+    false,
+  );
+});
 
 test("one active Sealed Return leaves only the Direction slot available", () => {
   assert.deepEqual(

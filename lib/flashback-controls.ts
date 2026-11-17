@@ -5,6 +5,15 @@ export type FlashbackSessionAvailability = {
 
 const DIRECTION_PRODUCT_VERSION = "market-direction-v1";
 
+export function shouldPollFlashbackStatus(
+  flashbackViewIsActive: boolean,
+  sessions: readonly FlashbackSessionAvailability[],
+): boolean {
+  return flashbackViewIsActive && sessions.some(
+    (session) => session.state === "sealed" || session.state === "ready_to_reveal",
+  );
+}
+
 export function getFlashbackStartAvailability(
   sessions: readonly FlashbackSessionAvailability[],
 ): { sealed: boolean; direction: boolean } {

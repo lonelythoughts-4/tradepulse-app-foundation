@@ -8,7 +8,7 @@ import { translateDeskPhrase } from "../../lib/desk-i18n";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
-import { getFlashbackStartAvailability, parseFlashbackEntryAmount } from "../../lib/flashback-controls";
+import { getFlashbackStartAvailability, parseFlashbackEntryAmount, shouldPollFlashbackStatus } from "../../lib/flashback-controls";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
 import { useResourcePoller } from "./use-resource-poller";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
@@ -291,8 +291,8 @@ export function BotsWorkspace({
     },
     (snapshot) => onActionResult("/v1/flashback/refresh", {}, snapshot),
     3_000,
-    view === "flashback" && Boolean(activeCountdownSession),
-    `flashback:${activeCountdownSession?.id || ""}`,
+    shouldPollFlashbackStatus(view === "flashback", flashbackSessions),
+    `flashback:${flashbackSessionIds}`,
     (error) => onNotice(
       error instanceof Error
         ? `Flashback status refresh failed: ${error.message}`
