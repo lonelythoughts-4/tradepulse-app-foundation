@@ -37,8 +37,11 @@ export interface DeskApiMutation {
 
 export class DeskApi {
   private readonly controllers = new Map<string, AbortController>();
+  private readonly basePath: string;
 
-  constructor(private readonly basePath = "/api") {}
+  constructor(basePath = "/api") {
+    this.basePath = basePath;
+  }
 
   async getResource<T>(resource: string, signal?: AbortSignal): Promise<T> {
     this.controllers.get(resource)?.abort();
