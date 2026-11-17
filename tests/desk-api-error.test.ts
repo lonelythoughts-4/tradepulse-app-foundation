@@ -14,11 +14,11 @@ test("language-save errors retain status and request reference for rollback loca
   );
 
   assert.equal(
-    error.localizedMessage("en"),
+    localizeApiError("en", error.responseMessage, error.status, error.reference),
     "The service could not save this preference. Reference: request-17",
   );
   assert.equal(
-    error.localizedMessage("es"),
+    localizeApiError("es", error.responseMessage, error.status, error.reference),
     localizeApiError("es", "The service could not save this preference.", 500, "request-17"),
   );
 });
@@ -56,6 +56,9 @@ test("the language rollback notice uses the saved locale and actual API error", 
   );
 
   assert.match(shell, /throw new DeskApiError\(message, response\.status, reference, responseMessage\)/);
-  assert.match(shell, /error\.localizedMessage\(persistedLanguageRef\.current\)/);
+  assert.match(
+    shell,
+    /localizeApiError\(\s*persistedLanguageRef\.current,\s*error\.responseMessage,\s*error\.status,\s*error\.reference/s,
+  );
   assert.doesNotMatch(shell, /setNotice\(localizeApiError\(persistedLanguageRef\.current, "", 500\)\)/);
 });

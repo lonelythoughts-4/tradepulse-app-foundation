@@ -1,5 +1,4 @@
 import type { ActionKey } from "./desk-types";
-import { localizeApiError, type LanguageCode } from "./desk-i18n";
 
 export class DeskApiError extends Error {
   readonly status: number;
@@ -17,15 +16,6 @@ export class DeskApiError extends Error {
     this.status = status;
     this.reference = reference;
     this.responseMessage = responseMessage;
-  }
-
-  localizedMessage(language: LanguageCode): string {
-    return localizeApiError(
-      language,
-      this.responseMessage,
-      this.status,
-      this.reference,
-    );
   }
 }
 

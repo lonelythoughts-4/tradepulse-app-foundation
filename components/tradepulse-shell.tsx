@@ -7492,7 +7492,12 @@ function LiveTradePulse() {
         : current);
       setNotice(
         error instanceof DeskApiError
-          ? error.localizedMessage(persistedLanguageRef.current)
+          ? localizeApiError(
+              persistedLanguageRef.current,
+              error.responseMessage,
+              error.status,
+              error.reference,
+            )
           : error instanceof Error
             ? error.message
             : localizeApiError(persistedLanguageRef.current, "", 500),
