@@ -272,13 +272,13 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         <div><span className="eyebrow">EXECUTION</span><strong>{snapshot.partial ? "LOADING" : executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "SWITCHING TO MANUAL" : snapshot.execution_mode || "MANUAL"}</strong></div>
       </div>
       {snapshot.history_available === false && <p role="status">Chart history is delayed. The live quote remains current.</p>}
-      {sharedDemo?.state === "issued" && <section className="synthetic-auto-panel" aria-label="SHARED VIRTUAL DEMO">
+      {sharedDemo?.state === "issued" && <section className="synthetic-auto-panel synthetic-demo-panel" aria-label="SHARED VIRTUAL DEMO">
         <div className="synthetic-auto-heading">
           <div className="synthetic-auto-title"><h3>SHARED VIRTUAL DEMO</h3><p>The shared pool is eligible for automatic Synthetic execution only. Manual orders here use your selected Wallet or trading-credit source.</p></div>
           <div className="synthetic-auto-state"><button type="button" className="small-action" onClick={onOpenDemo}>Review shared virtual demo terms</button></div>
         </div>
       </section>}
-      {sharedDemo?.active && sharedDemo.state === "active" && <section className="synthetic-auto-panel" aria-label="SHARED VIRTUAL DEMO">
+      {sharedDemo?.active && sharedDemo.state === "active" && <section className="synthetic-auto-panel synthetic-demo-panel" aria-label="SHARED VIRTUAL DEMO">
         <div className="synthetic-auto-heading">
           <div className="synthetic-auto-title"><h3>SHARED VIRTUAL DEMO</h3><p>The shared pool is eligible for automatic Synthetic execution only. Manual orders here use your selected Wallet or trading-credit source.</p></div>
           <div className="synthetic-auto-state" role="status" aria-live="polite"><span className="status-chip running"><i />SHARED VIRTUAL DEMO ACTIVE</span></div>

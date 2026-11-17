@@ -745,6 +745,8 @@ html,body{overflow-x:clip}
 .synthetic-risk-copy>p{max-width:72ch;margin:0;color:var(--tp-supporting-text);font-size:11px;line-height:1.5}
 .synthetic-risk-notice>.primary-action{width:auto;min-width:142px;min-height:44px;margin:0;padding:10px 14px;white-space:nowrap}
 .synthetic-auto-panel{display:grid;gap:14px;margin-top:18px;padding:16px;border:1px solid rgba(148,163,184,.14);border-radius:10px;background:rgba(8,12,18,.38)}
+html[data-theme="light"] .synthetic-demo-panel{background:var(--tp-surface)}
+html[data-theme="light"] .synthetic-demo-panel .status-chip.running{color:var(--tp-positive);background:color-mix(in srgb,var(--tp-positive) 10%,transparent)}
 .synthetic-auto-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:14px}
 .synthetic-auto-title{min-width:0}
 .synthetic-auto-title h3{margin:0;font:600 16px/1.25 var(--font-space-grotesk),sans-serif}
