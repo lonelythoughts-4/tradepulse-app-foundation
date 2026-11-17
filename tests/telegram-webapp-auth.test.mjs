@@ -34,8 +34,24 @@ test("a delayed Telegram bridge stays in session-check state without starting br
   assert.match(shell, /hasTelegramWebAppLaunchParams\(\s*window\.location\.search,\s*window\.location\.hash/);
   assert.match(shell, /const telegramContext = openedInsideTelegram\(\)/);
   assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return;/);
-  assert.match(shell, /telegramIdentityPending\s*\?\s*"Waiting for Telegram to verify this session/);
+  assert.match(shell, /status=\{telegramIdentityPending \? "Connecting to Telegram/);
   assert.match(shell, /sessionBootstrapComplete && !telegramLaunchContext/);
   assert.doesNotMatch(shell, /if \(telegramIdentityPending\) return <DeskLoading/);
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
+});
+
+test("Telegram Mini Apps show the Pulse loader instead of browser auth and handoff", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const loader = await readFile(
+    new URL("../components/desk-loading.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(shell, /if \(telegramLaunchContext\) \{\s*if \(loading \|\| telegramIdentityPending\) \{\s*return \(\s*<DeskLoading/);
+  assert.match(shell, /status=\{notice \|\| "Telegram sign-in could not be completed\."\}[\s\S]*?onRetry=\{\(\) => \{\s*setNotice\(""\);\s*void load\(\);/);
+  assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
+  assert.match(shell, /<BrowserBotHandoff/);
 });

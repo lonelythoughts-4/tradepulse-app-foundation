@@ -53,6 +53,22 @@
   line-height: 1.5;
 }
 
+.retry {
+  margin-top: 20px;
+  padding: 10px 18px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tp-accent, #e8b650);
+  font: inherit;
+  cursor: pointer;
+}
+
+.retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
 .screen ::selection { background: #e8b650; color: #070b12; }
 
 @keyframes pulse-trace {

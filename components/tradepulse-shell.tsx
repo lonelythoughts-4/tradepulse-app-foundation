@@ -7423,6 +7423,24 @@ function LiveTradePulse() {
     }
   };
   if (!data) {
+    if (telegramLaunchContext) {
+      if (loading || telegramIdentityPending) {
+        return (
+          <DeskLoading
+            status={telegramIdentityPending ? "Connecting to Telegram…" : "Opening your desk…"}
+          />
+        );
+      }
+      return (
+        <DeskLoading
+          status={notice || "Telegram sign-in could not be completed."}
+          onRetry={() => {
+            setNotice("");
+            void load();
+          }}
+        />
+      );
+    }
     if (!sessionBootstrapComplete && !telegramLaunchContext) {
       return <DeskLoading status="Checking your saved session…" />;
     }
@@ -7431,20 +7449,14 @@ function LiveTradePulse() {
         theme={deskTheme}
         onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
       >
-        {sessionBootstrapComplete && !telegramLaunchContext ? (
+        {sessionBootstrapComplete ? (
           <BrowserBotHandoff onComplete={async () => {
             await load();
             return deskStore.getState().resources.dashboard !== null;
           }} />
         ) : (
           <p className={authEntryStyles.signInIntro} role="status" aria-live="polite">
-            {telegramIdentityPending
-              ? "Waiting for Telegram to verify this session…"
-              : loading
-                ? telegramLaunchContext
-                  ? "Connecting to Telegram…"
-                  : "Checking your saved session…"
-                : notice || "Reopen this page from the TradeMemo bot to verify your session."}
+            {loading ? "Checking your saved session…" : notice || "Reopen this page from the TradeMemo bot to verify your session."}
           </p>
         )}
       </AuthEntryPage>
