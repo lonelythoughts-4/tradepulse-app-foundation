@@ -5760,6 +5760,8 @@ function LiveWalletScreen({
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
     deposits?: LiveDashboard["deposits"];
+    demo?: LiveDashboard["demo"];
+    bots?: LiveDashboard["bots"];
   }) => void;
   onNotice: (message: string) => void;
   initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
@@ -7869,13 +7871,15 @@ function LiveTradePulse() {
               poll={(signal) => request("/v1/dashboard", { signal }, walletEnvironment)}
               request={request}
               environment={walletEnvironment}
-              onWalletUpdate={({ wallet, withdrawal, deposits }) =>
+              onWalletUpdate={({ wallet, withdrawal, deposits, demo, bots }) =>
                 updateDashboard((current) =>
                   current
                     ? {
                         ...current,
                         wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
                         deposits: deposits || current.deposits,
+                        demo: demo || current.demo,
+                        bots: bots || current.bots,
                         withdrawals: withdrawal
                           ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
                           : current.withdrawals,
@@ -7928,6 +7932,7 @@ function LiveTradePulse() {
               marketChart={MarketChart}
               onDashboardPatch={updateDashboard}
               onNotice={setNotice}
+              onOpenDemo={() => setDemoReviewOpen(true)}
               request={request}
               store={deskStore}
             />

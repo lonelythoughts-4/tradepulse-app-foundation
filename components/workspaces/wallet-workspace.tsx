@@ -111,6 +111,8 @@ export function WalletWorkspace({
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
     deposits?: LiveDashboard["deposits"];
+    demo?: LiveDashboard["demo"];
+    bots?: LiveDashboard["bots"];
   }) => void;
   onNotice: (message: string) => void;
   initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";
@@ -120,13 +122,20 @@ export function WalletWorkspace({
     (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
   );
   const dashboardPollRevision = useRef(-1);
+  const demoRefreshRequired = environment === "mainnet"
+    && ["issued", "active"].includes(String(data?.demo?.pool_state || data?.demo?.state || ""));
   useResourcePoller(
     async (_token, signal) => {
       dashboardPollRevision.current = store.getState().revisions.dashboard ?? -1;
       return poll(signal);
     },
-    (next) => applyResourceIfUnchanged(store, "dashboard", next, dashboardPollRevision.current),
-    15_000,
+    (next) => {
+      const applied = applyResourceIfUnchanged(store, "dashboard", next, dashboardPollRevision.current);
+      if (applied && environment === "mainnet") {
+        onWalletUpdate({ wallet: next.wallet, deposits: next.deposits, demo: next.demo, bots: next.bots });
+      }
+    },
+    demoRefreshRequired ? 5_000 : 15_000,
     true,
     `wallet-dashboard:${environment}`,
     (error) => onNotice(
@@ -163,6 +172,8 @@ function WalletWorkspaceBody({
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
     deposits?: LiveDashboard["deposits"];
+    demo?: LiveDashboard["demo"];
+    bots?: LiveDashboard["bots"];
   }) => void;
   onNotice: (message: string) => void;
   initialView?: "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas";

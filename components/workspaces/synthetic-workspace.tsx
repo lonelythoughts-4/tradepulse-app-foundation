@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
-import { DeskLocalized } from "../desk-language";
+import { DeskLocalized, useDeskLanguage } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { ActionKey, DeskState } from "../../lib/desk-types";
 import type { LiveDashboard } from "../tradepulse-shell";
+import { translateDeskPhrase } from "../../lib/desk-i18n";
 import { reconcileSyntheticTicks, type SyntheticTick } from "../../lib/synthetic-ticks";
 import { MAXIMUM_OPEN_ENDED_LOSS_CAP, MINIMUM_OPEN_ENDED_LOSS_CAP, contractReasonLabel, contractTypeLabel, manualContractPreferences, manualSyntheticOrderActionKey, normaliseManualContractType, validateOpenEndedTerms, type ManualContractType } from "../../lib/synthetic-contract-terms";
 import { activateContractInfo, contractInfoExpanded, contractInfoFocus, contractInfoHover, initialContractInfoState } from "../../lib/synthetic-contract-info";
@@ -16,21 +17,27 @@ import { useResourcePoller } from "./use-resource-poller";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
-type Snapshot = { market: string; partial?: boolean; history_available?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number; capacity_refresh_required?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number }; demo?: { active: boolean; state?: string; available_usd: number; credit_available_usd?: number } };
+type Snapshot = { market: string; partial?: boolean; history_available?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number; capacity_refresh_required?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number }; demo?: { active: boolean; state?: string; available_usd: number; locked_usd?: number; realised_pnl_usd?: number; expires_at?: number | null; credit_available_usd?: number } };
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
 type Review = { kind: "long" | "short" | "auto" | "approve"; path: string; payload: Record<string, unknown>; amount: number; market: string; direction: string; fee: number; signal?: Signal; manualContract?: ManualContractType; maximumLossPercent?: number; manualStopLossPercent?: number };
 
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onOpenDemo: () => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const selectSnapshot = (state: DeskState) => state.resources.synthetic as Snapshot | null;
 
-export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, request, store }: SyntheticWorkspaceProps) {
+export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onOpenDemo, request, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
   const marketRef = useRef(market);
   const revision = useRef(0);
   const snapshot = useDeskSelector(store, selectSnapshot);
+  const language = useDeskLanguage();
+  const t = useCallback(
+    (phrase: string, replacements?: Record<string, string | number>) =>
+      translateDeskPhrase(language, phrase, replacements),
+    [language],
+  );
   const [amount, setAmount] = useState("20");
   const [manualContract, setManualContract] = useState<ManualContractType>("fixed");
   const [maximumLossPercent, setMaximumLossPercent] = useState("50");
@@ -244,6 +251,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const selectedFundingCapacity = syntheticFundingCapacity(fundingSource, snapshot);
   const selectedFundingLabel = fundingSource === "credit" ? "Credit capacity" : "Manual capacity";
   const selectedFundingNeedsDisclosure = syntheticFundingNeedsDisclosure(fundingSource);
+  const sharedDemo = environment === "mainnet" ? snapshot?.demo : undefined;
   const confirmedAuto = snapshot?.execution_mode === "AUTO";
   const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Switching to Manual…" : confirmedAuto ? "Auto on" : "Auto off";
   if (snapshot) return <DeskLocalized><div className="desk-screen"><div className="gradient-panel synthetic-pilot">
@@ -264,6 +272,24 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         <div><span className="eyebrow">EXECUTION</span><strong>{snapshot.partial ? "LOADING" : executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "SWITCHING TO MANUAL" : snapshot.execution_mode || "MANUAL"}</strong></div>
       </div>
       {snapshot.history_available === false && <p role="status">Chart history is delayed. The live quote remains current.</p>}
+      {sharedDemo?.state === "issued" && <section className="synthetic-auto-panel" aria-label="SHARED VIRTUAL DEMO">
+        <div className="synthetic-auto-heading">
+          <div className="synthetic-auto-title"><h3>SHARED VIRTUAL DEMO</h3><p>The shared pool is eligible for automatic Synthetic execution only. Manual orders here use your selected Wallet or trading-credit source.</p></div>
+          <div className="synthetic-auto-state"><button type="button" className="small-action" onClick={onOpenDemo}>Review shared virtual demo terms</button></div>
+        </div>
+      </section>}
+      {sharedDemo?.active && sharedDemo.state === "active" && <section className="synthetic-auto-panel" aria-label="SHARED VIRTUAL DEMO">
+        <div className="synthetic-auto-heading">
+          <div className="synthetic-auto-title"><h3>SHARED VIRTUAL DEMO</h3><p>The shared pool is eligible for automatic Synthetic execution only. Manual orders here use your selected Wallet or trading-credit source.</p></div>
+          <div className="synthetic-auto-state" role="status" aria-live="polite"><span className="status-chip running"><i />SHARED VIRTUAL DEMO ACTIVE</span></div>
+        </div>
+        <div className="synthetic-auto-capacity" aria-label="SHARED VIRTUAL DEMO">
+          <span>DEMO AVAILABLE <b>{money(Number(sharedDemo.available_usd || 0))}</b></span>
+          <span>DEMO LOCKED <b>{money(Number(sharedDemo.locked_usd || 0))}</b></span>
+          <span>DEMO P&amp;L <b>{money(Number(sharedDemo.realised_pnl_usd || 0))}</b></span>
+        </div>
+        {sharedDemo.expires_at && <p className="synthetic-auto-hint">{t("Ends {expiry}.", { expiry: new Date(sharedDemo.expires_at * 1000).toLocaleString() })}</p>}
+      </section>}
       {snapshot.partial ? <div className="activity-row" role="status"><div className="activity-info"><strong>Checking account and trading state</strong><small>Live quotes continue. Orders remain locked until balances, Auto mode and open positions are verified.</small></div></div> : environment === "mainnet" ? <>
         {!snapshot.live_disclosure_accepted && selectedFundingNeedsDisclosure && <section className="announcements synthetic-risk-notice" aria-labelledby="synthetic-risk-title"><div className="synthetic-risk-copy"><span className="eyebrow">LIVE-RISK ACKNOWLEDGEMENT</span><strong id="synthetic-risk-title">Required before wallet-funded Synthetic trading, trading credit, or Auto.</strong><p>Orders reserve the selected funds at 1:1 margin. Price movement can lose the full reserved amount; spread and tier fees apply. Auto may place wallet-funded orders up to the amount you approve.</p></div><button className="primary-action" disabled={pendingFor("disclosure:accept")} onClick={() => void act("/v1/synthetic/disclosure", {}).catch(() => undefined)}>{pendingFor("disclosure:accept") ? "Saving…" : "Review & accept"}</button></section>}
         <label className="amount-field">Order size<div className="amount-input"><span>$</span><input value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic order size" /></div></label>
