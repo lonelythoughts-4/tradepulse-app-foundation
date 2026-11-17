@@ -4690,9 +4690,13 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
     const previousLanguage = language;
     setLanguage(next);
     setLanguageError("");
-    void onLanguageChange(next).catch(() => {
+    void onLanguageChange(next).catch((error) => {
       setLanguage(previousLanguage);
-      const message = localizeApiError(previousLanguage, "", 500);
+      const message = error instanceof DeskApiError
+        ? localizeApiError(previousLanguage, error.responseMessage, error.status, error.reference)
+        : error instanceof Error
+          ? error.message
+          : localizeApiError(previousLanguage, "", 500);
       setLanguageError(message);
       onNotice(message);
     });

@@ -62,3 +62,15 @@ test("the language rollback notice uses the saved locale and actual API error", 
   );
   assert.doesNotMatch(shell, /setNotice\(localizeApiError\(persistedLanguageRef\.current, "", 500\)\)/);
 });
+
+test("activation language rollback preserves the API failure in the previous locale", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    shell,
+    /onLanguageChange\(next\)\.catch\(\(error\) => \{\s*setLanguage\(previousLanguage\);\s*const message = error instanceof DeskApiError\s*\?\s*localizeApiError\(previousLanguage, error\.responseMessage, error\.status, error\.reference\)/s,
+  );
+});
