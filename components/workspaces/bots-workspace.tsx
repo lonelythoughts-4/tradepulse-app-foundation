@@ -1127,11 +1127,15 @@ export function BotsWorkspace({
               <span className="eyebrow">{isDemoBot ? "SHARED DEMO CONTROLS" : awaitingAuthorization ? "FUNDED MEMECOIN BOT BETA" : "MEMECOIN STRATEGY CONTROLS"}</span>
               <p>
                 {isDemoBot
-                  ? "The shared virtual demo runs automatically after activation. Choose its strategy controls below; manual demo orders are never placed and the pool remains separate from your wallet."
+                  ? "The shared virtual demo runs automatically after activation. Per-position margins were set before launch; the controls below change future Memecoin strategy entries, not the Synthetic margin. Manual demo orders are never placed."
                   : awaitingAuthorization
                   ? "Only your Memecoin allocation is at risk. Results use live market data and settle within that allocation. Trench Mode checks fresh launches only after a same-network DEX quote and liquidity review; it cannot prevent rugs, taxes, freezes, or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
               </p>
+              {isDemoBot && <div className="fact-block">
+                <span>MEMECOIN MARGIN <b>{data.demo?.memecoin_margin_usd != null ? money(Number(data.demo?.memecoin_margin_usd)) + " per position" : "Legacy sizing · unchanged"}</b></span>
+                <span>SYNTHETIC MARGIN <b>{data.demo?.synthetic_margin_usd != null ? money(Number(data.demo?.synthetic_margin_usd)) + " per position" : "Legacy engine default · unchanged"}</b></span>
+              </div>}
               {awaitingAuthorization && <div className="activity-row" role="status">
                 <div className="activity-info">
                   <strong>Automatic entries cannot start yet.</strong>

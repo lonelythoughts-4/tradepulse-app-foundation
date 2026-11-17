@@ -929,6 +929,11 @@ type VisualDeskModel = {
     credit_available_usd?: number;
     credit_locked_usd?: number;
     credit_active?: boolean;
+    memecoin_margin_usd?: number | null;
+    synthetic_margin_usd?: number | null;
+    memecoin_min_margin_usd?: number;
+    synthetic_min_margin_usd?: number;
+    max_position_margin_usd?: number;
   } | null;
 };
 
@@ -4882,6 +4887,11 @@ export type LiveDashboard = {
     credit_available_usd?: number;
     credit_locked_usd?: number;
     credit_active?: boolean;
+    memecoin_margin_usd?: number | null;
+    synthetic_margin_usd?: number | null;
+    memecoin_min_margin_usd?: number;
+    synthetic_min_margin_usd?: number;
+    max_position_margin_usd?: number;
   } | null;
   popup_ttl_seconds: number;
   notices: Array<{ id: string; kind: string; title: string; body: string }>;
@@ -6847,6 +6857,15 @@ function LiveTradePulse() {
   const [broadcastConfirm, setBroadcastConfirm] = useState("");
   const [securityCode, setSecurityCode] = useState("");
   const [demoReviewOpen, setDemoReviewOpen] = useState(false);
+  const [demoMemecoinMargin, setDemoMemecoinMargin] = useState("");
+  const [demoSyntheticMargin, setDemoSyntheticMargin] = useState("");
+  const openDemoReview = () => {
+    const grant = Number(data.demo?.grant_usd || 0);
+    const maximum = Number(data.demo?.max_position_margin_usd || Math.floor(grant * 0.2 * 100) / 100);
+    setDemoMemecoinMargin(String(maximum));
+    setDemoSyntheticMargin(String(Math.min(25, maximum)));
+    setDemoReviewOpen(true);
+  };
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
     "mainnet",
   );
@@ -7617,6 +7636,18 @@ function LiveTradePulse() {
   };
   const walletEnvironment = data.user.is_admin ? webEnvironment : "mainnet";
   const workspacePresence = getWorkspacePresencePlan(Boolean(reduceMotion));
+  const demoGrant = Number(data.demo?.grant_usd || 0);
+  const demoMaximumMargin = Number(data.demo?.max_position_margin_usd || Math.floor(demoGrant * 0.2 * 100) / 100);
+  const demoMemecoinMinimum = Number(data.demo?.memecoin_min_margin_usd || 20);
+  const demoSyntheticMinimum = Number(data.demo?.synthetic_min_margin_usd || 25);
+  const validDemoMargin = (value: string, minimum: number) => (
+    /^\d+(?:\.\d{1,2})?$/.test(value.trim())
+    && Number.isFinite(Number(value))
+    && Number(value) >= minimum
+    && Number(value) <= demoMaximumMargin
+  );
+  const demoSizingValid = validDemoMargin(demoMemecoinMargin, demoMemecoinMinimum)
+    && validDemoMargin(demoSyntheticMargin, demoSyntheticMinimum);
   return (
     <DeskLanguageProvider language={uiLanguage}>
     <DeskLocalized>
@@ -7652,29 +7683,74 @@ function LiveTradePulse() {
         }} />
         {demoReviewOpen && data.demo?.state === "issued" && (
           <AccessibleDialog
-            label="Review shared virtual demo terms"
+            label="Configure shared virtual demo"
             onClose={() => setDemoReviewOpen(false)}
             dismissible={!isActionPending("demo:start")}
           >
-            <span className="eyebrow">SHARED VIRTUAL DEMO</span>
-            <h2>Review virtual demo terms</h2>
-            <div className="fact-block">
-              <span>VIRTUAL FUNDS <b>{Number(data?.demo?.grant_usd || 0) > 0 ? money(Number(data?.demo?.grant_usd)) : "Offer unavailable"}</b></span>
-              <span>ACTIVATION DEADLINE <b>{data?.demo?.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
-              <span>FUNDING <b>Shared across Memecoin + Synthetic</b></span>
+            <div className="demo-review-heading">
+              <h2 id="demo-review-title">Choose automatic position sizes</h2>
+              <span className="status-chip paused">NOT STARTED</span>
             </div>
-            <p>Virtual funds are separate from your wallet and cannot be withdrawn.</p>
-            <p>A qualifying first verified mainnet deposit while this demo is active ends it immediately. Only realized demo profit may create capped, non-withdrawable trading credit. Unused virtual funds, unrealized results, and unclaimed demo profit expire at the active-demo deadline.</p>
+            <div className="fact-block">
+              <span>VIRTUAL FUNDS <b>{demoGrant > 0 ? money(demoGrant) : "Offer unavailable"}</b></span>
+              <span>ACTIVATION DEADLINE <b>{data?.demo?.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
+              <span>MAXIMUM PER POSITION <b>{money(demoMaximumMargin)}</b></span>
+            </div>
+            <div className="demo-sizing-fields" aria-labelledby="demo-review-title">
+              <label className="amount-field" htmlFor="demo-memecoin-margin">
+                Memecoin margin per position
+                <input
+                  id="demo-memecoin-margin"
+                  type="number"
+                  min={demoMemecoinMinimum}
+                  max={demoMaximumMargin}
+                  step="0.01"
+                  value={demoMemecoinMargin}
+                  onChange={(event) => setDemoMemecoinMargin(event.target.value)}
+                  inputMode="decimal"
+                  aria-label="Memecoin demo margin per position"
+                  data-dialog-initial-focus
+                />
+              </label>
+              <label className="amount-field" htmlFor="demo-synthetic-margin">
+                Synthetic margin per position
+                <input
+                  id="demo-synthetic-margin"
+                  type="number"
+                  min={demoSyntheticMinimum}
+                  max={demoMaximumMargin}
+                  step="0.01"
+                  value={demoSyntheticMargin}
+                  onChange={(event) => setDemoSyntheticMargin(event.target.value)}
+                  inputMode="decimal"
+                  aria-label="Synthetic demo margin per position"
+                />
+              </label>
+            </div>
+            <div className="fact-block">
+              <span>MEMECOIN STRATEGY <b>Curated basket · 3× max · 5-minute reviews</b></span>
+              <span>SYNTHETIC STRATEGY <b>Automatic signals · risk-adjusted base margin</b></span>
+              <span>SHARED POOL <b>Open positions reduce capacity for both</b></span>
+            </div>
+            {!demoSizingValid && (
+              <p role="alert">
+                Choose Memecoin margin from {money(demoMemecoinMinimum)} to {money(demoMaximumMargin)} and Synthetic margin from {money(demoSyntheticMinimum)} to {money(demoMaximumMargin)}.
+              </p>
+            )}
+            <p>Memecoin uses DOGE, SHIB, PEPE, WIF and BONK; Trench Mode starts off. Synthetic may reduce its selected base margin under volatility checks. Both wait for qualifying signals and risk checks, so a trade is not guaranteed on every review.</p>
+            <p>Virtual funds are separate from your wallet and cannot be withdrawn. A qualifying first verified mainnet deposit while this demo is active ends it immediately. Only realized demo profit may create capped, non-withdrawable trading credit; unused funds and unclaimed profit expire at the active-demo deadline.</p>
             <button
               type="button"
               className="primary-action"
-              data-dialog-initial-focus
-              disabled={isActionPending("demo:start") || Number(data?.demo?.grant_usd || 0) <= 0}
+              disabled={isActionPending("demo:start") || !demoSizingValid || demoGrant <= 0}
               onClick={async () => {
-                if (await act("/v1/demo/start", {})) setDemoReviewOpen(false);
+                if (await act("/v1/demo/start", {
+                  memecoin_margin_usd: Number(demoMemecoinMargin),
+                  synthetic_margin_usd: Number(demoSyntheticMargin),
+                })) setDemoReviewOpen(false);
               }}
             >
-              {isActionPending("demo:start") ? "Starting…" : "Start virtual demo"}
+              {isActionPending("demo:start") ? "Starting…" : "Start demo with these sizes"}
             </button>
             <button type="button" className="ghost-action" disabled={isActionPending("demo:start")} onClick={() => setDemoReviewOpen(false)}>Go back</button>
           </AccessibleDialog>
@@ -7727,7 +7803,7 @@ function LiveTradePulse() {
                 setBotEntryId(null);
                 setTab("Bots");
               }}
-              onStartDemo={() => setDemoReviewOpen(true)}
+              onStartDemo={openDemoReview}
               onViewActivity={() => {
                 setWalletEntry("activity");
                 setTab("Wallet");
@@ -7861,7 +7937,7 @@ function LiveTradePulse() {
               reload={load}
               onActionResult={applyActionResult}
               onNotice={setNotice}
-              onOpenDemo={() => setDemoReviewOpen(true)}
+              onOpenDemo={openDemoReview}
               initialBotId={botEntryId}
             />
           )}
@@ -7932,7 +8008,7 @@ function LiveTradePulse() {
               marketChart={MarketChart}
               onDashboardPatch={updateDashboard}
               onNotice={setNotice}
-              onOpenDemo={() => setDemoReviewOpen(true)}
+              onOpenDemo={openDemoReview}
               request={request}
               store={deskStore}
             />
