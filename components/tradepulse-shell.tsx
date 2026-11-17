@@ -37,6 +37,7 @@ import {
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
 import { localizeApiError, translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
+import { DeskApiError } from "../lib/desk-api";
 import { DeskLanguageProvider, DeskLocalized, useDeskLanguage } from "./desk-language";
 import {
   DESK_THEME_STORAGE_KEY,
@@ -6946,12 +6947,13 @@ function LiveTradePulse() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
+        const responseMessage = typeof body.error === "string" ? body.error : "";
         const reference = typeof body.request_id === "string"
           ? body.request_id
           : response.headers.get("x-tradepulse-request-id") || undefined;
         const message = localizeApiError(
           languageRef.current,
-          typeof body.error === "string" ? body.error : "",
+          responseMessage,
           response.status,
           reference || undefined,
         );
@@ -6962,9 +6964,9 @@ function LiveTradePulse() {
           } else {
             sessionValidationRef.current?.(targetEnvironment);
           }
-          throw new Error(message);
+          throw new DeskApiError(message, response.status, reference, responseMessage);
         }
-        throw new Error(message);
+        throw new DeskApiError(message, response.status, reference, responseMessage);
       }
       return body;
     } catch (error) {
@@ -7488,7 +7490,13 @@ function LiveTradePulse() {
       updateDashboard((current) => current
         ? { ...current, user: { ...current.user, language_code: persistedLanguageRef.current } }
         : current);
-      setNotice(localizeApiError(persistedLanguageRef.current, "", 500));
+      setNotice(
+        error instanceof DeskApiError
+          ? error.localizedMessage(persistedLanguageRef.current)
+          : error instanceof Error
+            ? error.message
+            : localizeApiError(persistedLanguageRef.current, "", 500),
+      );
       throw error;
     });
   };
@@ -7761,7 +7769,7 @@ function LiveTradePulse() {
               </p>
             )}
             <p>Memecoin uses DOGE, SHIB, PEPE, WIF and BONK; Trench Mode starts off. Synthetic may reduce its selected base margin under volatility checks. Both wait for qualifying signals and risk checks, so a trade is not guaranteed on every review.</p>
-            <p>Virtual funds are separate from your wallet and cannot be withdrawn. A qualifying first verified mainnet deposit while this demo is active ends it immediately. Only realized demo profit may create capped, non-withdrawable trading credit; unused funds and unclaimed profit expire at the active-demo deadline.</p>
+            <p>Virtual funds are separate from your wallet and cannot be withdrawn. Your first qualifying, verified mainnet deposit while the demo is active is credited to your wallet and ends the demo immediately. Only positive realized demo profit may create separate, capped, non-withdrawable trading credit, subject to the demo’s conversion limits. Unused virtual funds and any unconverted demo profit expire when the demo ends; locked positions and unrealized profit are not transferred. A qualifying deposit before the demo starts voids the unstarted offer; without an active demo, no demo credit is created.</p>
             <button
               type="button"
               className="primary-action"

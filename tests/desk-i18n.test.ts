@@ -39,6 +39,9 @@ test("dynamic phrases are translated without changing their values", () => {
 });
 
 test("bot onboarding, demo, and notification copy follows the selected language", () => {
+  const demoDepositTerms =
+    "Virtual funds are separate from your wallet and cannot be withdrawn. Your first qualifying, verified mainnet deposit while the demo is active is credited to your wallet and ends the demo immediately. Only positive realized demo profit may create separate, capped, non-withdrawable trading credit, subject to the demo’s conversion limits. Unused virtual funds and any unconverted demo profit expire when the demo ends; locked positions and unrealized profit are not transferred. A qualifying deposit before the demo starts voids the unstarted offer; without an active demo, no demo credit is created.";
+
   assert.equal(translateDeskPhrase("es", "YOUR BOT FLEET"), "TUS BOTS");
   assert.equal(
     translateDeskPhrase("es", "Set up your first automation"),
@@ -63,6 +66,10 @@ test("bot onboarding, demo, and notification copy follows the selected language"
     translateDeskPhrase("ja", "The shared virtual demo runs automatically after activation. Choose its strategy controls below; manual demo orders are never placed and the pool remains separate from your wallet."),
     "共有バーチャルデモは有効化後に自動実行されます。下で戦略を設定してください。手動デモ注文は行われず、プールはウォレットと別管理です。",
   );
+  const translatedDemoDepositTerms = translateDeskPhrase("es", demoDepositTerms);
+  assert.match(translatedDemoDepositTerms, /se acredita en tu cartera/);
+  assert.match(translatedDemoDepositTerms, /finaliza la demo de inmediato/);
+  assert.match(translatedDemoDepositTerms, /sin una demo activa/);
   assert.equal(
     translateDeskPhrase("it", "Notifications could not be refreshed. Showing the latest saved notices and trying again automatically."),
     "Impossibile aggiornare le notifiche. Vengono mostrate le ultime salvate e il sistema riproverà automaticamente.",
