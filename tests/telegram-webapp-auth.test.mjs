@@ -12,6 +12,12 @@ test("Telegram WebApp user agents wait for signed init data even before it arriv
   assert.equal(isTelegramWebAppContext("TelegramDesktop/5.8", false), true);
 });
 
+test("Telegram WebApp platform identifies clients with a generic user agent", () => {
+  assert.equal(isTelegramWebAppContext("Mozilla/5.0 Chrome/140", false, false, "tdesktop"), true);
+  assert.equal(isTelegramWebAppContext("Mozilla/5.0 Chrome/140", false, false, "android"), true);
+  assert.equal(isTelegramWebAppContext("Mozilla/5.0 Chrome/140", false, false, "unknown"), false);
+});
+
 test("ordinary browsers use the handoff unless signed Telegram data is present", () => {
   assert.equal(isTelegramWebAppContext("Mozilla/5.0 Chrome/140", false), false);
   assert.equal(isTelegramWebAppContext("Mozilla/5.0 Chrome/140", true), true);
@@ -33,6 +39,7 @@ test("a delayed Telegram bridge stays in session-check state without starting br
   );
   assert.match(shell, /hasTelegramWebAppLaunchParams\(\s*window\.location\.search,\s*window\.location\.hash/);
   assert.match(shell, /const telegramContext = openedInsideTelegram\(\)/);
+  assert.match(shell, /telegramWebApp\(\)\?\.platform/);
   assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return;/);
   assert.match(shell, /status=\{telegramIdentityPending \? "Connecting to Telegram/);
   assert.match(shell, /sessionBootstrapComplete && !telegramLaunchContext/);

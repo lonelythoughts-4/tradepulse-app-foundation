@@ -5101,6 +5101,7 @@ type LiveTradePulseAdmin = {
 
 type TelegramWebApp = {
   initData?: string;
+  platform?: string;
   ready?: () => void;
   expand?: () => void;
 };
@@ -5137,6 +5138,7 @@ function openedInsideTelegram() {
     userAgent,
     Boolean(telegramInitData()),
     hasLaunchParams,
+    telegramWebApp()?.platform,
   );
 }
 async function waitForTelegramWebApp() {
