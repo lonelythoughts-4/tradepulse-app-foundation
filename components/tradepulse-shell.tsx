@@ -1191,7 +1191,7 @@ function Activity({
       ? ledger
           .slice(0, 3)
           .map((entry) => {
-            const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+            const amount = entry.amount_usd;
             const balanceChanged = !isNonFinancialActivity(entry.kind);
             const presentation = describeActivity(entry);
             return {
@@ -1261,7 +1261,7 @@ export function isFlashbackEntryLock(kind: string) {
 }
 
 function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledger"][number]; onClose: () => void }) {
-  const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+  const amount = entry.amount_usd;
   const detail = entry.trade_detail;
   const position = detail?.position;
   const isFee = entry.kind === "performance_fee";
@@ -5422,13 +5422,6 @@ export function money(value: number) {
   }).format(Number(value || 0));
 }
 
-export function signedActivityAmount(kind: string, status: string, amount: number) {
-  const description = `${kind} ${status}`.toLowerCase();
-  // Engine rows are occasionally stored as an absolute realised amount. The
-  // event label remains authoritative for the direction shown to the user.
-  return /\bloss\b|performance_fee|identity_change_fee/.test(description) ? -Math.abs(Number(amount || 0)) : Number(amount || 0);
-}
-
 function activityAmountTone(amount: number) {
   return amount > 0 ? "up" : amount < 0 ? "down" : undefined;
 }
@@ -6497,7 +6490,7 @@ function LiveWalletScreen({
         <GradientPanel className="ledger-card">
           {filteredLedger.length ? (
             filteredLedger.map((entry, index) => {
-              const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+              const amount = entry.amount_usd;
               const isNonFinancial = isNonFinancialActivity(entry.kind);
               const presentation = describeActivity(entry);
               return (
@@ -6549,7 +6542,7 @@ function LiveWalletScreen({
             [...data.ledger]
               .sort((a, b) => b.created_at - a.created_at)
               .map((entry, index) => {
-                const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                const amount = entry.amount_usd;
                 const isNonFinancial = isNonFinancialActivity(entry.kind);
                 const presentation = describeActivity(entry);
                 return (

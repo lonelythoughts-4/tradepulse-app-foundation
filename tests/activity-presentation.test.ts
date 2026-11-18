@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { describeActivity } from "../lib/activity-presentation.ts";
@@ -62,4 +63,22 @@ test("describes a simulated testnet deposit as a testnet event", () => {
     summary: "Test funds added to your separate testnet balance",
     status: "Simulated",
   });
+});
+
+test("activity views display the API's canonical signed amount without inferring direction", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const wallet = await readFile(
+    new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(shell, /const amount = entry\.amount_usd;/);
+  assert.match(wallet, /const amount = entry\.amount_usd;/);
+  assert.doesNotMatch(
+    `${shell}\n${wallet}`,
+    /signedActivityAmount|Math\.abs\(Number\(amount/,
+  );
 });

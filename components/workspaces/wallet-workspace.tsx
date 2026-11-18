@@ -22,7 +22,6 @@ import {
   PaymentMark,
   Send,
   ShieldCheck,
-  signedActivityAmount,
   StateIcon,
   StateSwapIcon,
   StepRail,
@@ -1020,7 +1019,7 @@ function WalletWorkspaceBody({
           <GradientPanel className="ledger-card">
             {filteredLedger.length ? (
               filteredLedger.map((entry, index) => {
-                const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                const amount = entry.amount_usd;
                 const isNonFinancial = isNonFinancialActivity(entry.kind);
                 const presentation = describeActivity(entry);
                 return (
@@ -1085,7 +1084,7 @@ function WalletWorkspaceBody({
               ]
                 .sort((a, b) => b.created_at - a.created_at)
                 .map((entry, index) => {
-                  const amount = signedActivityAmount(entry.kind, entry.status, entry.amount_usd);
+                  const amount = entry.amount_usd;
                   const isNonFinancial = isNonFinancialActivity(entry.kind);
                   const presentation = describeActivity(entry);
                   return (
