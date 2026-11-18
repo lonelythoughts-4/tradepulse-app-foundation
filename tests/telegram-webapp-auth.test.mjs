@@ -47,6 +47,23 @@ test("a delayed Telegram bridge stays in session-check state without starting br
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
 });
 
+test("desk tab synchronization preserves Telegram launch data in the URL fragment", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const routeHashEffect = shell.match(
+    /useEffect\(\(\) => \{\s*const expected = `#\$\{tab\.toLowerCase\(\)\}`;[\s\S]*?\}, \[tab\]\);/,
+  )?.[0];
+
+  assert.ok(routeHashEffect, "desk tab hash synchronization effect should exist");
+  assert.match(routeHashEffect, /if \(openedInsideTelegram\(\)\) return;/);
+  assert.ok(
+    routeHashEffect.indexOf("openedInsideTelegram()") < routeHashEffect.indexOf("replaceState"),
+    "Telegram launch data must be preserved before route hash replacement",
+  );
+});
+
 test("Telegram Mini Apps show the Pulse loader instead of browser auth and handoff", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),

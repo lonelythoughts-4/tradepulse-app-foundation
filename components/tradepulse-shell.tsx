@@ -6750,6 +6750,9 @@ function LiveTradePulse() {
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
   useEffect(() => {
+    // Telegram carries signed Mini App launch data in the URL fragment.
+    // Replacing it with the desk tab before the bridge reads it strands auth.
+    if (openedInsideTelegram()) return;
     const expected = `#${tab.toLowerCase()}`;
     if (window.location.hash !== expected) window.history.replaceState(null, "", expected);
   }, [tab]);
