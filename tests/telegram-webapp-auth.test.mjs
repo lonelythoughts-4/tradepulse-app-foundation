@@ -52,10 +52,12 @@ test("desk tab synchronization preserves Telegram launch data in the URL fragmen
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
   );
-  const routeHashEffect = shell.match(
-    /useEffect\(\(\) => \{\s*const expected = `#\$\{tab\.toLowerCase\(\)\}`;[\s\S]*?\}, \[tab\]\);/,
-  )?.[0];
+  const expectedHashIndex = shell.indexOf("const expected = `#${tab.toLowerCase()}`;");
+  const effectStart = shell.lastIndexOf("useEffect(() => {", expectedHashIndex);
+  const effectEnd = shell.indexOf("}, [tab]);", expectedHashIndex);
+  const routeHashEffect = shell.slice(effectStart, effectEnd);
 
+  assert.notEqual(expectedHashIndex, -1, "desk tab hash should be generated");
   assert.ok(routeHashEffect, "desk tab hash synchronization effect should exist");
   assert.match(routeHashEffect, /if \(openedInsideTelegram\(\)\) return;/);
   assert.ok(
