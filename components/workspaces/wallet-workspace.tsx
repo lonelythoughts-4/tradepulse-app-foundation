@@ -432,7 +432,11 @@ function WalletWorkspaceBody({
       withdrawalIdempotencyKeys.current.delete(fingerprint);
       setReviewWithdrawal(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("The withdrawal request could not be created. Check the details and try again.");
+      const rawMessage = error instanceof Error ? error.message : t("The withdrawal request could not be created. Check the details and try again.");
+      const dailyLimit = /^Daily limit reached: (.+)\.$/.exec(rawMessage);
+      const message = dailyLimit
+        ? t("Daily limit reached: {limit}. Start a new withdrawal with a lower amount.", { limit: dailyLimit[1] })
+        : rawMessage;
       setWithdrawalError(message);
       onNotice(message);
     } finally {

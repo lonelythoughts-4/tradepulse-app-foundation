@@ -414,12 +414,12 @@ export function GradientPanel({
 type AvatarId = "orbit" | "signal" | "prism" | "current" | "vector" | "tide";
 
 const avatarOptions: Array<{ id: AvatarId; name: string; detail: string; utility: string; artifact: string }> = [
-  { id: "orbit", name: "Orbit", detail: "capital keeps its horizon", utility: "Wallet quick route", artifact: "Orbital receipt seal" },
-  { id: "signal", name: "Signal", detail: "read the pulse, hold the line", utility: "Live Desk quick route", artifact: "Signal-call stamp" },
-  { id: "prism", name: "Prism", detail: "separate motion from noise", utility: "Activity quick route", artifact: "Prismatic field note" },
-  { id: "current", name: "Current", detail: "move when the signal settles", utility: "Alerts quick route", artifact: "Current-flow mark" },
-  { id: "vector", name: "Vector", detail: "make the next move legible", utility: "Bots quick route", artifact: "Vector dispatch tag" },
-  { id: "tide", name: "Tide", detail: "keep a measured rhythm", utility: "Account quick route", artifact: "Tide-line token" },
+  { id: "orbit", name: "Orbit", detail: "Wallet at a glance", utility: "Wallet shortcut", artifact: "Orbit receipt mark" },
+  { id: "signal", name: "Signal", detail: "Live market view", utility: "Live Desk shortcut", artifact: "Signal stamp" },
+  { id: "prism", name: "Prism", detail: "Recent activity", utility: "Activity shortcut", artifact: "Prism mark" },
+  { id: "current", name: "Current", detail: "Alerts and updates", utility: "Alerts shortcut", artifact: "Current mark" },
+  { id: "vector", name: "Vector", detail: "Bot controls", utility: "Bots shortcut", artifact: "Vector mark" },
+  { id: "tide", name: "Tide", detail: "Account settings", utility: "Account shortcut", artifact: "Tide mark" },
 ];
 
 function PulseAvatar({
@@ -462,6 +462,12 @@ function AvatarPicker({
   available?: number;
   pending?: boolean;
 }) {
+  const language = useDeskLanguage();
+  const t = (phrase: string, replacements?: Record<string, string | number>) =>
+    translateDeskPhrase(language, phrase, replacements);
+  const identity = avatarOptions.find((option) => option.id === selected);
+  const identityName = translateDeskPhrase(language, identity?.name || "identity");
+  const identityArtifact = translateDeskPhrase(language, identity?.artifact || "identity");
   return (
     <DeskLocalized>
     <AccessibleDialog
@@ -477,7 +483,9 @@ function AvatarPicker({
         )}
         <span className="eyebrow">YOUR DESK IDENTITY</span>
         <h2>{locked ? "Change your identity" : "Choose your signal"}</h2>
-        <p>{locked ? `Your next identity change costs $${fee.toFixed(2)} from your available mainnet wallet.` : "Your first identity is free. It becomes your desk signal once confirmed."}</p>
+        <p>{locked
+          ? t("Your next identity change costs {fee} from your available mainnet wallet.", { fee: `$${fee.toFixed(2)}` })
+          : "Your first identity is free. It becomes your desk signal once confirmed."}</p>
         <div className="avatar-picker-grid" role="list">
           {avatarOptions.map((option) => (
             <button
@@ -493,10 +501,19 @@ function AvatarPicker({
             </button>
           ))}
         </div>
-        <div className="identity-seal" aria-live="polite"><span>SEALED COSMETIC REVEAL</span><strong>{locked ? `Next artifact: ${avatarOptions.find((option) => option.id === selected)?.artifact}` : "Your identity artifact reveals after confirmation"}</strong></div>
-        {locked && <p className="identity-fee-note">{selected === current ? "This is your current identity. No charge applies." : `Available now $${available.toFixed(2)} · after change $${(Math.max(0, available - fee)).toFixed(2)}`}</p>}
+        <div className="identity-seal" aria-live="polite"><span>SEALED COSMETIC REVEAL</span><strong>{locked ? t("Next artifact: {artifact}", { artifact: identityArtifact }) : "Your identity artifact reveals after confirmation"}</strong></div>
+        {locked && <p className="identity-fee-note">{selected === current
+          ? "This is your current identity. No charge applies."
+          : t("Available now {available} · after change {after}", {
+            available: `$${available.toFixed(2)}`,
+            after: `$${Math.max(0, available - fee).toFixed(2)}`,
+          })}</p>}
         <button className="primary-action" type="button" disabled={pending || (locked && selected !== current && available < fee)} aria-busy={pending} onClick={() => onConfirm(selected)}>
-          {pending ? "Saving identity…" : locked ? (selected === current ? `Keep ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}` : `Pay $${fee.toFixed(2)} & use ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`) : `Seal ${avatarOptions.find((option) => option.id === selected)?.name || "identity"}`}
+          {pending ? "Saving identity…" : locked
+            ? selected === current
+              ? t("Keep {identity}", { identity: identityName })
+              : t("Pay {fee} & use {identity}", { fee: `$${fee.toFixed(2)}`, identity: identityName })
+            : t("Seal {identity}", { identity: identityName })}
           <ChevronRight />
         </button>
       </div>

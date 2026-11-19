@@ -30,6 +30,12 @@ test("workspace phrases and accessible labels use the selected language", () => 
 
 test("dynamic phrases are translated without changing their values", () => {
   assert.equal(
+    translateDeskPhrase("es", "Daily limit reached: {limit}. Start a new withdrawal with a lower amount.", {
+      limit: "$100.00",
+    }),
+    "Alcanzaste el límite diario: $100.00. Inicia un nuevo retiro por un importe menor.",
+  );
+  assert.equal(
     translateDeskPhrase("es", "Loading testnet deposit assets…"),
     "Cargando activos de depósito de testnet…",
   );
@@ -109,5 +115,43 @@ test("dynamic demo and notification translations preserve localized values", () 
   assert.equal(
     translateDeskPhrase("it", "RC-123: Your case is queued for manual on-chain and custody review. No wallet credit or transfer has been made."),
     "RC-123: Il caso è in coda per una revisione manuale on-chain e di custodia. Non è stato effettuato alcun accredito o trasferimento.",
+  );
+});
+
+test("account reset and identity copy translates dynamic values", () => {
+  assert.equal(translateDeskPhrase("es", "Reset preferences"), "Restablecer preferencias");
+  assert.match(
+    translateDeskPhrase(
+      "es",
+      "This clears personal desk preferences and alerts only. It cannot change your balance, bots, deposits, withdrawals, security code, trial history, or demo trading credit.",
+    ),
+    /No cambia el saldo, los bots, los depósitos, los retiros/,
+  );
+  assert.equal(
+    translateDeskPhrase(
+      "es",
+      "Your next identity change costs {fee} from your available mainnet wallet.",
+      { fee: "$10.00" },
+    ),
+    "El próximo cambio de identidad cuesta $10.00 de tu saldo disponible en mainnet.",
+  );
+  assert.equal(
+    translateDeskPhrase("it", "Pay {fee} & use {identity}", { fee: "$10.00", identity: "Orbit" }),
+    "Paga $10.00 e usa Orbit",
+  );
+});
+
+test("Synthetic final-review safeguards use concise localized copy", () => {
+  assert.equal(
+    translateDeskPhrase("es", "You can lose the full reserved margin. Prices may change during review."),
+    "Puedes perder todo el margen reservado. El precio puede cambiar durante la revisión.",
+  );
+  assert.equal(
+    translateDeskPhrase("ja", "Confirm signal approval"),
+    "シグナルを承認",
+  );
+  assert.equal(
+    translateDeskPhrase("ro", "Confirm {direction}", { direction: "LONG" }),
+    "Confirmă LONG",
   );
 });

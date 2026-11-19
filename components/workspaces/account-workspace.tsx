@@ -157,8 +157,9 @@ export function AccountWorkspace({
     setModalFeedback(null);
     try {
       await request(path, { method: "POST", body: JSON.stringify(body) });
-      setModalFeedback({ message, error: false });
-      onNotice(message);
+      const localizedMessage = translateDeskPhrase(language, message);
+      setModalFeedback({ message: localizedMessage, error: false });
+      onNotice(localizedMessage);
       // Account controls confirm their own result in this modal. Do not make
       // a security or preference save trigger a full desk refresh and delay
       // the next interaction.
