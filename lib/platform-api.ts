@@ -38,7 +38,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: 'no-store',
       redirect: 'manual',
-      signal: request.signal,
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(upstreamPath === '/v1/admin/autousers/runs' ? 55_000 : 30_000)]),
     })
     const contentType = upstream.headers.get('content-type') || ''
     if (!contentType.includes('application/json')) {

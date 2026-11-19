@@ -5282,10 +5282,15 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         timer.current = null;
         terminal = true;
         setMessage("Telegram confirmed. Opening your desk…");
-        const opened = await onCompleteRef.current();
+        let opened = await onCompleteRef.current();
+        for (let retry = 0; !opened && retry < 5; retry += 1) {
+          setMessage("Telegram confirmed. Finishing the secure desk connection…");
+          await new Promise((resolve) => window.setTimeout(resolve, 800 * (retry + 1)));
+          opened = await onCompleteRef.current();
+        }
         if (!opened) {
           setState("error");
-          setMessage("Telegram confirmed, but your desk could not be opened. Try again to reconnect.");
+          setMessage("Telegram confirmed, but the desk session is still settling. Reconnect once to reopen it.");
         }
       } catch {
         if (Date.now() >= deadline) {
@@ -7046,6 +7051,7 @@ function LiveTradePulse() {
       const resolvedEnvironment = next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet";
       selectedEnvironmentRef.current = resolvedEnvironment;
       setWebEnvironment(resolvedEnvironment);
+      return true;
     } catch (error) {
       setNotice(
         error instanceof DOMException && error.name === "AbortError"
@@ -7054,6 +7060,7 @@ function LiveTradePulse() {
             ? error.message
             : translateDesk(languageRef.current, "error.request"),
       );
+      return false;
     } finally {
       if (checkingSession) {
         setLoading(false);
@@ -7064,7 +7071,7 @@ function LiveTradePulse() {
     const promise = performLoad();
     dashboardLoadRef.current = { environment: targetEnvironment, promise };
     try {
-      await promise;
+      return await promise;
     } finally {
       if (dashboardLoadRef.current?.promise === promise) {
         dashboardLoadRef.current = null;
@@ -7455,8 +7462,8 @@ function LiveTradePulse() {
       >
         {sessionBootstrapComplete ? (
           <BrowserBotHandoff onComplete={async () => {
-            await load();
-            return deskStore.getState().resources.dashboard !== null;
+          const loaded = await load();
+          return Boolean(loaded && deskStore.getState().resources.dashboard !== null);
           }} />
         ) : (
           <p className={authEntryStyles.signInIntro} role="status" aria-live="polite">

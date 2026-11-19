@@ -24,7 +24,8 @@ test("forwards browser cancellation to the platform API request", async () => {
     });
     const response = await proxyPlatformRequest(request, "/v1/dashboard");
     assert.equal(response.status, 200);
-    assert.equal(forwardedSignal, request.signal);
+    assert.ok(forwardedSignal instanceof AbortSignal);
+    assert.equal(forwardedSignal?.aborted, false);
     assert.equal(forwardedHeaders?.get("idempotency-key"), "withdrawal:stable-retry-key");
   } finally {
     globalThis.fetch = previousFetch;

@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server'
 import { proxyPlatformRequest } from '@/lib/platform-api'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
   return proxyPlatformRequest(request, '/v1/dashboard')

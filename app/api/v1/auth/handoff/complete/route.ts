@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server'
 import { proxyPlatformRequest } from '@/lib/platform-api'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 // This explicit first-party route preserves the API's Set-Cookie response.
 // Rewrites are fine for ordinary JSON, but the browser handoff is an auth

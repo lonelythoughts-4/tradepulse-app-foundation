@@ -751,7 +751,7 @@ export function AdminWorkspace({
       // The API accepts only the durable import queue here. Account setup and
       // activity expansion happen independently on the server, so a large
       // upload never leaves this browser control stuck on a long request.
-      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 30_000);
+      const result = await request("/v1/admin/autousers/runs", { method: "POST", body: form }, "testnet", 60_000);
       setAutouserFile(null);
       if (autouserFileRef.current) autouserFileRef.current.value = "";
       onNotice(result.message || "Auto-user testnet deposit run scheduled.");
