@@ -240,9 +240,12 @@ export function AdminWorkspace({
   const [autouserSchedule, setAutouserSchedule] = useState<AutouserSchedule | null>(null);
   const [autouserScheduleLoadPending, setAutouserScheduleLoadPending] = useState<Record<string, boolean>>({});
   const [autouserScheduleLoadError, setAutouserScheduleLoadError] = useState("");
+  const [autouserScheduleRefreshError, setAutouserScheduleRefreshError] = useState("");
   const [autouserScheduleTimes, setAutouserScheduleTimes] = useState<Record<string, string>>({});
   const [autouserScheduleSavePending, setAutouserScheduleSavePending] = useState<Record<string, boolean>>({});
   const [autouserScheduleSaveErrors, setAutouserScheduleSaveErrors] = useState<Record<string, string>>({});
+  const autouserScheduleRef = useRef<AutouserSchedule | null>(null);
+  const autouserScheduleRefreshRef = useRef<(date: string) => Promise<void>>(async () => {});
   const autouserScheduleRequest = useRef(0);
   const autouserScheduleLoads = useRef(new Map<string, number>());
   const autouserScheduleSaving = useRef(new Set<string>());
@@ -869,9 +872,38 @@ export function AdminWorkspace({
       });
     }
   };
+  const applyAutouserSchedule = (response: AutouserSchedule, preserveUnsavedTimes: boolean) => {
+    if (preserveUnsavedTimes) {
+      const previousTimes = new Map<string, string>();
+      for (const item of autouserScheduleRef.current?.items || []) {
+        previousTimes.set(`${item.source}:${item.id}`, item.local_time);
+      }
+      setAutouserScheduleTimes((current) => {
+        const next: Record<string, string> = {};
+        for (const item of response.items) {
+          const itemKey = `${item.source}:${item.id}`;
+          const currentTime = current[itemKey];
+          const previousTime = previousTimes.get(itemKey);
+          next[itemKey] = currentTime === undefined || currentTime === previousTime
+            ? item.local_time
+            : currentTime;
+        }
+        return next;
+      });
+    } else {
+      const times: Record<string, string> = {};
+      for (const item of response.items) {
+        times[`${item.source}:${item.id}`] = item.local_time;
+      }
+      setAutouserScheduleTimes(times);
+    }
+    autouserScheduleRef.current = response;
+    setAutouserSchedule(response);
+  };
   const closeAutouserSchedule = () => {
     const date = autouserScheduleDate;
     autouserScheduleRequest.current += 1;
+    autouserScheduleRef.current = null;
     if (date) {
       autouserScheduleLoads.current.delete(date);
       setAutouserScheduleLoadPending((current) => {
@@ -883,14 +915,17 @@ export function AdminWorkspace({
     setAutouserScheduleDate(null);
     setAutouserSchedule(null);
     setAutouserScheduleLoadError("");
+    setAutouserScheduleRefreshError("");
   };
   const openAutouserSchedule = async (date: string) => {
     if (autouserScheduleLoads.current.has(date)) return;
     const requestId = ++autouserScheduleRequest.current;
     autouserScheduleLoads.current.set(date, requestId);
     setAutouserScheduleDate(date);
+    autouserScheduleRef.current = null;
     setAutouserSchedule(null);
     setAutouserScheduleLoadError("");
+    setAutouserScheduleRefreshError("");
     setAutouserScheduleTimes({});
     setAutouserScheduleSaveErrors({});
     setAutouserScheduleLoadPending((current) => ({ ...current, [date]: true }));
@@ -908,12 +943,7 @@ export function AdminWorkspace({
         throw new Error("The server returned an invalid schedule.");
       }
       if (requestId !== autouserScheduleRequest.current) return;
-      setAutouserSchedule(response);
-      const times: Record<string, string> = {};
-      for (const item of response.items) {
-        times[`${item.source}:${item.id}`] = item.local_time;
-      }
-      setAutouserScheduleTimes(times);
+      applyAutouserSchedule(response, false);
     } catch (error) {
       if (requestId === autouserScheduleRequest.current) {
         setAutouserScheduleLoadError(
@@ -933,6 +963,52 @@ export function AdminWorkspace({
       }
     }
   };
+  const refreshAutouserSchedule = async (date: string) => {
+    const requestId = autouserScheduleRequest.current;
+    if (
+      autouserScheduleDate !== date ||
+      autouserScheduleRef.current?.date !== date ||
+      autouserScheduleLoads.current.has(date) ||
+      autouserScheduleSaving.current.size > 0
+    ) return;
+    autouserScheduleLoads.current.set(date, requestId);
+    try {
+      const response = await request(
+        `/v1/admin/autousers/schedule?date=${encodeURIComponent(date)}`,
+        {},
+        "testnet",
+      ) as AutouserSchedule;
+      if (
+        response.date !== date ||
+        response.timezone !== "Africa/Lagos" ||
+        !Array.isArray(response.items)
+      ) {
+        throw new Error("The server returned an invalid schedule.");
+      }
+      if (requestId !== autouserScheduleRequest.current || autouserScheduleDate !== date) return;
+      applyAutouserSchedule(response, true);
+      setAutouserScheduleRefreshError("");
+    } catch (error) {
+      if (requestId === autouserScheduleRequest.current && autouserScheduleDate === date) {
+        setAutouserScheduleRefreshError(
+          error instanceof Error ? error.message : "The schedule state could not be refreshed.",
+        );
+      }
+    } finally {
+      if (autouserScheduleLoads.current.get(date) === requestId) {
+        autouserScheduleLoads.current.delete(date);
+      }
+    }
+  };
+  autouserScheduleRefreshRef.current = refreshAutouserSchedule;
+  useEffect(() => {
+    if (!autouserScheduleDate) return;
+    const date = autouserScheduleDate;
+    const interval = window.setInterval(() => {
+      void autouserScheduleRefreshRef.current(date);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [autouserScheduleDate]);
   const saveAutouserScheduleTime = async (item: AutouserScheduleItem, localTime: string) => {
     const date = autouserScheduleDate;
     const schedule = autouserSchedule;
@@ -956,16 +1032,17 @@ export function AdminWorkspace({
         "testnet",
       );
       if (requestId === autouserScheduleRequest.current) {
-        setAutouserSchedule((current) => current && current.date === date
-          ? {
-            ...current,
-            items: current.items.map((scheduledItem) =>
+        const currentSchedule = autouserScheduleRef.current;
+        if (currentSchedule?.date === date) {
+          applyAutouserSchedule({
+            ...currentSchedule,
+            items: currentSchedule.items.map((scheduledItem) =>
               scheduledItem.source === item.source && scheduledItem.id === item.id
                 ? { ...scheduledItem, local_time: localTime }
                 : scheduledItem,
             ),
-          }
-          : current);
+          }, true);
+        }
         setAutouserScheduleTimes((current) => ({ ...current, [itemKey]: localTime }));
       }
       scheduleReconcile();
@@ -982,6 +1059,9 @@ export function AdminWorkspace({
         delete next[itemKey];
         return next;
       });
+      if (date && requestId === autouserScheduleRequest.current) {
+        void refreshAutouserSchedule(date);
+      }
     }
   };
   const confirmAutouserCancel = async () => {
@@ -1047,6 +1127,11 @@ export function AdminWorkspace({
             <button className="small-action" onClick={closeAutouserSchedule}>Close</button>
           </div>
         </div>
+        {autouserScheduleRefreshError && autouserSchedule && (
+          <p className="security-feedback" role="status" aria-live="polite">
+            Schedule state could not refresh. Showing the last loaded state; another refresh will retry automatically. {autouserScheduleRefreshError}
+          </p>
+        )}
         {autouserScheduleLoadPending[autouserScheduleDate] ? (
           <p role="status" aria-live="polite">Loading exact schedule…</p>
         ) : autouserScheduleLoadError ? (
