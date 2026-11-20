@@ -610,7 +610,7 @@ function WalletWorkspaceBody({
                 type="button"
                 className="primary-action"
                 disabled={depositPending || !asset || !chain}
-                onClick={createRoute}
+                onClick={() => void createRoute()}
               >
                 {depositPending ? t("Preparing address…") : t("Create deposit address")}{" "}
                 {!depositPending && <ChevronRight />}

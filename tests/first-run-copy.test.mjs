@@ -4,6 +4,7 @@ import test from "node:test";
 
 const shell = readFileSync(new URL("../components/tradepulse-shell.tsx", import.meta.url), "utf8");
 const auth = readFileSync(new URL("../components/auth-entry.tsx", import.meta.url), "utf8");
+const messages = readFileSync(new URL("../lib/desk-i18n.ts", import.meta.url), "utf8");
 
 test("first-run copy names the products and keeps users in control", () => {
   for (const source of [shell, auth]) {
@@ -36,10 +37,22 @@ test("activation asks for a language only on the first step", () => {
   const start = shell.indexOf("function ActivationJourney");
   const end = shell.indexOf("export type LiveDashboard", start);
   const journey = shell.slice(start, end);
-  const finalStep = journey.slice(journey.indexOf("const verified"));
+  const gateStart = journey.indexOf("if (!verified) {");
+  const gateEnd = journey.indexOf("if (step < 4)", gateStart);
+  const channelGate = journey.slice(gateStart, gateEnd);
 
   assert.match(journey, /\{step === 0 && \([\s\S]*<fieldset className="activation-languages"/);
-  assert.doesNotMatch(finalStep, /activation-languages/);
+  assert.match(channelGate, /activation\.channelTitle/);
+  assert.match(channelGate, /activation\.channelIntro/);
+  assert.doesNotMatch(channelGate, /activation-languages|activation\.continue/);
+});
+
+test("the official channel gate is mandatory and uses the only configured channel", () => {
+  assert.match(messages, /Join @TradememoLabs/);
+  assert.match(messages, /the only official channel we operate/);
+  assert.match(shell, /channel\?\.url \|\| "https:\/\/t\.me\/TradememoLabs"/);
+  assert.match(shell, /if \(!verified\) \{/);
+  assert.match(shell, /activation\.channelIntro/);
 });
 
 test("first-run identity is required, confirms immediately, and has no decorative portrait overlays", () => {

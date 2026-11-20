@@ -4725,6 +4725,43 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
     });
   };
   const advance = async (next: number) => { setStep(next); try { await request("/v1/onboarding/step", { method: "POST", body: JSON.stringify({ step: Math.min(next, 4) }) }); } catch (error) { onNotice(error instanceof Error ? error.message : translateDesk(language, "error.request")); } };
+  const copy = activationCopy[language];
+  const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable");   } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : localizeApiError(language, "", 500)); } finally { setChecking(false); } };
+  const verified = Boolean(channel?.verified || state === "verified");
+  const channelUrl = channel?.url || "https://t.me/TradememoLabs";
+  const accept = async () => {
+    if (accepting) return;
+    setAccepting(true);
+    try {
+      await request("/v1/onboarding/accept", { method: "POST", body: "{}" });
+      onAccepted();
+      void onComplete();
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : translateDesk(language, "activation.acceptError"));
+    } finally { setAccepting(false); }
+  };
+  if (!verified) {
+    return (
+      <DeskLocalized>
+        <main className="activation-shell">
+          <section className="activation-stage activation-gate" aria-labelledby="activation-title">
+            <h1 id="activation-title">{translateDesk(language, "activation.channelTitle")}</h1>
+            <p>{translateDesk(language, "activation.channelIntro")}</p>
+            <div className="activation-channel">
+              <a className="primary-action" href={channelUrl} target="_blank" rel="noreferrer">
+                {translateDesk(language, "activation.join")}
+              </a>
+              <button className="text-action" type="button" disabled={checking} aria-busy={checking} onClick={verify}>
+                {checking ? translateDesk(language, "activation.checking") : translateDesk(language, "activation.recheck")}
+              </button>
+              {state === "not_joined" || state === "restricted" ? <small>{translateDesk(language, "activation.membershipPending")}</small> : null}
+              {state && !["verified", "not_joined", "restricted"].includes(state) ? <small>{translateDesk(language, "activation.membershipUnavailable")}</small> : null}
+            </div>
+          </section>
+        </main>
+      </DeskLocalized>
+    );
+  }
   if (step < 4) {
     const page = pages[step];
     return (
@@ -4771,48 +4808,19 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
       </DeskLocalized>
     );
   }
-  const gateReady = Boolean(channel?.enabled && channel.configured);
-  const copy = activationCopy[language];
-  const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable");   } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : localizeApiError(language, "", 500)); } finally { setChecking(false); } };
-  const accept = async () => {
-    if (accepting) return;
-    setAccepting(true);
-    try {
-      await request("/v1/onboarding/accept", { method: "POST", body: "{}" });
-      onAccepted();
-      void onComplete();
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : translateDesk(language, "activation.acceptError"));
-    } finally { setAccepting(false); }
-  };
-  const verified = Boolean(channel?.verified || state === "verified");
   return (
     <DeskLocalized>
       <main className="activation-shell">
         <section className="activation-stage activation-gate" aria-labelledby="activation-title">
           <p className="activation-progress">{activationProgress[language](5)}</p>
           <h1 id="activation-title">{copy.title}</h1>
-          <p>{copy.intro}{gateReady ? ` ${translateDesk(language, "activation.channelIntro")}` : ""}</p>
-          {gateReady && !verified && (
-            <div className="activation-channel">
-              <a className="primary-action" href={channel?.url} target="_blank" rel="noreferrer">
-                {translateDesk(language, "activation.join")}
-              </a>
-              <button className="text-action" disabled={checking} onClick={verify}>
-                {checking ? translateDesk(language, "activation.checking") : translateDesk(language, "activation.recheck")}
-              </button>
-              {state === "not_joined" || state === "restricted" ? <small>{translateDesk(language, "activation.membershipPending")}</small> : null}
-              {state === "unavailable" ? <small>{translateDesk(language, "activation.membershipUnavailable")}</small> : null}
-            </div>
-          )}
-          {(!gateReady || verified) && (
-            <div className="activation-terms">
-              <p><strong>{copy.terms}</strong><br />{copy.body}</p>
-              <button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>
-                {accepting ? copy.opening : copy.accept}
-              </button>
-            </div>
-          )}
+          <p>{copy.intro}</p>
+          <div className="activation-terms">
+            <p><strong>{copy.terms}</strong><br />{copy.body}</p>
+            <button className="primary-action" type="button" disabled={accepting} aria-busy={accepting} onClick={accept}>
+              {accepting ? copy.opening : copy.accept}
+            </button>
+          </div>
         </section>
       </main>
     </DeskLocalized>
@@ -5209,7 +5217,9 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         const contentType = response.headers.get("content-type") || "";
         const handoff = contentType.includes("application/json")
           ? await response.json()
-          : { error: (await response.text()).slice(0, 240) };
+          : {
+              error: `The sign-in service returned an unexpected response (HTTP ${response.status}). Please try again shortly.`,
+            };
         requestId = typeof handoff.request_id === "string" ? handoff.request_id : "";
         if (!response.ok || !handoff.token || !handoff.bot_url || !handoff.qr_svg) {
           throw new Error(
@@ -5301,7 +5311,9 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         const contentType = response.headers.get("content-type") || "";
         const result = contentType.includes("application/json")
           ? await response.json()
-          : { error: (await response.text()).slice(0, 240) };
+          : {
+              error: `The sign-in service returned an unexpected response (HTTP ${response.status}). Please try again shortly.`,
+            };
         if (!response.ok || !result.ready) {
           throw new Error(result.error || "Could not finish browser connection.");
         }

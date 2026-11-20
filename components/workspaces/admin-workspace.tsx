@@ -1272,7 +1272,7 @@ export function AdminWorkspace({
           <div><strong>Movement queues</strong><span>Review confirmed deposits, withdrawal approvals, recovery cases, and their audit trail before acting.</span></div>
           <div><strong>Account operations</strong><span>Fund, reset onboarding, or reissue demo access only for the named Telegram account.</span></div>
           <div><strong>Runtime controls</strong><span>Settings update shared product rules. Save one value at a time and recheck the result before making another change.</span></div>
-          <div><strong>Channel gates</strong><span>Set the onboarding channel ID and invite link, then enable the gate only after the bot can post and verify membership there.</span></div>
+          <div><strong>Channel gate</strong><span>Onboarding requires membership in the fixed @TradememoLabs official channel. The gate cannot be disabled or redirected.</span></div>
         </div>
         <button className="primary-action" onClick={() => setAdminHelpOpen(false)}>Close guide</button>
       </AccessibleDialog>}
@@ -2064,9 +2064,6 @@ export function AdminWorkspace({
             <option value="demo_active_days">Demo duration</option>
             <option value="demo_conversion_percent">Demo trading-credit rate</option>
             <option value="community_url">Community link</option>
-            <option value="onboarding_channel_enabled">Onboarding channel gate</option>
-            <option value="onboarding_channel_id">Onboarding channel ID</option>
-            <option value="onboarding_channel_url">Onboarding channel link</option>
             <option value="popup_ttl_seconds">Popup cleanup seconds</option>
             <option value="flashback_direction_config">Flashback Direction catalog (JSON)</option>
           </select>

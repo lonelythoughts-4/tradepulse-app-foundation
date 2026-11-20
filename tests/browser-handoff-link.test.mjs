@@ -44,6 +44,11 @@ test("the browser handoff keeps the web link for desktop and never forces an ins
   assert.match(shell, /Your current code remains visible/);
   assert.match(shell, /state === "error" \? \(\s*<button className="primary-action" type="button" onClick=\{retry\}>/);
   assert.match(shell, /The sign-in service did not respond\. Retrying once…/);
+  assert.match(shell, /The sign-in service returned an unexpected response \(HTTP \$\{response\.status\}\)\. Please try again shortly\./);
+  const handoffStart = shell.indexOf("function BrowserBotHandoff");
+  const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
+  const handoff = shell.slice(handoffStart, handoffEnd);
+  assert.doesNotMatch(handoff, /response\.text\(\)\)\.slice\(0, 240\)/);
   assert.match(shell, /Reference: \$\{requestId\}/);
 });
 

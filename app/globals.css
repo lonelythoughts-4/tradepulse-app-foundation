@@ -88,6 +88,12 @@
 .content-wrap>.dashboard-grid+.synthetic-pilot,.content-wrap>.synthetic-pilot+.synthetic-pilot,.content-wrap>.synthetic-pilot+.bot-card{margin-top:32px}
 .flow-card{width:100%;max-width:860px;padding:clamp(16px,2.4vw,24px)}
 .choice-grid{width:100%;grid-template-columns:minmax(0,1fr)}
+.choice-grid button{border-color:color-mix(in srgb,var(--tp-ink) 18%,transparent);background:color-mix(in srgb,var(--tp-surface-raised) 88%,var(--tp-ink) 12%)}
+.choice-grid button.selected,.choice-grid button:hover{border-color:var(--tp-accent);background:color-mix(in srgb,var(--tp-surface-raised) 82%,var(--tp-accent) 18%)}
+.choice-grid button small,.choice-grid button>svg{color:var(--tp-supporting-text)}
+html[data-theme="light"] .choice-grid button{border-color:var(--border);background:var(--card)}
+html[data-theme="light"] .choice-grid button.selected,html[data-theme="light"] .choice-grid button:hover{border-color:var(--primary);background:color-mix(in srgb,var(--card) 90%,var(--primary) 10%)}
+html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .choice-grid button>svg{color:var(--muted-foreground)}
 
 /* Local interaction motion: feedback explains only the control that changed. */
 .motion-dialog-backdrop{animation:motion-backdrop-in var(--motion-duration-transition) var(--motion-ease-enter) both}

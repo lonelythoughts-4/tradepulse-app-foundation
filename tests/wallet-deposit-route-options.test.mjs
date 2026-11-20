@@ -39,3 +39,13 @@ test("the wallet loads deposit asset/network pairs from the selected environment
     );
   }
 });
+
+test("the deposit button does not pass its click event into the route payload", async () => {
+  const wallet = await readFile(
+    new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(wallet, /onClick=\{\(\) => void createRoute\(\)\}/);
+  assert.doesNotMatch(wallet, /onClick=\{createRoute\}/);
+});
