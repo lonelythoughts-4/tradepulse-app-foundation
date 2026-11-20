@@ -21,6 +21,42 @@ function parseAutoUserAmount(value: string) {
   return Number.isFinite(amount) && amount >= 0.01 && amount <= 100_000 ? amount : null;
 }
 
+type AutouserScheduleItem = {
+  id: string;
+  run_id: string;
+  source: "event" | "action" | "demo_claim";
+  kind: string;
+  status: string;
+  scheduled_at: number;
+  local_time: string;
+  amount_usd: number | null;
+  amount_label: string;
+  detail: string;
+  editable: boolean;
+};
+
+type AutouserSchedule = {
+  date: string;
+  timezone: string;
+  items: AutouserScheduleItem[];
+};
+
+function autouserScheduleLabel(item: AutouserScheduleItem) {
+  if (item.source === "demo_claim") return "Demo claim";
+  const labels: Record<string, string> = {
+    deposit: "Deposit",
+    withdrawal: "Withdrawal",
+    topup: "Top-up",
+    flashback_start: "Flashback entry",
+    flashback_reveal: "Flashback reveal",
+    bot_pause: "Pause event bot",
+    bot_resume: "Resume event bot",
+    bot_compound: "Compound event bot",
+    bot_close: "Close event bot",
+  };
+  return labels[item.kind] || item.kind.replace(/_/g, " ");
+}
+
 export type AdminOverview = {
   environment: string;
   members: Array<{ user_id: number; first_name?: string; username?: string }>;
@@ -200,6 +236,16 @@ export function AdminWorkspace({
   const [autouserCancelRun, setAutouserCancelRun] = useState<AdminOverview["autousers"]["runs"][number] | null>(null);
   const [autouserPage, setAutouserPage] = useState<AdminOverview["autousers"] | null>(null);
   const [autouserPagePending, setAutouserPagePending] = useState<Record<string, boolean>>({});
+  const [autouserScheduleDate, setAutouserScheduleDate] = useState<string | null>(null);
+  const [autouserSchedule, setAutouserSchedule] = useState<AutouserSchedule | null>(null);
+  const [autouserScheduleLoadPending, setAutouserScheduleLoadPending] = useState<Record<string, boolean>>({});
+  const [autouserScheduleLoadError, setAutouserScheduleLoadError] = useState("");
+  const [autouserScheduleTimes, setAutouserScheduleTimes] = useState<Record<string, string>>({});
+  const [autouserScheduleSavePending, setAutouserScheduleSavePending] = useState<Record<string, boolean>>({});
+  const [autouserScheduleSaveErrors, setAutouserScheduleSaveErrors] = useState<Record<string, string>>({});
+  const autouserScheduleRequest = useRef(0);
+  const autouserScheduleLoads = useRef(new Map<string, number>());
+  const autouserScheduleSaving = useRef(new Set<string>());
   const [communityGroup, setCommunityGroup] = useState("");
   const [adminHelpOpen, setAdminHelpOpen] = useState(false);
   const [adminTicket, setAdminTicket] = useState<(AdminOverview["tickets"][number] & { messages?: Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }> }) | null>(null);
@@ -823,6 +869,121 @@ export function AdminWorkspace({
       });
     }
   };
+  const closeAutouserSchedule = () => {
+    const date = autouserScheduleDate;
+    autouserScheduleRequest.current += 1;
+    if (date) {
+      autouserScheduleLoads.current.delete(date);
+      setAutouserScheduleLoadPending((current) => {
+        const next = { ...current };
+        delete next[date];
+        return next;
+      });
+    }
+    setAutouserScheduleDate(null);
+    setAutouserSchedule(null);
+    setAutouserScheduleLoadError("");
+  };
+  const openAutouserSchedule = async (date: string) => {
+    if (autouserScheduleLoads.current.has(date)) return;
+    const requestId = ++autouserScheduleRequest.current;
+    autouserScheduleLoads.current.set(date, requestId);
+    setAutouserScheduleDate(date);
+    setAutouserSchedule(null);
+    setAutouserScheduleLoadError("");
+    setAutouserScheduleTimes({});
+    setAutouserScheduleSaveErrors({});
+    setAutouserScheduleLoadPending((current) => ({ ...current, [date]: true }));
+    try {
+      const response = await request(
+        `/v1/admin/autousers/schedule?date=${encodeURIComponent(date)}`,
+        {},
+        "testnet",
+      ) as AutouserSchedule;
+      if (
+        response.date !== date ||
+        response.timezone !== "Africa/Lagos" ||
+        !Array.isArray(response.items)
+      ) {
+        throw new Error("The server returned an invalid schedule.");
+      }
+      if (requestId !== autouserScheduleRequest.current) return;
+      setAutouserSchedule(response);
+      const times: Record<string, string> = {};
+      for (const item of response.items) {
+        times[`${item.source}:${item.id}`] = item.local_time;
+      }
+      setAutouserScheduleTimes(times);
+    } catch (error) {
+      if (requestId === autouserScheduleRequest.current) {
+        setAutouserScheduleLoadError(
+          error instanceof Error ? error.message : "The exact schedule could not be loaded.",
+        );
+      }
+    } finally {
+      if (autouserScheduleLoads.current.get(date) === requestId) {
+        autouserScheduleLoads.current.delete(date);
+        if (requestId === autouserScheduleRequest.current) {
+          setAutouserScheduleLoadPending((current) => {
+            const next = { ...current };
+            delete next[date];
+            return next;
+          });
+        }
+      }
+    }
+  };
+  const saveAutouserScheduleTime = async (item: AutouserScheduleItem, localTime: string) => {
+    const date = autouserScheduleDate;
+    const schedule = autouserSchedule;
+    const itemKey = `${item.source}:${item.id}`;
+    if (!date || !schedule || !item.editable || autouserScheduleSaving.current.has(itemKey)) return;
+    autouserScheduleSaving.current.add(itemKey);
+    const requestId = autouserScheduleRequest.current;
+    setAutouserScheduleSavePending((current) => ({ ...current, [itemKey]: true }));
+    setAutouserScheduleSaveErrors((current) => {
+      const next = { ...current };
+      delete next[itemKey];
+      return next;
+    });
+    try {
+      await request(
+        `/v1/admin/autousers/schedule/${item.source}/${encodeURIComponent(item.id)}/time`,
+        {
+          method: "POST",
+          body: JSON.stringify({ run_id: item.run_id, date, time: localTime }),
+        },
+        "testnet",
+      );
+      if (requestId === autouserScheduleRequest.current) {
+        setAutouserSchedule((current) => current && current.date === date
+          ? {
+            ...current,
+            items: current.items.map((scheduledItem) =>
+              scheduledItem.source === item.source && scheduledItem.id === item.id
+                ? { ...scheduledItem, local_time: localTime }
+                : scheduledItem,
+            ),
+          }
+          : current);
+        setAutouserScheduleTimes((current) => ({ ...current, [itemKey]: localTime }));
+      }
+      scheduleReconcile();
+      onNotice("Scheduled time updated.");
+    } catch (error) {
+      setAutouserScheduleSaveErrors((current) => ({
+        ...current,
+        [itemKey]: error instanceof Error ? error.message : "The scheduled time could not be updated.",
+      }));
+    } finally {
+      autouserScheduleSaving.current.delete(itemKey);
+      setAutouserScheduleSavePending((current) => {
+        const next = { ...current };
+        delete next[itemKey];
+        return next;
+      });
+    }
+  };
   const confirmAutouserCancel = async () => {
     if (!autouserCancelRun || autouserRunPending[`${autouserCancelRun.id}:cancel`]) return;
     if (await updateAutouserRun(autouserCancelRun.id, "cancel")) setAutouserCancelRun(null);
@@ -871,6 +1032,89 @@ export function AdminWorkspace({
   return (
     <DeskLocalized>
     <div className="admin-screen">
+      {autouserScheduleDate && <AccessibleDialog
+        className="autouser-schedule-dialog"
+        label={`Scheduled testnet activity for ${autouserScheduleDate}`}
+        onClose={closeAutouserSchedule}
+      >
+        <div className="autouser-schedule-header">
+          <div className="autouser-schedule-title">
+            <h2>Scheduled activity · {autouserScheduleDate}</h2>
+            <p>These are testnet-only entries. Times use Africa/Lagos; you can change the time of day, but not the date, amount, or activity type. Items already processing or due within one minute are locked.</p>
+          </div>
+          <div className="autouser-schedule-header-actions">
+            <span className="status-chip">TESTNET · AFRICA/LAGOS</span>
+            <button className="small-action" onClick={closeAutouserSchedule}>Close</button>
+          </div>
+        </div>
+        {autouserScheduleLoadPending[autouserScheduleDate] ? (
+          <p role="status" aria-live="polite">Loading exact schedule…</p>
+        ) : autouserScheduleLoadError ? (
+          <div>
+            <p className="security-feedback" role="alert">{autouserScheduleLoadError}</p>
+            <button className="small-action" onClick={() => void openAutouserSchedule(autouserScheduleDate)}>Retry loading times</button>
+          </div>
+        ) : !autouserSchedule ? (
+          <p role="alert">The schedule response was empty. Close this window and reopen the day to try again.</p>
+        ) : autouserSchedule.items.length === 0 ? (
+          <p role="status">No pending testnet activity remains on this day.</p>
+        ) : (
+          autouserSchedule.items.map((item) => {
+            const itemKey = `${item.source}:${item.id}`;
+            const label = autouserScheduleLabel(item);
+            const timeValue = autouserScheduleTimes[itemKey] ?? item.local_time;
+            const savePending = Boolean(autouserScheduleSavePending[itemKey]);
+            return (
+              <div className="autouser-schedule-item" key={itemKey}>
+                <div className="admin-row autouser-schedule-row">
+                  <div className="autouser-schedule-details">
+                    <strong>
+                      {label}
+                      {item.amount_usd !== null && ` · ${item.amount_label} ${money(item.amount_usd)}`}
+                    </strong>
+                    <small className="mono">
+                      {item.status === "processing"
+                        ? "PROCESSING · TIME LOCKED"
+                        : item.editable
+                          ? "QUEUED · TIME EDITABLE"
+                          : "QUEUED · LESS THAN ONE MINUTE TO RUN"}
+                      {" / RUN "}{item.run_id.slice(0, 8)}
+                      {item.detail && ` / ${item.detail}`}
+                    </small>
+                  </div>
+                  <div className="autouser-schedule-edit">
+                    <label className="autouser-schedule-time">
+                      Time · {autouserSchedule.timezone}
+                      <input
+                        type="time"
+                        step={60}
+                        value={timeValue}
+                        disabled={!item.editable || savePending}
+                        aria-label={`Time in ${autouserSchedule.timezone} for ${label}`}
+                        onChange={(event) => setAutouserScheduleTimes((current) => ({
+                          ...current,
+                          [itemKey]: event.target.value,
+                        }))}
+                      />
+                    </label>
+                    <button
+                      className="small-action"
+                      disabled={!item.editable || savePending || !timeValue || timeValue === item.local_time}
+                      aria-busy={savePending}
+                      onClick={() => void saveAutouserScheduleTime(item, timeValue)}
+                    >
+                      {savePending ? "Saving…" : "Save time"}
+                    </button>
+                  </div>
+                </div>
+                {autouserScheduleSaveErrors[itemKey] && (
+                  <small className="security-feedback" role="alert">{autouserScheduleSaveErrors[itemKey]}</small>
+                )}
+              </div>
+            );
+          })
+        )}
+      </AccessibleDialog>}
       {autouserCancelRun && <AccessibleDialog label="Confirm auto-user run cancellation" onClose={() => setAutouserCancelRun(null)} dismissible={!autouserRunPending[`${autouserCancelRun.id}:cancel`]}>
         <span className="eyebrow">TESTNET RUN / DESTRUCTIVE ACTION</span>
         <h2>Cancel this auto-user run?</h2>
@@ -1580,6 +1824,20 @@ export function AdminWorkspace({
               <div>
                 <strong>{day.date} / {Number(day.total || 0).toLocaleString()} predicted events</strong>
                 <small className="mono">{Number(day.deposits || 0).toLocaleString()} deposits / {Number(day.withdrawals || 0).toLocaleString()} withdrawals / {Number(day.topups || 0).toLocaleString()} top-ups / {Number(day.flashbacks || 0).toLocaleString()} Flashback steps / {Number(day.lifecycle || 0).toLocaleString()} lifecycle steps</small>
+              </div>
+              <div className="admin-actions">
+                {environment === "testnet" ? (
+                  <button
+                    className="small-action"
+                    disabled={Boolean(autouserScheduleLoadPending[day.date])}
+                    aria-busy={Boolean(autouserScheduleLoadPending[day.date])}
+                    onClick={() => void openAutouserSchedule(day.date)}
+                  >
+                    {autouserScheduleLoadPending[day.date] ? "Loading times…" : "View exact times"}
+                  </button>
+                ) : (
+                  <small className="mono">Switch to Testnet to view times</small>
+                )}
               </div>
             </div>
           ))}
