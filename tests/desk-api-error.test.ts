@@ -55,7 +55,7 @@ test("the language rollback notice uses the saved locale and actual API error", 
     "utf8",
   );
 
-  assert.match(shell, /throw new DeskApiError\(message, response\.status, reference, responseMessage\)/);
+  assert.match(shell, /throw new DeskApiError\(message, response\.status, reference, responseMessage, responseBody\)/);
   assert.match(
     shell,
     /localizeApiError\(\s*persistedLanguageRef\.current,\s*error\.responseMessage,\s*error\.status,\s*error\.reference/s,
