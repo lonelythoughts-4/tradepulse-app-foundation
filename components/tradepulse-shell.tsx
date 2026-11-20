@@ -6707,7 +6707,7 @@ function LiveTradePulse() {
   }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
   const telegramHandoffSessionRef = useRef(false);
-  const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
+  const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<boolean> } | null>(null);
   const sessionValidationRef = useRef<((environment: "mainnet" | "testnet") => void) | null>(null);
   const lastVisibilityRefreshRef = useRef(0);
   const selectedEnvironmentRef = useRef<"mainnet" | "testnet">("mainnet");
@@ -6897,6 +6897,7 @@ function LiveTradePulse() {
   const [demoMemecoinMargin, setDemoMemecoinMargin] = useState("");
   const [demoSyntheticMargin, setDemoSyntheticMargin] = useState("");
   const openDemoReview = () => {
+    if (!data) return;
     const grant = Number(data.demo?.grant_usd || 0);
     const maximum = Number(data.demo?.max_position_margin_usd || Math.floor(grant * 0.2 * 100) / 100);
     setDemoMemecoinMargin(String(maximum));
@@ -7015,7 +7016,7 @@ function LiveTradePulse() {
     const result = await request("/v1/account/notices");
     return result.notices || [];
   });
-  const load = async (targetEnvironment = webEnvironment) => {
+  const load = async (targetEnvironment = webEnvironment): Promise<boolean> => {
     // Every view reads the same account projection.  Reuse an in-flight read
     // for its environment instead of letting an alert, account change, or
     // deposit monitor stack several expensive dashboard requests together.
@@ -7033,7 +7034,7 @@ function LiveTradePulse() {
       webApp?.expand?.();
       if (telegramContext && !telegramInitData()) {
         setTelegramIdentityPending(true);
-        return;
+        return false;
       }
       setTelegramIdentityPending(false);
       // A Telegram-authenticated first load has to assemble the complete
@@ -7042,7 +7043,7 @@ function LiveTradePulse() {
       // an authentication failure at twelve seconds.
       const next = await request("/v1/dashboard", {}, targetEnvironment, 25_000);
       if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
-        return;
+        return false;
       }
       const previousUserId = authenticatedUserRef.current;
       if (previousUserId !== null && previousUserId !== next.user.id) {
@@ -7095,6 +7096,9 @@ function LiveTradePulse() {
         dashboardLoadRef.current = null;
       }
     }
+  };
+  const reloadDashboard = async (): Promise<void> => {
+    await load();
   };
   sessionValidationRef.current = (environment) => {
     void load(environment);
@@ -7553,7 +7557,7 @@ function LiveTradePulse() {
   if (!data.user.onboarding_complete)
     return (
       <DeskLanguageProvider language={uiLanguage}>
-        <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={load} onNotice={setNotice} onLanguageChange={changeLanguage} />
+        <ActivationJourney data={data} request={request} onAccepted={() => updateDashboard((current) => current ? { ...current, user: { ...current.user, onboarding_complete: true } } : current)} onComplete={reloadDashboard} onNotice={setNotice} onLanguageChange={changeLanguage} />
       </DeskLanguageProvider>
     );
   const gasLow = data.wallet.tank < data.wallet.tank_capacity * 0.25;
@@ -8015,7 +8019,7 @@ function LiveTradePulse() {
             <BotsWorkspace
               data={data}
               request={request}
-              reload={load}
+              reload={reloadDashboard}
               onActionResult={applyActionResult}
               onNotice={setNotice}
               onOpenDemo={openDemoReview}
@@ -8052,7 +8056,7 @@ function LiveTradePulse() {
             <DeskWorkspace
               data={data}
               request={request}
-              reload={load}
+              reload={reloadDashboard}
               onNotice={setNotice}
             />
           )}

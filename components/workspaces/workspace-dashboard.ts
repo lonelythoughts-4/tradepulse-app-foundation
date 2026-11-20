@@ -98,6 +98,8 @@ export type WorkspaceDashboard = {
     credit_available_usd?: number;
     credit_locked_usd?: number;
     credit_active?: boolean;
+    memecoin_margin_usd?: number | null;
+    synthetic_margin_usd?: number | null;
   } | null;
   popup_ttl_seconds: number;
   notices: Array<{ id: string; kind: string; title: string; body: string }>;
