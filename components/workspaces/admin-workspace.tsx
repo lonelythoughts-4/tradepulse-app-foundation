@@ -172,6 +172,7 @@ export function AdminWorkspace({
   reload,
   onEnvironment,
   onNotice,
+  onLiveDeskEnabledChange,
 }: {
   admin: NonNullable<AdminOverview>;
   environment: "mainnet" | "testnet";
@@ -184,6 +185,7 @@ export function AdminWorkspace({
   reload: () => Promise<void>;
   onEnvironment: (environment: "mainnet" | "testnet") => Promise<void>;
   onNotice: (message: string) => void;
+  onLiveDeskEnabledChange: (enabled: boolean) => void;
 }) {
   const [target, setTarget] = useState("");
   const [amount, setAmount] = useState("");
@@ -515,6 +517,7 @@ export function AdminWorkspace({
   const broadcastConfirmed = confirm.trim().toUpperCase() === "SEND ALL";
   const canSendBroadcast = Boolean(broadcast.trim()) && !broadcastPending && (!broadcastNeedsTarget || validBroadcastTarget) && (broadcastScope !== "all" || broadcastConfirmed);
   const isAdminActionPending = (key: string) => Boolean(pendingAdminActions[key]);
+  const liveDeskEnabled = admin.settings.find((setting) => setting.key === "live_desk_enabled")?.value !== "false";
   const post = async (
     path: string,
     body: object,
@@ -2017,6 +2020,36 @@ export function AdminWorkspace({
         <details className="admin-category">
           <summary><strong>System controls and activity</strong><span>Runtime settings, markets, notices, treasury, and settlements</span></summary>
           <div className="admin-category-grid">
+        <GradientPanel className="admin-table">
+          <span className="eyebrow">CUSTOMER NAVIGATION</span>
+          <h2>Live Desk tab</h2>
+          <p>Hide the Live Desk tab from desktop and mobile navigation while the feature is being updated. Existing alerts and saved data are unchanged.</p>
+          <div className="admin-row">
+            <div>
+              <strong>Current visibility</strong>
+              <small className="mono">{liveDeskEnabled ? "VISIBLE" : "HIDDEN"}</small>
+            </div>
+            <button
+              className="small-action"
+              disabled={isAdminActionPending("feature:live_desk_enabled")}
+              aria-busy={isAdminActionPending("feature:live_desk_enabled")}
+              onClick={() => {
+                const nextEnabled = !liveDeskEnabled;
+                void post(
+                  "/v1/admin/settings",
+                  { key: "live_desk_enabled", value: nextEnabled ? "true" : "false" },
+                  `Live Desk tab ${nextEnabled ? "shown" : "hidden"}.`,
+                  "feature:live_desk_enabled",
+                  () => onLiveDeskEnabledChange(nextEnabled),
+                );
+              }}
+            >
+              {isAdminActionPending("feature:live_desk_enabled")
+                ? liveDeskEnabled ? "Hiding Live Desk…" : "Showing Live Desk…"
+                : liveDeskEnabled ? "Hide Live Desk tab" : "Show Live Desk tab"}
+            </button>
+          </div>
+        </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">SETTINGS EDITOR</span>
           <h2>Runtime controls</h2>

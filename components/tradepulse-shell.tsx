@@ -529,6 +529,7 @@ function Sidebar({
   profileName = "Jordan Davis",
   profileTier = "Pro account",
   isAdmin = true,
+  liveDeskEnabled = true,
   avatarId = "orbit",
 }: {
   active: string;
@@ -537,6 +538,7 @@ function Sidebar({
   profileName?: string;
   profileTier?: string;
   isAdmin?: boolean;
+  liveDeskEnabled?: boolean;
   avatarId?: AvatarId;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -586,7 +588,7 @@ function Sidebar({
             <span>{localizedNavLabel(language, label)}</span>
           </button>
         ))}
-        <button
+        {liveDeskEnabled && <button
           type="button"
           className={`nav-item ${active === "Live Desk" ? "active" : ""}`}
           aria-label={localizedNavLabel(language, "Live Desk")}
@@ -596,7 +598,7 @@ function Sidebar({
         >
           <NavIcon name="desk" />
           <span>{localizedNavLabel(language, "Live Desk")}</span>
-        </button>
+        </button>}
         {isAdmin && (
           <button
             type="button"
@@ -660,11 +662,13 @@ function BottomNav({
   active,
   setActive,
   isAdmin = true,
+  liveDeskEnabled = true,
   language = "en",
 }: {
   active: string;
   setActive: (value: string) => void;
   isAdmin?: boolean;
+  liveDeskEnabled?: boolean;
   language?: LanguageCode;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -696,7 +700,9 @@ function BottomNav({
   }, [moreOpen]);
   useEffect(() => setMoreOpen(false), [active]);
   const secondaryItems = mobileSecondaryNavItems.filter(
-    (item) => item.label !== "Admin" || isAdmin,
+    (item) =>
+      (item.label !== "Admin" || isAdmin) &&
+      (item.label !== "Live Desk" || liveDeskEnabled),
   );
   const secondaryActive = secondaryItems.some((item) => item.label === active);
   return (
@@ -4829,6 +4835,9 @@ export type LiveDashboard = {
     onboarding?: { step: number; terms_accepted_at?: number | null; channel: { enabled: boolean; configured: boolean; url: string; verified: boolean; verified_at?: number | null } };
   };
   environment: string;
+  features?: {
+    live_desk_enabled?: boolean;
+  };
   wallet: {
     available: number;
     locked: number;
@@ -6698,6 +6707,7 @@ function LiveTradePulse() {
     deskStore,
     (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
   );
+  const liveDeskEnabled = data?.features?.live_desk_enabled !== false;
   const updateDashboard = useCallback((update: LiveDashboard | null | ((current: LiveDashboard | null) => LiveDashboard | null)) => {
     const current = deskStore.getState().resources.dashboard as LiveDashboard | null;
     const next = typeof update === "function"
@@ -6772,6 +6782,12 @@ function LiveTradePulse() {
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
+  useEffect(() => {
+    if (data?.features?.live_desk_enabled === false && tab === "Desk") {
+      setTab("Dashboard");
+      setNotice("Live Desk is hidden by an administrator.");
+    }
+  }, [data?.features?.live_desk_enabled, tab]);
   useEffect(() => {
     // Telegram carries signed Mini App launch data in the URL fragment.
     // Replacing it with the desk tab before the bridge reads it strands auth.
@@ -7595,7 +7611,13 @@ function LiveTradePulse() {
   };
   const chromeActive = tab === "Desk" ? "Live Desk" : tab;
   const selectChromeTab = (value: string) => {
-    if (value === "Live Desk") return setTab("Desk");
+    if (value === "Live Desk") {
+      if (!liveDeskEnabled) {
+        setNotice("Live Desk is hidden by an administrator.");
+        return;
+      }
+      return setTab("Desk");
+    }
     if (value === "Community") {
       window.open(data.community_url, "_blank", "noopener,noreferrer");
       return;
@@ -7625,7 +7647,7 @@ function LiveTradePulse() {
       setWalletEntry("overview");
       setTab("Wallet");
     } else if (utility === "signal") {
-      setTab("Desk");
+      setTab(liveDeskEnabled ? "Desk" : "Account");
     } else if (utility === "prism") {
       setWalletEntry("activity");
       setTab("Wallet");
@@ -7744,6 +7766,7 @@ function LiveTradePulse() {
         profileName={profileName}
         profileTier={data.user.tier || "TradeMemo account"}
         isAdmin={data.user.is_admin}
+        liveDeskEnabled={liveDeskEnabled}
         avatarId={avatarId}
       />
       <main className="main-content">
@@ -8052,7 +8075,7 @@ function LiveTradePulse() {
               initialView={walletEntry}
             />
           )}
-          {tab === "Desk" && (
+          {tab === "Desk" && liveDeskEnabled && (
             <DeskWorkspace
               data={data}
               request={request}
@@ -8108,6 +8131,9 @@ function LiveTradePulse() {
               reload={refreshAdmin}
               onEnvironment={switchAdminEnvironment}
               onNotice={setNotice}
+              onLiveDeskEnabledChange={(enabled) => updateDashboard((current) => current
+                ? { ...current, features: { ...current.features, live_desk_enabled: enabled } }
+                : current)}
             />
           )}
           {tab === "Admin" && !admin && (
@@ -8138,6 +8164,7 @@ function LiveTradePulse() {
         active={chromeActive}
         setActive={selectChromeTab}
         isAdmin={data.user.is_admin}
+        liveDeskEnabled={liveDeskEnabled}
         language={uiLanguage}
       />
     </div>
