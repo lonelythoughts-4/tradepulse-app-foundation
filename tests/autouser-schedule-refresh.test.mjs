@@ -17,10 +17,14 @@ test("open auto-user schedules refresh state without replacing unsaved time edit
   const refresh = source.slice(refreshStart, saveStart);
   const save = source.slice(saveStart, source.indexOf("const confirmAutouserCancel", saveStart));
 
-  assert.match(apply, /currentTime === undefined \|\| currentTime === previousTime/);
+  assert.match(apply, /autouserScheduleForceServerTimes\.current\.delete\(itemKey\)/);
+  assert.match(apply, /item\.editable && !forceServerTime && currentTime !== undefined && currentTime !== previousTime/);
   assert.match(refresh, /schedule\?date=\$\{encodeURIComponent\(date\)\}/);
   assert.match(refresh, /applyAutouserSchedule\(response, true\)/);
+  assert.match(refresh, /autouserScheduleRefreshQueued\.current\.add\(date\)/);
   assert.match(refresh, /window\.setInterval/);
-  assert.match(refresh, /10_000/);
-  assert.match(save, /void refreshAutouserSchedule\(date\)/);
+  assert.match(refresh, /5_000/);
+  assert.match(save, /error\.status === 409/);
+  assert.match(save, /autouserScheduleForceServerTimes\.current\.add\(itemKey\)/);
+  assert.match(save, /void refreshAutouserSchedule\(date, refreshAfterSave\)/);
 });
