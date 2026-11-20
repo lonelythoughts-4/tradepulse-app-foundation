@@ -280,6 +280,51 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
   border-radius: 8px;
   background: transparent;
 }
+.route-choice-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(52px, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+.route-choice-actions > button {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  margin: 0;
+  padding: 10px 12px;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.route-choice-actions > .route-choice-secondary {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+.route-choice-actions > .route-choice-secondary:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--card);
+  color: var(--foreground);
+}
+.route-choice-actions > .route-choice-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.route-choice-back {
+  min-height: 40px;
+  margin: 8px 0 0;
+}
+@media (max-width: 520px) {
+  .route-choice-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 700px) {
   .wallet-balance-overview {
     grid-template-columns: minmax(0, 1fr);

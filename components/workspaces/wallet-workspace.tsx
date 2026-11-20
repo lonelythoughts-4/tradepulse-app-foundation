@@ -205,7 +205,8 @@ function WalletWorkspaceBody({
   const [routeConflict, setRouteConflict] = useState<
     LiveDashboard["deposits"][number] | null
   >(null);
-  const [depositPending, setDepositPending] = useState(false);
+  const [routeCreatePending, setRouteCreatePending] = useState(false);
+  const [depositCheckPending, setDepositCheckPending] = useState(false);
   const [withdrawAsset, setWithdrawAsset] = useState("USDT");
   const [withdrawChain, setWithdrawChain] = useState("ERC20");
   const [withdrawAddress, setWithdrawAddress] = useState("");
@@ -222,6 +223,9 @@ function WalletWorkspaceBody({
   const [walletPending, setWalletPending] = useState(false);
   const withdrawalIdempotencyKeys = useRef(new Map<string, string>());
   const withdrawalSubmitting = useRef(false);
+  const routeCreateInFlight = useRef(false);
+  const routeChoiceVersion = useRef(0);
+  const depositCheckInFlight = useRef(false);
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
@@ -317,10 +321,10 @@ function WalletWorkspaceBody({
     return t(name);
   };
   const showOverview = () => {
+    routeChoiceVersion.current += 1;
     setView("overview");
     setStep(0);
     setIntent(null);
-    setDepositPending(false);
     setReviewWithdrawal(false);
     setSubmittedWithdrawal(null);
   };
@@ -338,7 +342,7 @@ function WalletWorkspaceBody({
     );
   });
   const createRoute = async (allowParallel = false) => {
-    if (depositPending || !asset || !chain) return;
+    if (routeCreateInFlight.current || !asset || !chain) return;
     const selectedRoute = depositRoutes.find(
       (route) => route.asset === asset && route.chain === chain,
     );
@@ -352,7 +356,9 @@ function WalletWorkspaceBody({
       setStep(1);
       return;
     }
-    setDepositPending(true);
+    routeCreateInFlight.current = true;
+    const choiceVersion = ++routeChoiceVersion.current;
+    setRouteCreatePending(true);
     try {
       const result = await request("/v1/deposits/routes", {
         method: "POST",
@@ -364,17 +370,22 @@ function WalletWorkspaceBody({
         }),
       }, environment);
       const createdIntent = result.intent as LiveDashboard["deposits"][number];
-      setIntent(createdIntent);
       onWalletUpdate({
         deposits: [
           ...data.deposits.filter((route) => route.id !== createdIntent.id),
           createdIntent,
         ],
       });
-      setRouteConflict(null);
-      setStep(2);
+      const choiceIsCurrent = choiceVersion === routeChoiceVersion.current;
+      if (choiceIsCurrent) {
+        setIntent(createdIntent);
+        setRouteConflict(null);
+        setStep(2);
+      }
       onNotice(
-        t("Deposit address created. Send only the selected asset on the selected network."),
+        choiceIsCurrent
+          ? t("Deposit address created. Send only the selected asset on the selected network.")
+          : t("A separate deposit route was created. It is listed under My Deposits."),
       );
     } catch (error) {
       if (error instanceof DeskApiError && error.status === 409) {
@@ -395,19 +406,23 @@ function WalletWorkspaceBody({
             "status" in route &&
             typeof route.status === "string"
           ) {
-            setRouteConflict({
-              id: route.id,
-              asset: route.asset,
-              chain: route.chain,
-              address: route.address,
-              status: route.status,
-              expected_amount:
-                "expected_amount" in route && typeof route.expected_amount === "string"
-                  ? route.expected_amount
-                  : undefined,
-              watch_enabled:
-                "watch_enabled" in route && Boolean(route.watch_enabled),
-            });
+            if (choiceVersion === routeChoiceVersion.current) {
+              setRouteConflict({
+                id: route.id,
+                asset: route.asset,
+                chain: route.chain,
+                address: route.address,
+                status: route.status,
+                expected_amount:
+                  "expected_amount" in route && typeof route.expected_amount === "string"
+                    ? route.expected_amount
+                    : undefined,
+                watch_enabled:
+                  "watch_enabled" in route && Boolean(route.watch_enabled),
+              });
+            } else {
+              onNotice(error.message);
+            }
             return;
           }
         }
@@ -418,7 +433,8 @@ function WalletWorkspaceBody({
           : t("A deposit address could not be created. Choose another network or try again."),
       );
     } finally {
-      setDepositPending(false);
+      routeCreateInFlight.current = false;
+      setRouteCreatePending(false);
     }
   };
   const submitWithdrawal = async () => {
@@ -536,6 +552,7 @@ function WalletWorkspaceBody({
                   key={item}
                   className={asset === item ? "selected" : ""}
                   onClick={() => {
+                    routeChoiceVersion.current += 1;
                     setAsset(item);
                     setChain("");
                     setStep(1);
@@ -559,6 +576,7 @@ function WalletWorkspaceBody({
                     className={chain === route.chain ? "selected" : ""}
                     disabled={!route.available}
                     onClick={() => {
+                      routeChoiceVersion.current += 1;
                       setChain(route.chain);
                       setIntent(null);
                       setStep(2);
@@ -592,7 +610,14 @@ function WalletWorkspaceBody({
                     {asset} on {depositNetworkName(chain)}
                   </strong>
                   <p>{t("Use this network only for the deposit address shown next.")}</p>
-                  <button type="button" className="small-action" onClick={() => setStep(1)}>
+                  <button
+                    type="button"
+                    className="small-action"
+                    onClick={() => {
+                      routeChoiceVersion.current += 1;
+                      setStep(1);
+                    }}
+                  >
                     {t("Change network")}
                   </button>
                 </div>
@@ -601,7 +626,10 @@ function WalletWorkspaceBody({
                 <span>{t("EXPECTED AMOUNT / OPTIONAL")}</span>
                 <input
                   value={expectedAmount}
-                  onChange={(event) => setExpectedAmount(event.target.value)}
+                  onChange={(event) => {
+                    routeChoiceVersion.current += 1;
+                    setExpectedAmount(event.target.value);
+                  }}
                   inputMode="decimal"
                   placeholder="0.00"
                 />
@@ -609,11 +637,12 @@ function WalletWorkspaceBody({
               <button
                 type="button"
                 className="primary-action"
-                disabled={depositPending || !asset || !chain}
+                disabled={routeCreatePending || !asset || !chain}
+                aria-busy={routeCreatePending}
                 onClick={() => void createRoute()}
               >
-                {depositPending ? t("Preparing address…") : t("Create deposit address")}{" "}
-                {!depositPending && <ChevronRight />}
+                {routeCreatePending ? t("Preparing address…") : t("Create deposit address")}{" "}
+                {!routeCreatePending && <ChevronRight />}
               </button>
             </>
           )}
@@ -694,12 +723,14 @@ function WalletWorkspaceBody({
                 </span>
               </div>
               <button
+                type="button"
                 className="primary-action"
-                disabled={depositPending}
-                aria-busy={depositPending}
+                disabled={depositCheckPending}
+                aria-busy={depositCheckPending}
                 onClick={async () => {
-                  if (depositPending) return;
-                  setDepositPending(true);
+                  if (depositCheckInFlight.current) return;
+                  depositCheckInFlight.current = true;
+                  setDepositCheckPending(true);
                   try {
                     const result = await request(
                       `/v1/deposits/${intent.id}/watch`,
@@ -741,11 +772,12 @@ function WalletWorkspaceBody({
                           : t("Deposit tracking could not start. Try again."),
                     );
                   } finally {
-                    setDepositPending(false);
+                    depositCheckInFlight.current = false;
+                    setDepositCheckPending(false);
                   }
                 }}
               >
-                {depositPending
+                {depositCheckPending
                   ? t("Checking deposit…")
                   : intent.watch_enabled
                     ? t("Check deposit now")
@@ -798,24 +830,27 @@ function WalletWorkspaceBody({
         </GradientPanel>
         {routeConflict && (
           <AccessibleDialog
-            label={t("An open deposit route already exists")}
-            onClose={() => setRouteConflict(null)}
-            dismissible={!depositPending}
+            label={t("Choose a deposit route")}
+            onClose={() => {
+              routeChoiceVersion.current += 1;
+              setRouteConflict(null);
+            }}
           >
             <span className="eyebrow">{t("DEPOSIT ROUTE CHOICE")}</span>
-            <h2>{t("An open deposit route already exists")}</h2>
+            <h2>{t("Choose a deposit route")}</h2>
             <p>
-              {t("Continue the existing {asset} route on {network}, or switch to your selected route. The existing address will stay open, so a transfer already sent can still be credited. Both routes will appear in My Deposits.", {
+              {t("Your {asset} route on {network} is already open. Continue using that address, or create a separate route on {selectedNetwork}. The existing address stays open, so a transfer already sent can still be credited. Both routes will appear in My Deposits.", {
                 asset: routeConflict.asset,
                 network: depositNetworkName(routeConflict.chain),
+                selectedNetwork: depositNetworkName(chain),
               })}
             </p>
-            <div className="button-row">
+            <div className="route-choice-actions">
               <button
                 type="button"
                 className="primary-action"
-                disabled={depositPending}
                 onClick={() => {
+                  routeChoiceVersion.current += 1;
                   setAsset(routeConflict.asset);
                   setChain(routeConflict.chain);
                   setExpectedAmount(routeConflict.expected_amount || "");
@@ -830,27 +865,29 @@ function WalletWorkspaceBody({
                   setRouteConflict(null);
                 }}
               >
-                {t("Continue with existing route")}
+                {t("Use existing address on {network}", { network: depositNetworkName(routeConflict.chain) })}
               </button>
               <button
                 type="button"
-                className="small-action"
-                disabled={depositPending}
-                aria-busy={depositPending}
+                className="small-action route-choice-secondary"
+                disabled={routeCreatePending}
+                aria-busy={routeCreatePending}
                 onClick={() => void createRoute(true)}
               >
-                {depositPending
+                {routeCreatePending
                   ? t("Preparing address…")
-                  : t("Switch to selected network")}
+                  : t("Create separate route on {network}", { network: depositNetworkName(chain) })}
               </button>
             </div>
             <button
               type="button"
-              className="ghost-action"
-              disabled={depositPending}
-              onClick={() => setRouteConflict(null)}
+              className="ghost-action route-choice-back"
+              onClick={() => {
+                routeChoiceVersion.current += 1;
+                setRouteConflict(null);
+              }}
             >
-              {t("Keep selected network")}
+              {t("Back to network selection")}
             </button>
           </AccessibleDialog>
         )}
@@ -934,7 +971,7 @@ function WalletWorkspaceBody({
         <GradientPanel className="flow-card">
           <div className="flow-title">
             <div>
-              <span className="eyebrow">{t("WITHDRAW")}</span>
+              <span className="eyebrow">{t("Withdraw")}</span>
               <h2>{t("Send funds safely")}</h2>
             </div>
             <span className="secure-chip">
@@ -1058,7 +1095,7 @@ function WalletWorkspaceBody({
         </GradientPanel>
         {reviewWithdrawal && (
           <AccessibleDialog label={t("Verify before sending")} onClose={() => setReviewWithdrawal(false)} dismissible={!walletPending}>
-                <span className="eyebrow">{t("WITHDRAWAL REVIEW")}</span>
+                <span className="eyebrow">{t("Withdrawal review")}</span>
                 <h2>{t("Verify before sending")}</h2>
               <div className="mono-review">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -1095,7 +1132,7 @@ function WalletWorkspaceBody({
         </button>
         <div className="ledger-header">
           <div>
-            <span className="eyebrow">{t("WALLET / HISTORY")}</span>
+            <span className="eyebrow">{t("Transaction history")}</span>
             <h2 id="transaction-history-title">{t("Transaction history")}</h2>
           </div>
         </div>
@@ -1278,14 +1315,14 @@ function WalletWorkspaceBody({
           <span>
             <Send />
           </span>
-          <strong>{t("WITHDRAW")}</strong>
+          <strong>{t("Withdraw")}</strong>
           <ChevronRight />
         </button>
         <button onClick={() => setView("history")}>
           <span>
             <History />
           </span>
-          <strong>{t("WALLET / HISTORY")}</strong>
+          <strong>{t("Transaction history")}</strong>
           <ChevronRight />
         </button>
         <button onClick={() => setView("activity")}>

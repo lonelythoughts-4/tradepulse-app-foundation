@@ -49,3 +49,27 @@ test("the deposit button does not pass its click event into the route payload", 
   assert.match(wallet, /onClick=\{\(\) => void createRoute\(\)\}/);
   assert.doesNotMatch(wallet, /onClick=\{createRoute\}/);
 });
+
+test("wallet actions use readable labels and route choices have distinct, equal-size actions", async () => {
+  const wallet = await readFile(
+    new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = await readFile(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(wallet, /t\("Withdraw"\)/);
+  assert.match(wallet, /t\("Transaction history"\)/);
+  assert.doesNotMatch(wallet, /t\("WITHDRAW"\)/);
+  assert.doesNotMatch(wallet, /t\("WALLET \/ HISTORY"\)/);
+  assert.match(wallet, /t\("Use existing address on \{network\}"/);
+  assert.match(wallet, /t\("Create separate route on \{network\}"/);
+  assert.match(wallet, /t\("Back to network selection"\)/);
+  assert.match(wallet, /disabled=\{routeCreatePending\}/);
+  assert.match(wallet, /disabled=\{depositCheckPending\}/);
+  assert.doesNotMatch(wallet, /depositPending/);
+  assert.match(styles, /\.route-choice-actions\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 520px\) \{\s*\.route-choice-actions\s*\{\s*grid-template-columns: minmax\(0, 1fr\)/);
+});
