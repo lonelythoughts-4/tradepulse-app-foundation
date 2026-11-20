@@ -53,7 +53,7 @@ test("session checks do not replace the authentication page with a full-screen d
   assert.ok(authenticatedStart > unauthenticatedStart, "the unauthenticated view should end before authenticated controls");
 
   const unauthenticatedView = shell.slice(unauthenticatedStart, authenticatedStart);
-  assert.match(unauthenticatedView, /if \(!sessionBootstrapComplete && !telegramLaunchContext\) \{\s*return <DeskLoading status="Checking your saved session\.\.\." \/>;\s*\}/);
+  assert.match(unauthenticatedView, /if \(!sessionBootstrapComplete && !telegramLaunchContext\) \{\s*return <DeskLoading status="Checking your saved session(?:\u2026|\.{3})" \/>;\s*\}/);
   assert.match(unauthenticatedView, /return \(\s*<AuthEntryPage/);
   assert.match(unauthenticatedView, /sessionBootstrapComplete && !telegramLaunchContext/);
   assert.match(unauthenticatedView, /role="status" aria-live="polite"/);
