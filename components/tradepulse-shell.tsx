@@ -6999,6 +6999,10 @@ function LiveTradePulse() {
           response.status,
           reference || undefined,
         );
+        const responseBody =
+          path === "/v1/deposits/routes" && response.status === 409
+            ? body
+            : undefined;
         if (response.status === 401) {
           setNotice(message);
           if (path === "/v1/dashboard") {
@@ -7006,9 +7010,9 @@ function LiveTradePulse() {
           } else {
             sessionValidationRef.current?.(targetEnvironment);
           }
-          throw new DeskApiError(message, response.status, reference, responseMessage);
+          throw new DeskApiError(message, response.status, reference, responseMessage, responseBody);
         }
-        throw new DeskApiError(message, response.status, reference, responseMessage);
+        throw new DeskApiError(message, response.status, reference, responseMessage, responseBody);
       }
       return body;
     } catch (error) {

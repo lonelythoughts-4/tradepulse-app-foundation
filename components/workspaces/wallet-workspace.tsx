@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AccessibleDialog } from "../accessible-dialog";
 import { applyResourceIfUnchanged, useDeskSelector, type DeskStore } from "../../lib/desk-store";
+import { DeskApiError } from "../../lib/desk-api";
 import type { DeskState } from "../../lib/desk-types";
 import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 import { translateDeskPhrase } from "../../lib/desk-i18n";
@@ -201,6 +202,9 @@ function WalletWorkspaceBody({
   const [intent, setIntent] = useState<
     LiveDashboard["deposits"][number] | null
   >(null);
+  const [routeConflict, setRouteConflict] = useState<
+    LiveDashboard["deposits"][number] | null
+  >(null);
   const [depositPending, setDepositPending] = useState(false);
   const [withdrawAsset, setWithdrawAsset] = useState("USDT");
   const [withdrawChain, setWithdrawChain] = useState("ERC20");
@@ -287,6 +291,7 @@ function WalletWorkspaceBody({
     setChain("");
     setExpectedAmount("");
     setIntent(null);
+    setRouteConflict(null);
     setStep(0);
     void loadDepositRoutes();
   }, [environment, loadDepositRoutes, view]);
@@ -332,7 +337,7 @@ function WalletWorkspaceBody({
       kind.includes("bot") || kind.includes("trade") || kind.includes("engine")
     );
   });
-  const createRoute = async () => {
+  const createRoute = async (allowParallel = false) => {
     if (depositPending || !asset || !chain) return;
     const selectedRoute = depositRoutes.find(
       (route) => route.asset === asset && route.chain === chain,
@@ -355,14 +360,58 @@ function WalletWorkspaceBody({
           asset,
           chain,
           expected_amount: expectedAmount || null,
+          allow_parallel: allowParallel,
         }),
       }, environment);
-      setIntent(result.intent);
+      const createdIntent = result.intent as LiveDashboard["deposits"][number];
+      setIntent(createdIntent);
+      onWalletUpdate({
+        deposits: [
+          ...data.deposits.filter((route) => route.id !== createdIntent.id),
+          createdIntent,
+        ],
+      });
+      setRouteConflict(null);
       setStep(2);
       onNotice(
         t("Deposit address created. Send only the selected asset on the selected network."),
       );
     } catch (error) {
+      if (error instanceof DeskApiError && error.status === 409) {
+        const body = error.responseBody;
+        if (body && typeof body === "object" && "open_route" in body) {
+          const route = body.open_route;
+          if (
+            route &&
+            typeof route === "object" &&
+            "id" in route &&
+            typeof route.id === "string" &&
+            "asset" in route &&
+            typeof route.asset === "string" &&
+            "chain" in route &&
+            typeof route.chain === "string" &&
+            "address" in route &&
+            typeof route.address === "string" &&
+            "status" in route &&
+            typeof route.status === "string"
+          ) {
+            setRouteConflict({
+              id: route.id,
+              asset: route.asset,
+              chain: route.chain,
+              address: route.address,
+              status: route.status,
+              expected_amount:
+                "expected_amount" in route && typeof route.expected_amount === "string"
+                  ? route.expected_amount
+                  : undefined,
+              watch_enabled:
+                "watch_enabled" in route && Boolean(route.watch_enabled),
+            });
+            return;
+          }
+        }
+      }
       onNotice(
         error instanceof Error
           ? error.message
@@ -747,6 +796,64 @@ function WalletWorkspaceBody({
             </>
           )}
         </GradientPanel>
+        {routeConflict && (
+          <AccessibleDialog
+            label={t("An open deposit route already exists")}
+            onClose={() => setRouteConflict(null)}
+            dismissible={!depositPending}
+          >
+            <span className="eyebrow">{t("DEPOSIT ROUTE CHOICE")}</span>
+            <h2>{t("An open deposit route already exists")}</h2>
+            <p>
+              {t("Continue the existing {asset} route on {network}, or switch to your selected route. The existing address will stay open, so a transfer already sent can still be credited. Both routes will appear in My Deposits.", {
+                asset: routeConflict.asset,
+                network: depositNetworkName(routeConflict.chain),
+              })}
+            </p>
+            <div className="button-row">
+              <button
+                type="button"
+                className="primary-action"
+                disabled={depositPending}
+                onClick={() => {
+                  setAsset(routeConflict.asset);
+                  setChain(routeConflict.chain);
+                  setExpectedAmount(routeConflict.expected_amount || "");
+                  setIntent(routeConflict);
+                  onWalletUpdate({
+                    deposits: [
+                      ...data.deposits.filter((route) => route.id !== routeConflict.id),
+                      routeConflict,
+                    ],
+                  });
+                  setStep(2);
+                  setRouteConflict(null);
+                }}
+              >
+                {t("Continue with existing route")}
+              </button>
+              <button
+                type="button"
+                className="small-action"
+                disabled={depositPending}
+                aria-busy={depositPending}
+                onClick={() => void createRoute(true)}
+              >
+                {depositPending
+                  ? t("Preparing address…")
+                  : t("Switch to selected network")}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="ghost-action"
+              disabled={depositPending}
+              onClick={() => setRouteConflict(null)}
+            >
+              {t("Keep selected network")}
+            </button>
+          </AccessibleDialog>
+        )}
         {activeDeposits.length > 0 && (
           <GradientPanel className="ledger-card">
             <span className="eyebrow">{t("MY DEPOSITS")}</span>

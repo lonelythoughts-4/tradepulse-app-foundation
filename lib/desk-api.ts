@@ -4,18 +4,21 @@ export class DeskApiError extends Error {
   readonly status: number;
   readonly reference?: string;
   readonly responseMessage: string;
+  readonly responseBody: unknown;
 
   constructor(
     message: string,
     status: number,
     reference?: string,
     responseMessage = message,
+    responseBody?: unknown,
   ) {
     super(message);
     this.name = "DeskApiError";
     this.status = status;
     this.reference = reference;
     this.responseMessage = responseMessage;
+    this.responseBody = responseBody;
   }
 }
 
