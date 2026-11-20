@@ -21,6 +21,7 @@ import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import { reconcileSyntheticTicks, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
 import { formatMarketPrice, makeMarketCandles, type MarketChartCandle, type MarketChartPoint } from "../lib/market-chart-series";
+import { memecoinMarketDisplayName } from "../lib/market-display";
 import {
   shouldApplyEnvironmentProjection,
   shouldResetEnvironmentForAccess,
@@ -7942,9 +7943,7 @@ function LiveTradePulse() {
             Object.entries(charts).map(([product, chart]) => {
               const isMemecoin = product === "memecoin";
               const displayMarket = isMemecoin
-                ? data.memecoin?.market_labels?.[chart.market]
-                  || data.memecoin?.market_labels?.[chart.market.toLowerCase()]
-                  || "Memecoin market"
+                ? memecoinMarketDisplayName(chart.market, data.memecoin?.market_labels)
                 : chart.market;
               return (
                 <GradientPanel className="synthetic-pilot" key={product}>
@@ -7995,9 +7994,7 @@ function LiveTradePulse() {
                         <div className="activity-info">
                           <strong>
                             {(isMemecoin
-                              ? data.memecoin?.market_labels?.[position.market]
-                                || data.memecoin?.market_labels?.[position.market.toLowerCase()]
-                                || "Memecoin market"
+                              ? memecoinMarketDisplayName(position.market, data.memecoin?.market_labels)
                               : position.market)} · {position.direction}
                           </strong>
                           <small>
