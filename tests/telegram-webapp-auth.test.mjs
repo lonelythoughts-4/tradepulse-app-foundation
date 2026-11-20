@@ -40,7 +40,7 @@ test("a missing Telegram bridge falls back to secure bot confirmation", async ()
   assert.match(shell, /hasTelegramWebAppLaunchParams\(\s*window\.location\.search,\s*window\.location\.hash/);
   assert.match(shell, /const telegramContext = openedInsideTelegram\(\)/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
-  assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return;/);
+  assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return false;/);
   assert.match(shell, /if \(telegramIdentityPending\) \{\s*return \(\s*<AuthEntryPage/);
   assert.match(shell, /translateDesk\(uiLanguage, "telegram\.bridgeFallback"\)/);
   assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{\s*telegramHandoffSessionRef\.current = true;\s*setTelegramIdentityPending\(false\);\s*const loaded = await load\(\);/);
