@@ -6706,6 +6706,7 @@ function LiveTradePulse() {
     deskStore.applyResource("dashboard", next);
   }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
+  const telegramHandoffSessionRef = useRef(false);
   const dashboardLoadRef = useRef<{ environment: "mainnet" | "testnet"; promise: Promise<void> } | null>(null);
   const sessionValidationRef = useRef<((environment: "mainnet" | "testnet") => void) | null>(null);
   const lastVisibilityRefreshRef = useRef(0);
@@ -7023,7 +7024,7 @@ function LiveTradePulse() {
     const performLoad = async () => {
     const languageRevisionAtRequest = languageRevisionRef.current;
     const checkingSession = !data;
-    const telegramContext = openedInsideTelegram();
+    const telegramContext = openedInsideTelegram() && !telegramHandoffSessionRef.current;
     setTelegramLaunchContext(telegramContext);
     if (checkingSession) setLoading(true);
     try {
@@ -7452,10 +7453,28 @@ function LiveTradePulse() {
   };
   if (!data) {
     if (telegramLaunchContext) {
-      if (loading || telegramIdentityPending) {
+      if (telegramIdentityPending) {
+        return (
+          <AuthEntryPage
+            theme={deskTheme}
+            onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
+          >
+            <p role="status" aria-live="polite">
+              {translateDesk(uiLanguage, "telegram.bridgeFallback")}
+            </p>
+            <BrowserBotHandoff onComplete={async () => {
+              telegramHandoffSessionRef.current = true;
+              setTelegramIdentityPending(false);
+              const loaded = await load();
+              return Boolean(loaded && deskStore.getState().resources.dashboard !== null);
+            }} />
+          </AuthEntryPage>
+        );
+      }
+      if (loading) {
         return (
           <DeskLoading
-            status={telegramIdentityPending ? "Connecting to Telegram…" : "Opening your desk…"}
+            status="Opening your desk…"
           />
         );
       }
@@ -8059,6 +8078,7 @@ function LiveTradePulse() {
               onLanguageChange={changeLanguage}
               onLogout={async () => {
                 await request("/v1/auth/logout", { method: "POST" });
+                telegramHandoffSessionRef.current = false;
                 updateDashboard(null);
               }}
             />

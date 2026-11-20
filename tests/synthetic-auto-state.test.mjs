@@ -50,7 +50,7 @@ test("signal approval closes review immediately and reports pending until server
 test("the mobile brand keeps its wordmark without the marked SVG", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
   const mobileBrand = shell.match(/<div className="mobile-brand">([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.match(mobileBrand, /TRADE<span>PULSE<\/span>/);
+  assert.match(mobileBrand, /TRADE<span>MEMO<\/span>/);
   assert.doesNotMatch(mobileBrand, /PulseMark/);
 });
 

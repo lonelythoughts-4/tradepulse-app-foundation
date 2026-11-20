@@ -32,7 +32,7 @@ test("Telegram launch parameters identify a Mini App before its signed data arri
   assert.equal(hasTelegramWebAppLaunchParams("?campaign=summer", ""), false);
 });
 
-test("a delayed Telegram bridge stays in session-check state without starting browser handoff", async () => {
+test("a missing Telegram bridge falls back to secure bot confirmation", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -41,9 +41,10 @@ test("a delayed Telegram bridge stays in session-check state without starting br
   assert.match(shell, /const telegramContext = openedInsideTelegram\(\)/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
   assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return;/);
-  assert.match(shell, /status=\{telegramIdentityPending \? "Connecting to Telegram/);
-  assert.match(shell, /sessionBootstrapComplete && !telegramLaunchContext/);
-  assert.doesNotMatch(shell, /if \(telegramIdentityPending\) return <DeskLoading/);
+  assert.match(shell, /if \(telegramIdentityPending\) \{\s*return \(\s*<AuthEntryPage/);
+  assert.match(shell, /translateDesk\(uiLanguage, "telegram\.bridgeFallback"\)/);
+  assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{\s*telegramHandoffSessionRef\.current = true;\s*setTelegramIdentityPending\(false\);\s*const loaded = await load\(\);/);
+  assert.match(shell, /openedInsideTelegram\(\) && !telegramHandoffSessionRef\.current/);
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
 });
 
@@ -66,7 +67,7 @@ test("desk tab synchronization preserves Telegram launch data in the URL fragmen
   );
 });
 
-test("Telegram Mini Apps show the Pulse loader instead of browser auth and handoff", async () => {
+test("Telegram Mini Apps show a loader first and offer secure fallback after bridge timeout", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -76,7 +77,8 @@ test("Telegram Mini Apps show the Pulse loader instead of browser auth and hando
     "utf8",
   );
 
-  assert.match(shell, /if \(telegramLaunchContext\) \{\s*if \(loading \|\| telegramIdentityPending\) \{\s*return \(\s*<DeskLoading/);
+  assert.match(shell, /if \(telegramLaunchContext\) \{\s*if \(telegramIdentityPending\) \{\s*return \(\s*<AuthEntryPage/);
+  assert.match(shell, /if \(loading\) \{\s*return \(\s*<DeskLoading/);
   assert.match(shell, /status=\{notice \|\| "Telegram sign-in could not be completed\."\}[\s\S]*?onRetry=\{\(\) => \{\s*setNotice\(""\);\s*void load\(\);/);
   assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
   assert.match(shell, /<BrowserBotHandoff/);

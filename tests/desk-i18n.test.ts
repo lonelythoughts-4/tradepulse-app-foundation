@@ -17,6 +17,13 @@ test("API errors use the selected language and retain a support reference", () =
   assert.doesNotMatch(message, /English server detail/);
 });
 
+test("Telegram sign-in fallback copy is localized", () => {
+  const english = translateDesk("en", "telegram.bridgeFallback");
+  assert.match(translateDesk("es", "telegram.bridgeFallback"), /Telegram/);
+  assert.match(translateDesk("ja", "telegram.bridgeFallback"), /Telegram/);
+  assert.notEqual(translateDesk("es", "telegram.bridgeFallback"), english);
+});
+
 test("English API errors retain server detail", () => {
   assert.equal(localizeApiError("en", "Balance too low", 400), "Balance too low");
 });

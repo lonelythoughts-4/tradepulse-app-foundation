@@ -31,6 +31,7 @@ export type DeskMessageKey =
   | "activation.membershipUnavailable"
   | "activation.channelIntro"
   | "activation.acceptError"
+  | "telegram.bridgeFallback"
   | "error.request"
   | "error.timeout"
   | "error.network"
@@ -59,6 +60,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "We couldn't check your membership. Try again shortly or contact support.",
     "activation.channelIntro": "Join the TradeMemo channel, then return here and recheck.",
     "activation.acceptError": "Could not save your terms acceptance.",
+    "telegram.bridgeFallback": "Telegram did not provide sign-in data. Continue with the secure link below.",
     "error.request": "TradeMemo could not complete this request. Please try again.",
     "error.timeout": "The request took too long. Please try again.",
     "error.network": "TradeMemo could not connect. Check your connection and try again.",
@@ -82,6 +84,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "Не удалось проверить участие. Попробуйте позже или обратитесь в поддержку.",
     "activation.channelIntro": "Вступите в канал TradeMemo и вернитесь сюда, чтобы проверить участие.",
     "activation.acceptError": "Не удалось сохранить подтверждение условий.",
+    "telegram.bridgeFallback": "Telegram не передал данные для входа. Продолжите через защищённую ссылку ниже.",
     "error.request": "Не удалось выполнить запрос. Попробуйте ещё раз.", "error.timeout": "Истекло время ожидания. Попробуйте ещё раз.",
     "error.network": "Не удалось подключиться к TradeMemo. Проверьте соединение и повторите попытку.",
     "error.400": "Проверьте введённые данные и попробуйте ещё раз.", "error.401": "Срок защищённого сеанса истёк. Подключитесь снова через Telegram.",
@@ -105,6 +108,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "सदस्यता जाँची नहीं जा सकी। बाद में फिर कोशिश करें या सहायता लें।",
     "activation.channelIntro": "TradeMemo चैनल से जुड़ें, फिर यहाँ लौटकर दोबारा जाँचें।",
     "activation.acceptError": "नियमों की स्वीकृति सहेजी नहीं जा सकी।",
+    "telegram.bridgeFallback": "Telegram ने साइन-इन जानकारी नहीं दी। नीचे दिए सुरक्षित लिंक से आगे बढ़ें।",
     "error.request": "अनुरोध पूरा नहीं हुआ। फिर से कोशिश करें।", "error.timeout": "अनुरोध में बहुत समय लगा। फिर से कोशिश करें।",
     "error.network": "TradeMemo से कनेक्ट नहीं हो सका। कनेक्शन जाँचकर फिर कोशिश करें।",
     "error.400": "जानकारी जाँचकर फिर कोशिश करें।", "error.401": "सुरक्षित सत्र समाप्त हो गया। जारी रखने के लिए Telegram से फिर जुड़ें।",
@@ -127,6 +131,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "No se pudo comprobar la membresía. Inténtalo más tarde o contacta con soporte.",
     "activation.channelIntro": "Únete al canal de TradeMemo y vuelve aquí para comprobarlo.",
     "activation.acceptError": "No se pudo guardar la aceptación de los términos.",
+    "telegram.bridgeFallback": "Telegram no proporcionó los datos de acceso. Continúa con el enlace seguro de abajo.",
     "error.request": "No se pudo completar la solicitud. Inténtalo de nuevo.", "error.timeout": "La solicitud tardó demasiado. Inténtalo de nuevo.",
     "error.network": "No se pudo conectar con TradeMemo. Revisa la conexión e inténtalo de nuevo.",
     "error.400": "Revisa la información e inténtalo de nuevo.", "error.401": "La sesión segura terminó. Vuelve a conectar con Telegram.",
@@ -149,6 +154,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "Impossibile verificare l'iscrizione. Riprova più tardi o contatta l'assistenza.",
     "activation.channelIntro": "Unisciti al canale TradeMemo, poi torna qui e ricontrolla.",
     "activation.acceptError": "Impossibile salvare l'accettazione dei termini.",
+    "telegram.bridgeFallback": "Telegram non ha fornito i dati di accesso. Continua con il link sicuro qui sotto.",
     "error.request": "Impossibile completare la richiesta. Riprova.", "error.timeout": "La richiesta ha impiegato troppo tempo. Riprova.",
     "error.network": "Impossibile connettersi a TradeMemo. Controlla la connessione e riprova.",
     "error.400": "Controlla i dati e riprova.", "error.401": "La sessione sicura è terminata. Riconnettiti con Telegram.",
@@ -172,6 +178,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "无法检查加入状态。请稍后重试或联系支持。",
     "activation.channelIntro": "加入 TradeMemo 频道后返回此处重新检查。",
     "activation.acceptError": "无法保存您对条款的确认。",
+    "telegram.bridgeFallback": "Telegram 未提供登录信息。请使用下方的安全链接继续。",
     "error.request": "无法完成请求，请重试。", "error.timeout": "请求超时，请重试。",
     "error.network": "无法连接 TradeMemo。请检查网络后重试。", "error.400": "请检查信息后重试。",
     "error.401": "安全会话已结束。请通过 Telegram 重新连接。", "error.403": "您没有权限执行此操作。",
@@ -195,6 +202,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "参加状況を確認できませんでした。後ほど再試行するかサポートに連絡してください。",
     "activation.channelIntro": "TradeMemo チャンネルに参加してから、ここに戻って再確認してください。",
     "activation.acceptError": "利用規約への同意を保存できませんでした。",
+    "telegram.bridgeFallback": "Telegram からサインイン情報を取得できませんでした。下の安全なリンクから続行してください。",
     "error.request": "リクエストを完了できませんでした。もう一度お試しください。",
     "error.timeout": "リクエストがタイムアウトしました。もう一度お試しください。",
     "error.network": "TradeMemo に接続できません。接続を確認して再試行してください。",
@@ -218,6 +226,7 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
     "activation.membershipUnavailable": "Aderarea nu a putut fi verificată. Încearcă mai târziu sau contactează asistența.",
     "activation.channelIntro": "Alătură-te canalului TradeMemo, apoi revino aici și verifică din nou.",
     "activation.acceptError": "Acceptarea termenilor nu a putut fi salvată.",
+    "telegram.bridgeFallback": "Telegram nu a furnizat datele de conectare. Continuă folosind linkul securizat de mai jos.",
     "error.request": "Solicitarea nu a putut fi finalizată. Încearcă din nou.",
     "error.timeout": "Solicitarea a durat prea mult. Încearcă din nou.",
     "error.network": "Conectarea la TradeMemo a eșuat. Verifică conexiunea și încearcă din nou.",

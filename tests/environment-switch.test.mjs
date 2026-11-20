@@ -47,8 +47,14 @@ test("admin testnet selection persists across tabs while non-admin access return
 
 test("session checks do not replace the authentication page with a full-screen desk loader", async () => {
   const shell = await readFile(new URL("../components/tradepulse-shell.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(shell, /if \(loading\) return <DeskLoading/);
-  assert.match(shell, /if \(!data\) \{\s*return \(\s*<AuthEntryPage/);
-  assert.match(shell, /sessionBootstrapComplete && !telegramLaunchContext/);
-  assert.match(shell, /role="status" aria-live="polite"/);
+  const unauthenticatedStart = shell.indexOf("  if (!data) {");
+  const authenticatedStart = shell.indexOf("  const changeLanguage", unauthenticatedStart);
+  assert.notEqual(unauthenticatedStart, -1, "the unauthenticated view should be explicit");
+  assert.ok(authenticatedStart > unauthenticatedStart, "the unauthenticated view should end before authenticated controls");
+
+  const unauthenticatedView = shell.slice(unauthenticatedStart, authenticatedStart);
+  assert.match(unauthenticatedView, /if \(!sessionBootstrapComplete && !telegramLaunchContext\) \{\s*return <DeskLoading status="Checking your saved session\.\.\." \/>;\s*\}/);
+  assert.match(unauthenticatedView, /return \(\s*<AuthEntryPage/);
+  assert.match(unauthenticatedView, /sessionBootstrapComplete && !telegramLaunchContext/);
+  assert.match(unauthenticatedView, /role="status" aria-live="polite"/);
 });
