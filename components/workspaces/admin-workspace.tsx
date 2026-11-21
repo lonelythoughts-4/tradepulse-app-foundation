@@ -28,7 +28,7 @@ function parseAutoUserAmount(value: string) {
 type AutouserScheduleItem = {
   id: string;
   run_id: string;
-  source: "event" | "action" | "demo_claim";
+  source: "event" | "action";
   kind: string;
   status: string;
   scheduled_at: number;
@@ -46,7 +46,6 @@ type AutouserSchedule = {
 };
 
 function autouserScheduleLabel(item: AutouserScheduleItem) {
-  if (item.source === "demo_claim") return "Demo claim";
   const labels: Record<string, string> = {
     deposit: "Deposit",
     withdrawal: "Withdrawal",
@@ -277,7 +276,7 @@ export function AdminWorkspace({
   const [withdrawalReview, setWithdrawalReview] = useState<{
     row: AdminOverview["withdrawals"][number];
     action: "approve" | "reject";
-    environment: "mainnet" | "testnet" | "demo";
+    environment: "mainnet" | "testnet";
   } | null>(null);
   const [withdrawalPending, setWithdrawalPending] = useState(false);
   const withdrawalSubmitting = useRef(false);
@@ -1814,23 +1813,7 @@ export function AdminWorkspace({
             >
               {pendingAccountActions.onboarding ? "Resetting…" : "Reset onboarding"}
             </button>
-            <button
-              className="small-action"
-              disabled={environment !== "testnet" || pendingAccountActions.pilot}
-              aria-busy={pendingAccountActions.pilot}
-              onClick={() =>
-                void runAccountAction(
-                  "pilot",
-                  "/v1/admin/demo/reissue",
-                  {},
-                  "Your isolated testnet pilot was reset.",
-                )
-              }
-            >
-              {pendingAccountActions.pilot ? "Resetting…" : "Reset my testnet pilot"}
-            </button>
           </div>
-          {environment !== "testnet" && <small className="mono">TESTNET PILOT RESET IS AVAILABLE ONLY IN THE TESTNET ADMIN WORKSPACE.</small>}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
@@ -1862,7 +1845,7 @@ export function AdminWorkspace({
               className="small-action"
               disabled={!admin.community_cards?.config?.group || isAdminActionPending("community:presentation")}
               aria-busy={isAdminActionPending("community:presentation")}
-              onClick={() => void post("/v1/admin/community-cards/stress-test-presentation", { enabled: !admin.community_cards?.config?.stress_test_presentation }, admin.community_cards?.config?.stress_test_presentation ? "Stress-test cards will show their test label." : "Stress-test cards will match customer cards in this dedicated demo group.", "community:presentation")}
+              onClick={() => void post("/v1/admin/community-cards/stress-test-presentation", { enabled: !admin.community_cards?.config?.stress_test_presentation }, admin.community_cards?.config?.stress_test_presentation ? "Testnet cards will show their test label." : "Testnet cards will use the customer card presentation.", "community:presentation")}
             >
               {isAdminActionPending("community:presentation") ? "Updating…" : admin.community_cards?.config?.stress_test_presentation ? "Use test labels" : "Match customer cards"}
             </button>
@@ -1899,7 +1882,7 @@ export function AdminWorkspace({
           <span className="eyebrow">AUTO-USER LOAD ACTIVITY</span>
           <h2>Staggered testnet activity</h2>
           <p>
-            Import a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> name list. Plain text accepts one name per line; CSV/TSV accepts <span className="mono">first_name, username, user_ref</span>; JSON accepts names or name records.
+            Import a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> name list. Every account and event in this section is synthetic Testnet data only; it cannot fund or message real customer accounts.
           </p>
           <div className="admin-row">
             <div>
@@ -1909,11 +1892,11 @@ export function AdminWorkspace({
           </div>
           <div className="admin-row">
             <div>
-              <strong>Activity stays varied</strong>
-              <small>Every run has a precomputed daily plan: 5–15 deposits per day, tapering to 2–3 near the end, with varied daytime slots. Follow-on top-ups, withdrawals, Flashbacks, and lifecycle actions continue after funding.</small>
+              <strong>Activity stays isolated</strong>
+              <small>Deposits, top-ups, withdrawals, bot actions, and Flashback steps update synthetic balances and Testnet cards only. No Demo claim, real wallet funding, or customer notification is created.</small>
             </div>
           </div>
-          <p className="mono">TESTNET LEDGER ONLY / NO CHAIN DEPOSITS / NO CUSTOMER MESSAGES / TESTNET ACTIVITY CARDS ONLY</p>
+          <p className="mono">TESTNET LEDGER ONLY / NO MAINNET FUNDING / NO REAL CUSTOMER MESSAGES / AUTO-USER ACTIVITY CARDS ONLY</p>
           <label className="amount-field" htmlFor={autouserFileId}>Auto-user names file</label>
           <input
             ref={autouserFileRef}
@@ -2069,8 +2052,6 @@ export function AdminWorkspace({
             <option value="min_bot_investment_usd">Bot minimum</option>
             <option value="deposit_min_usd">Deposit minimum</option>
             <option value="withdraw_min_usd">Withdrawal minimum</option>
-            <option value="demo_active_days">Demo duration</option>
-            <option value="demo_conversion_percent">Demo trading-credit rate</option>
             <option value="community_url">Community link</option>
             <option value="popup_ttl_seconds">Popup cleanup seconds</option>
             <option value="flashback_direction_config">Flashback Direction catalog (JSON)</option>
@@ -2128,6 +2109,7 @@ export function AdminWorkspace({
         <GradientPanel className="admin-table">
           <span className="eyebrow">BROADCAST COMPOSER</span>
           <h2>Send a desk notice</h2>
+          <p>Broadcasts reach real customer accounts only. Imported Testnet/auto-user accounts are excluded from “All bot users.”</p>
           <label className="amount-field">Audience
             <select
               value={broadcastScope}
