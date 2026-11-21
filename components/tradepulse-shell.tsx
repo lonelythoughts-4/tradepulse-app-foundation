@@ -5180,8 +5180,14 @@ async function waitForTelegramWebApp() {
   // The Mini App bridge is injected asynchronously on some Android and iOS
   // clients. Give it a real chance to arrive before making an unauthenticated
   // dashboard request.
+  let preparedWebApp: TelegramWebApp | undefined;
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const webApp = telegramWebApp();
+    if (webApp && webApp !== preparedWebApp) {
+      webApp.ready?.();
+      webApp.expand?.();
+      preparedWebApp = webApp;
+    }
     if (webApp?.initData || telegramLaunchData()) return webApp;
     await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
@@ -7492,20 +7498,13 @@ function LiveTradePulse() {
     if (telegramLaunchContext) {
       if (telegramIdentityPending) {
         return (
-          <AuthEntryPage
-            theme={deskTheme}
-            onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
-          >
-            <p role="status" aria-live="polite">
-              {translateDesk(uiLanguage, "telegram.bridgeFallback")}
-            </p>
-            <BrowserBotHandoff onComplete={async () => {
-              telegramHandoffSessionRef.current = true;
-              setTelegramIdentityPending(false);
-              const loaded = await load();
-              return Boolean(loaded && deskStore.getState().resources.dashboard !== null);
-            }} />
-          </AuthEntryPage>
+          <DeskLoading
+            status={translateDesk(uiLanguage, "telegram.bridgeFallback")}
+            onRetry={() => {
+              setNotice("");
+              void load();
+            }}
+          />
         );
       }
       if (loading) {

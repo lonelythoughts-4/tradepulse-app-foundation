@@ -32,20 +32,32 @@ test("Telegram launch parameters identify a Mini App before its signed data arri
   assert.equal(hasTelegramWebAppLaunchParams("?campaign=summer", ""), false);
 });
 
-test("a missing Telegram bridge falls back to secure bot confirmation", async () => {
+test("a missing Telegram bridge stays in the Mini App and offers a retry", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const translations = await readFile(
+    new URL("../lib/desk-i18n.ts", import.meta.url),
     "utf8",
   );
   assert.match(shell, /hasTelegramWebAppLaunchParams\(\s*window\.location\.search,\s*window\.location\.hash/);
   assert.match(shell, /const telegramContext = openedInsideTelegram\(\)/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
   assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(true\);\s*return false;/);
-  assert.match(shell, /if \(telegramIdentityPending\) \{\s*return \(\s*<AuthEntryPage/);
+  assert.match(shell, /if \(telegramIdentityPending\) \{\s*return \(\s*<DeskLoading/);
   assert.match(shell, /translateDesk\(uiLanguage, "telegram\.bridgeFallback"\)/);
-  assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{\s*telegramHandoffSessionRef\.current = true;\s*setTelegramIdentityPending\(false\);\s*const loaded = await load\(\);/);
+  assert.match(shell, /status=\{translateDesk\(uiLanguage, "telegram\.bridgeFallback"\)\}\s*onRetry=\{\(\) => \{\s*setNotice\(""\);\s*void load\(\);/);
+  const fallbackStart = shell.indexOf("if (telegramIdentityPending) {", shell.indexOf("if (!data) {"));
+  const fallbackEnd = shell.indexOf("if (loading) {", fallbackStart);
+  const telegramFallback = shell.slice(fallbackStart, fallbackEnd);
+  assert.match(telegramFallback, /<DeskLoading/);
+  assert.doesNotMatch(telegramFallback, /<BrowserBotHandoff/);
   assert.match(shell, /openedInsideTelegram\(\) && !telegramHandoffSessionRef\.current/);
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
+  assert.match(shell, /if \(webApp && webApp !== preparedWebApp\) \{\s*webApp\.ready\?\.\(\);\s*webApp\.expand\?\.\(\);\s*preparedWebApp = webApp;/);
+  assert.match(translations, /"telegram\.bridgeFallback": "Telegram did not provide sign-in data\. Try again, or close this window and reopen the app from the TradeMemo bot\."/);
+  assert.doesNotMatch(telegramFallback, /Continue with the secure link below/);
 });
 
 test("desk tab synchronization preserves Telegram launch data in the URL fragment", async () => {
@@ -67,7 +79,7 @@ test("desk tab synchronization preserves Telegram launch data in the URL fragmen
   );
 });
 
-test("Telegram Mini Apps show a loader first and offer secure fallback after bridge timeout", async () => {
+test("Telegram Mini Apps show an in-app retry after bridge timeout", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -77,9 +89,10 @@ test("Telegram Mini Apps show a loader first and offer secure fallback after bri
     "utf8",
   );
 
-  assert.match(shell, /if \(telegramLaunchContext\) \{\s*if \(telegramIdentityPending\) \{\s*return \(\s*<AuthEntryPage/);
+  assert.match(shell, /if \(telegramLaunchContext\) \{\s*if \(telegramIdentityPending\) \{\s*return \(\s*<DeskLoading/);
   assert.match(shell, /if \(loading\) \{\s*return \(\s*<DeskLoading/);
   assert.match(shell, /status=\{notice \|\| "Telegram sign-in could not be completed\."\}[\s\S]*?onRetry=\{\(\) => \{\s*setNotice\(""\);\s*void load\(\);/);
   assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
+  assert.match(shell, /status=\{translateDesk\(uiLanguage, "telegram\.bridgeFallback"\)\}\s*onRetry=/);
   assert.match(shell, /<BrowserBotHandoff/);
 });
