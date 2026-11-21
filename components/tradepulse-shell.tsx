@@ -650,8 +650,8 @@ const mobilePrimaryNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Dashboard", icon: "dashboard" },
   { label: "Bots", icon: "bots" },
   { label: "Synthetic", icon: "desk" },
-  { label: "Wallet", icon: "wallet" },
   { label: "Flashback", icon: "desk" },
+  { label: "Wallet", icon: "wallet" },
 ];
 const mobileSecondaryNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Protection", icon: "account" },

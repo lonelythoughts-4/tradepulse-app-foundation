@@ -15,7 +15,7 @@ test("the Flashback navigation selection is accepted and rendered", async () => 
   assert.match(shell, /\{tab === "Flashback" && \(/);
 });
 
-test("Flashback takes Account's mobile primary-navigation position", async () => {
+test("Flashback follows Synthetic in mobile primary navigation", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -34,8 +34,8 @@ test("Flashback takes Account's mobile primary-navigation position", async () =>
     "Dashboard",
     "Bots",
     "Synthetic",
-    "Wallet",
     "Flashback",
+    "Wallet",
   ]);
   assert.match(secondaryItems, /\{ label: "Account"/);
   assert.doesNotMatch(secondaryItems, /\{ label: "Flashback"/);
