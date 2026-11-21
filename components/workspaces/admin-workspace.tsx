@@ -258,7 +258,6 @@ export function AdminWorkspace({
   const autouserScheduleSaving = useRef(new Set<string>());
   const autouserScheduleRefreshQueued = useRef(new Set<string>());
   const autouserScheduleForceServerTimes = useRef(new Set<string>());
-  const [communityGroup, setCommunityGroup] = useState("");
   const [adminHelpOpen, setAdminHelpOpen] = useState(false);
   const [adminTicket, setAdminTicket] = useState<(AdminOverview["tickets"][number] & { messages?: Array<{ id: number; author_role: "user" | "admin"; body: string; created_at: number }> }) | null>(null);
   const [adminTicketReply, setAdminTicketReply] = useState("");
@@ -505,7 +504,6 @@ export function AdminWorkspace({
     }
   };
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
-  const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
   const normalizedOnboardingTarget = onboardingTarget.trim();
   const validOnboardingTarget =
@@ -1837,30 +1835,13 @@ export function AdminWorkspace({
         <GradientPanel className="admin-table">
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
           <h2>Dedicated activity feed</h2>
-          <p>Posts confirmed activity to a dedicated group only. Treasury audit delivery remains separate; failed, pending, and internal events never publish.</p>
+          <p>Posts confirmed activity to <strong>@TradememoLab</strong>. Deposits, top-ups, and withdrawals use topic 2; Flashback cards use topic 1.</p>
           <p className="mono">
             {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / {admin.community_cards?.config?.stress_test_presentation ? "DEMO STRESS FORMAT" : "TEST LABELS"}
           </p>
           <small>{admin.community_cards?.renderer?.reason || "Renderer status unavailable."}</small>
-          <label className="amount-field">Dedicated Telegram group
-            <input
-              value={communityGroup}
-              aria-label="Dedicated Telegram group ID or username for community cards"
-              onChange={(event) => setCommunityGroup(event.target.value.trim())}
-              placeholder="@communitygroup or -100…"
-            />
-          </label>
+          <small className="mono">FIXED CHANNEL  @TradememoLab / FINANCIAL TOPIC 2 / FLASHBACK TOPIC 1</small>
           <div className="admin-actions">
-            <button
-              className="small-action"
-              disabled={!validCommunityGroup || isAdminActionPending("community:destination")}
-              aria-busy={isAdminActionPending("community:destination")}
-              onClick={() => void post("/v1/admin/community-cards", { group: communityGroup }, "Dedicated community group saved. Publication is off until checks pass.", "community:destination").then((saved) => {
-                if (saved) setCommunityGroup(communityGroup);
-              })}
-            >
-              {isAdminActionPending("community:destination") ? "Saving…" : "Save destination"}
-            </button>
             <button
               className="small-action"
               disabled={!admin.community_cards?.config?.group || isAdminActionPending("community:verify")}
