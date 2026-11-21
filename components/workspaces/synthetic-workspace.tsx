@@ -2,42 +2,34 @@
 
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
-import { DeskLocalized, useDeskLanguage } from "../desk-language";
+import { DeskLocalized } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { ActionKey, DeskState } from "../../lib/desk-types";
 import type { LiveDashboard } from "../tradepulse-shell";
-import { translateDeskPhrase } from "../../lib/desk-i18n";
 import { reconcileSyntheticTicks, type SyntheticTick } from "../../lib/synthetic-ticks";
 import { MAXIMUM_OPEN_ENDED_LOSS_CAP, MINIMUM_OPEN_ENDED_LOSS_CAP, contractReasonLabel, contractTypeLabel, manualContractPreferences, manualSyntheticOrderActionKey, normaliseManualContractType, validateOpenEndedTerms, type ManualContractType } from "../../lib/synthetic-contract-terms";
 import { activateContractInfo, contractInfoExpanded, contractInfoFocus, contractInfoHover, initialContractInfoState } from "../../lib/synthetic-contract-info";
 import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
-import { syntheticFundingCapacity, syntheticFundingNeedsDisclosure } from "../../lib/synthetic-demo-funding.js";
 import { useResourcePoller } from "./use-resource-poller";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
-type Snapshot = { market: string; partial?: boolean; history_available?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number; capacity_refresh_required?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number }; demo?: { active: boolean; state?: string; available_usd: number; locked_usd?: number; realised_pnl_usd?: number; expires_at?: number | null; credit_available_usd?: number; memecoin_margin_usd?: number | null; synthetic_margin_usd?: number | null } };
+type Snapshot = { market: string; partial?: boolean; history_available?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; live_disclosure_accepted?: boolean; execution_mode?: "MANUAL" | "AUTO"; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; manual_available_usd?: number; auto_margin_usd?: number; capacity_refresh_required?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number } };
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
 type Review = { kind: "long" | "short" | "auto" | "approve"; path: string; payload: Record<string, unknown>; amount: number; market: string; direction: string; fee: number; signal?: Signal; manualContract?: ManualContractType; maximumLossPercent?: number; manualStopLossPercent?: number };
 
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onOpenDemo: () => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const selectSnapshot = (state: DeskState) => state.resources.synthetic as Snapshot | null;
 
-export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onOpenDemo, request, store }: SyntheticWorkspaceProps) {
+export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, request, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
   const marketRef = useRef(market);
   const revision = useRef(0);
   const snapshot = useDeskSelector(store, selectSnapshot);
-  const language = useDeskLanguage();
-  const t = useCallback(
-    (phrase: string, replacements?: Record<string, string | number>) =>
-      translateDeskPhrase(language, phrase, replacements),
-    [language],
-  );
   const [amount, setAmount] = useState("20");
   const [manualContract, setManualContract] = useState<ManualContractType>("fixed");
   const [maximumLossPercent, setMaximumLossPercent] = useState("50");
@@ -45,13 +37,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [contractInfo, setContractInfo] = useState(initialContractInfoState);
   const [autoAmount, setAutoAmount] = useState("");
   const [autoAllocation, setAutoAllocation] = useState("");
-  const [fundingSource, setFundingSource] = useState<"wallet" | "credit">("wallet");
   const [signals, setSignals] = useState<Signal[]>([]);
   const [signalResults, setSignalResults] = useState<Record<string, string>>({});
   const [signalSubmissions, setSignalSubmissions] = useState<Record<string, Pick<Signal, "market" | "direction">>>({});
   const [signalError, setSignalError] = useState("");
-  const signalPollInFlight = useRef(false);
-  const signalPollFailures = useRef(0);
   const [loadError, setLoadError] = useState("");
   const [now, setNow] = useState(Date.now());
   const [helpOpen, setHelpOpen] = useState(false);
@@ -73,28 +62,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { setReview(null); setReviewError(""); }, [environment, market]);
   useEffect(() => { if (snapshot && !snapshot.partial) { setAutoAmount((current) => current || String(Number(snapshot.execution?.auto_margin_usd || 20))); setAutoAllocation((current) => current || String(Number(snapshot.execution?.auto_allocation_usd || 0))); } }, [snapshot]);
-  useEffect(() => {
-    if (!snapshot?.partial && fundingSource === "credit" && !Number(snapshot?.demo?.credit_available_usd || 0)) setFundingSource("wallet");
-  }, [fundingSource, snapshot?.demo?.credit_available_usd]);
   useResourcePoller<Snapshot>(async (_token, signal) => {
     try { return await request("/v1/synthetic/" + market + "?view=trading", { signal }, environment) as Snapshot; }
     catch (error) {
       if (signal.aborted) throw error;
-      // The lightweight stream has a live quote and owned positions even when
-      // the fuller history/configuration snapshot is temporarily delayed.
-      // Render that safe subset instead of replacing the entire desk with an
-      // outage screen.
-      try {
-        const stream = await request("/v1/synthetic/stream?market=" + market, { signal }, environment);
-        const latest = stream.latest as Snapshot["latest"];
-        const price = Number(latest?.reference ?? latest?.price);
-        if (Number.isFinite(price) && price > 0) {
-          setLoadError("");
-          return { market, partial: true, latest, ticks: [latest], positions: stream.positions || [], settings: {} } as Snapshot;
-        }
-      } catch (fallbackError) {
-        if (signal.aborted) throw fallbackError;
-      }
       setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
       return undefined;
     }
@@ -108,37 +79,43 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   }, 5000, true, `synthetic:${environment}:${market}`, (error) => {
     setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
   });
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      if (cancelled || signalPollInFlight.current) return;
-      signalPollInFlight.current = true;
-      try {
-        const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10");
-        if (!cancelled && market === marketRef.current) {
-          const next = (result.signals || []) as Signal[];
-          setSignals(next);
-          setSignalResults((current) => Object.fromEntries(Object.entries(current).filter(([id]) => next.some((signal) => signal.id === id))));
-          signalPollFailures.current = 0;
-          setSignalError("");
-        }
-      } catch {
-        if (!cancelled) {
-          signalPollFailures.current += 1;
-          // A single slow upstream read is not a customer-visible outage.
-          // Keep the last verified signals on screen and only surface the
-          // reconnect state after a short, consecutive failure window.
-          if (signalPollFailures.current >= 3) setSignalError("Signal updates are delayed. Reconnecting…");
-        }
-      } finally { signalPollInFlight.current = false; }
-    };
-    void refresh(); const timer = window.setInterval(refresh, 2000); return () => { cancelled = true; window.clearInterval(timer); };
-  }, [environment, market, request]);
-  useEffect(() => {
-    let cancelled = false; let inFlight = false;
-    const refresh = async () => { if (cancelled || inFlight) return; inFlight = true; try { const stream = await request("/v1/synthetic/stream?market=" + market, {}, environment); const latest = stream.latest as Snapshot["latest"] & { timestamp?: number }; const price = Number(latest?.reference ?? latest?.price); if (!cancelled && Number.isFinite(price) && price > 0 && Number.isInteger(Number(latest?.sequence))) update((current) => { const base = current?.market === market ? current : { market, partial: true, latest, ticks: [latest], positions: [], settings: {} } as Snapshot; return { ...base, latest, ticks: reconcileSyntheticTicks([...base.ticks.map((tick) => ({ market: tick.market || market, sequence: Number(tick.sequence), price: Number(tick.reference ?? tick.price), timestamp: tick.timestamp ?? tick.created_at })), { market, sequence: Number(latest.sequence), price, timestamp: latest.timestamp ?? latest.created_at }], market).map((tick) => ({ ...tick, reference: tick.price })).slice(-240), positions: stream.positions || base.positions }; }); } catch { /* snapshot poll recovers */ } finally { inFlight = false; } };
-    void refresh(); const timer = window.setInterval(refresh, 1000); return () => { cancelled = true; window.clearInterval(timer); };
-  }, [environment, market, request, update]);
+  useResourcePoller<Signal[]>(async (_token, signal) => {
+    const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10", { signal });
+    return (result.signals || []) as Signal[];
+  }, (next) => {
+    if (market !== marketRef.current) return;
+    setSignals(next);
+    setSignalResults((current) => Object.fromEntries(Object.entries(current).filter(([id]) => next.some((signal) => signal.id === id))));
+    setSignalError("");
+  }, 2000, true, `synthetic-signals:${environment}:${market}`, () => {
+    setSignalError("Signal updates are delayed. Reconnecting…");
+  });
+  useResourcePoller<Record<string, unknown>>(async (_token, signal) => {
+    return await request("/v1/synthetic/stream?market=" + market, { signal }, environment);
+  }, (stream) => {
+    const latest = stream.latest as Snapshot["latest"];
+    const price = Number(latest?.reference ?? latest?.price);
+    if (!Number.isFinite(price) || price <= 0 || !Number.isInteger(Number(latest?.sequence))) return;
+    update((current) => {
+      const base = current?.market === market
+        ? current
+        : { market, partial: true, latest, ticks: [latest], positions: [], settings: {} } as Snapshot;
+      return {
+        ...base,
+        latest,
+        ticks: reconcileSyntheticTicks([
+          ...base.ticks.map((tick) => ({
+            market: tick.market || market,
+            sequence: Number(tick.sequence),
+            price: Number(tick.reference ?? tick.price),
+            timestamp: tick.timestamp ?? tick.created_at,
+          })),
+          { market, sequence: Number(latest.sequence), price, timestamp: latest.timestamp ?? latest.created_at },
+        ], market).map((tick) => ({ ...tick, reference: tick.price })).slice(-240),
+        positions: base.partial && Array.isArray(stream.positions) ? stream.positions : base.positions,
+      };
+    });
+  }, 1000, true, `synthetic-quotes:${environment}:${market}`, () => {});
   const actionKey = (path: string, payload: Record<string, unknown>) => {
     const position = path.match(/^\/v1\/synthetic\/positions\/([^/]+)\/close$/); const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (path.includes("/synthetic/orders")) return ("synthetic-order:" + String(payload.market || market) + ":" + String(payload.direction || "order") + ":" + String(payload.contract_type || "fixed")) as ActionKey;
@@ -190,21 +167,18 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   };
   const openReview = (kind: Review["kind"], signal?: Signal) => {
     if (!snapshot || snapshot.partial || environment !== "mainnet") return;
-    const value = Number(kind === "auto" ? autoAmount : amount), capacity = syntheticFundingCapacity(fundingSource, snapshot), reserved = Number(autoAllocation);
+    const value = Number(kind === "auto" ? autoAmount : amount), capacity = Number(snapshot.allocation?.manual_available_usd ?? snapshot.allocation?.available_usd ?? 0), reserved = Number(autoAllocation);
     if (kind === "auto" && !snapshot.live_disclosure_accepted) return onNotice("Review and accept the live-risk acknowledgement before enabling Auto.");
-    if (kind !== "auto" && syntheticFundingNeedsDisclosure(fundingSource) && !snapshot.live_disclosure_accepted) return onNotice("Review and accept the live-risk acknowledgement before using wallet funds or trading credit.");
+    if (kind !== "auto" && !snapshot.live_disclosure_accepted) return onNotice("Review and accept the live-risk acknowledgement before using wallet funds.");
     if (!Number.isFinite(value) || value < 20) return onNotice("Set an order size of at least $20.00.");
     if (kind === "auto" && (!Number.isFinite(reserved) || reserved < value)) return onNotice("Auto capacity must cover at least one Auto order.");
-    const usingCredit = fundingSource === "credit" && Number(snapshot.demo?.credit_available_usd || 0) > 0;
-    if (kind !== "auto" && value > capacity && !(executionCapacityRefreshing && fundingSource === "wallet")) return onNotice((usingCredit ? "Trading credit" : "Manual capacity") + " has " + money(capacity) + " available. Reduce the order size or choose another funding source.");
-    if (kind === "auto" && usingCredit) return onNotice("Auto uses wallet allocation only. Select Wallet for automatic execution; converted trading credit requires a manual review.");
+    if (kind !== "auto" && value > capacity && !executionCapacityRefreshing) return onNotice("Manual capacity has " + money(capacity) + " available. Reduce the order size.");
     const selectedMarket = signal?.market || market, direction = signal?.direction || kind;
     const path = kind === "auto" ? "/v1/synthetic/settings/execution-mode" : signal ? "/v1/synthetic/signals/" + signal.id + "/approve" : "/v1/synthetic/orders";
-    const source = usingCredit ? "credit" : "mainnet";
     const terms = manualContract === "open_ended" ? validateOpenEndedTerms(maximumLossPercent, manualStopLossPercent) : null;
     if (terms && !terms.valid) return onNotice(terms.error);
     const preferences = manualContractPreferences(manualContract, maximumLossPercent, manualStopLossPercent);
-    const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: value, auto_allocation_usd: reserved } : signal ? { amount: value, funding_source: source, idempotency_key: "signal:" + source + ":" + account.user.id + ":" + signal.id, ...preferences } : { market: selectedMarket, direction, amount: value, mode: (snapshot.execution_mode || "MANUAL").toLowerCase(), funding_source: source, idempotency_key: "web:" + source + ":" + selectedMarket + ":" + direction + ":" + Date.now(), ...preferences };
+    const payload = kind === "auto" ? { execution_mode: "AUTO", auto_margin_usd: value, auto_allocation_usd: reserved } : signal ? { amount: value, funding_source: "mainnet", idempotency_key: "signal:" + account.user.id + ":" + signal.id, ...preferences } : { market: selectedMarket, direction, amount: value, mode: (snapshot.execution_mode || "MANUAL").toLowerCase(), funding_source: "mainnet", idempotency_key: "web:" + selectedMarket + ":" + direction + ":" + Date.now(), ...preferences };
     setAutoAcknowledged(false); setReviewError(""); setReview({ kind, path, payload, amount: value, market: selectedMarket, direction, fee: value * Number(snapshot.settings?.["fee_bps_" + account.user.tier.toLowerCase()] || 20) / 10000, signal, ...(kind === "auto" ? {} : { manualContract, maximumLossPercent: Number(preferences.maximum_loss_percent), manualStopLossPercent: Number(preferences.manual_stop_loss_percent) || undefined }) });
   };
   const confirm = async () => {
@@ -248,10 +222,8 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   };
   const autoActivityTitle = !latestAuto ? "No Auto activity yet" : latestAuto.event_type === "auto_signal_rejected" && /loss[_ -]streak/i.test(latestAuto.reason || "") ? "Auto entries paused" : latestAuto.event_type === "auto_signal_rejected" ? "No order opened" : latestAuto.event_type === "position_opened" ? "Order opened" : "Auto activity recorded";
   const autoActivityDetail = latestAuto ? [latestAuto.market, autoActivityReason(latestAuto.reason), "Updated " + new Date(latestAuto.timestamp * 1000).toLocaleTimeString()].filter(Boolean).join(" · ") : "Eligible signals open only when the wallet allocation and quote checks pass.";
-  const selectedFundingCapacity = syntheticFundingCapacity(fundingSource, snapshot);
-  const selectedFundingLabel = fundingSource === "credit" ? "Credit capacity" : "Manual capacity";
-  const selectedFundingNeedsDisclosure = syntheticFundingNeedsDisclosure(fundingSource);
-  const sharedDemo = environment === "mainnet" ? snapshot?.demo : undefined;
+  const selectedFundingCapacity = Number(snapshot?.allocation?.manual_available_usd ?? snapshot?.allocation?.available_usd ?? 0);
+  const selectedFundingLabel = "Manual capacity";
   const confirmedAuto = snapshot?.execution_mode === "AUTO";
   const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Switching to Manual…" : confirmedAuto ? "Auto on" : "Auto off";
   if (snapshot) return <DeskLocalized><div className="desk-screen"><div className="gradient-panel synthetic-pilot">
@@ -272,33 +244,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         <div><span className="eyebrow">EXECUTION</span><strong>{snapshot.partial ? "LOADING" : executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "SWITCHING TO MANUAL" : snapshot.execution_mode || "MANUAL"}</strong></div>
       </div>
       {snapshot.history_available === false && <p role="status">Chart history is delayed. The live quote remains current.</p>}
-      {sharedDemo?.state === "issued" && <section className="synthetic-auto-panel synthetic-demo-panel" aria-label="SHARED VIRTUAL DEMO">
-        <div className="synthetic-auto-heading">
-          <div className="synthetic-auto-title"><h3>SHARED VIRTUAL DEMO</h3><p>The shared pool is eligible for automatic Synthetic execution only. Manual orders here use your selected Wallet or trading-credit source.</p></div>
-          <div className="synthetic-auto-state"><button type="button" className="small-action" onClick={onOpenDemo}>Review shared virtual demo terms</button></div>
-        </div>
-      </section>}
-      {sharedDemo?.active && sharedDemo.state === "active" && <section className="synthetic-auto-panel synthetic-demo-panel" aria-label="SHARED VIRTUAL DEMO">
-        <div className="synthetic-auto-heading">
-          <div className="synthetic-auto-title"><h3>SHARED VIRTUAL DEMO</h3><p>The shared pool is eligible for automatic Synthetic execution only. Manual orders here use your selected Wallet or trading-credit source.</p></div>
-          <div className="synthetic-auto-state" role="status" aria-live="polite"><span className="status-chip running"><i />SHARED VIRTUAL DEMO ACTIVE</span></div>
-        </div>
-        <div className="synthetic-auto-capacity" aria-label="SHARED VIRTUAL DEMO">
-          <span>DEMO AVAILABLE <b>{money(Number(sharedDemo.available_usd || 0))}</b></span>
-          <span>DEMO LOCKED <b>{money(Number(sharedDemo.locked_usd || 0))}</b></span>
-          <span>DEMO P&amp;L <b>{money(Number(sharedDemo.realised_pnl_usd || 0))}</b></span>
-          <span>SYNTHETIC MARGIN <b>{sharedDemo.synthetic_margin_usd != null ? money(Number(sharedDemo.synthetic_margin_usd)) + " per position" : "Legacy engine default"}</b></span>
-        </div>
-        {sharedDemo.expires_at && <p className="synthetic-auto-hint">{t("Ends {expiry}.", { expiry: new Date(sharedDemo.expires_at * 1000).toLocaleString() })}</p>}
-      </section>}
       {snapshot.partial ? <div className="activity-row" role="status"><div className="activity-info"><strong>Checking account and trading state</strong><small>Live quotes continue. Orders remain locked until balances, Auto mode and open positions are verified.</small></div></div> : environment === "mainnet" ? <>
-        {!snapshot.live_disclosure_accepted && selectedFundingNeedsDisclosure && <section className="announcements synthetic-risk-notice" aria-labelledby="synthetic-risk-title"><div className="synthetic-risk-copy"><span className="eyebrow">LIVE-RISK ACKNOWLEDGEMENT</span><strong id="synthetic-risk-title">Required before wallet-funded Synthetic trading, trading credit, or Auto.</strong><p>Orders reserve the selected funds at 1:1 margin. Price movement can lose the full reserved amount; spread and tier fees apply. Auto may place wallet-funded orders up to the amount you approve.</p></div><button className="primary-action" disabled={pendingFor("disclosure:accept")} onClick={() => void act("/v1/synthetic/disclosure", {}).catch(() => undefined)}>{pendingFor("disclosure:accept") ? "Saving…" : "Review & accept"}</button></section>}
+        {!snapshot.live_disclosure_accepted && <section className="announcements synthetic-risk-notice" aria-labelledby="synthetic-risk-title"><div className="synthetic-risk-copy"><span className="eyebrow">LIVE-RISK ACKNOWLEDGEMENT</span><strong id="synthetic-risk-title">Required before wallet-funded Synthetic trading or Auto.</strong><p>Orders reserve wallet funds at 1:1 margin. Price movement can lose the full reserved amount; spread and tier fees apply. Auto may place wallet-funded orders up to the amount you approve.</p></div><button className="primary-action" disabled={pendingFor("disclosure:accept")} onClick={() => void act("/v1/synthetic/disclosure", {}).catch(() => undefined)}>{pendingFor("disclosure:accept") ? "Saving…" : "Review & accept"}</button></section>}
         <label className="amount-field">Order size<div className="amount-input"><span>$</span><input value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Synthetic order size" /></div></label>
-        {Number(snapshot.demo?.credit_available_usd || 0) > 0 && <div className="button-row" role="group" aria-label="Synthetic funding source">
-          <button type="button" className={fundingSource === "wallet" ? "small-action active" : "small-action"} aria-pressed={fundingSource === "wallet"} onClick={() => setFundingSource("wallet")}>Wallet</button>
-          {Number(snapshot.demo?.credit_available_usd || 0) > 0 && <button type="button" className={fundingSource === "credit" ? "small-action active" : "small-action"} aria-pressed={fundingSource === "credit"} onClick={() => setFundingSource("credit")}>Trading credit · {money(Number(snapshot.demo?.credit_available_usd || 0))}</button>}
-        </div>}
-        <div className="fact-block"><span>{fundingSource === "credit" ? "Credit margin · 1:1" : "Margin · 1:1"} <b>{money(Number(amount) || 0)}</b></span><span>{selectedFundingLabel} <b>{money(selectedFundingCapacity)}</b></span></div>
+        <div className="fact-block"><span>Wallet margin · 1:1 <b>{money(Number(amount) || 0)}</b></span><span>{selectedFundingLabel} <b>{money(selectedFundingCapacity)}</b></span></div>
         <section className="synthetic-contract-selector" aria-labelledby="manual-contract-title">
           <div className="synthetic-contract-heading"><div><span className="eyebrow" id="manual-contract-title">MANUAL CONTRACT</span><small>Choose how the order will close before reviewing it.</small></div><div className="synthetic-contract-info"><button type="button" className="small-action" aria-label="About contract types" aria-expanded={contractInfoExpanded(contractInfo)} aria-controls="manual-contract-help" aria-describedby={contractInfoExpanded(contractInfo) ? "manual-contract-help" : undefined} onMouseEnter={() => setContractInfo((current) => contractInfoHover(current, true))} onMouseLeave={() => setContractInfo((current) => contractInfoHover(current, false))} onFocus={() => setContractInfo((current) => contractInfoFocus(current, true))} onBlur={() => setContractInfo((current) => contractInfoFocus(current, false))} onClick={() => setContractInfo(activateContractInfo)}><span aria-hidden="true">i</span></button>{contractInfoExpanded(contractInfo) && <div id="manual-contract-help" role="tooltip" className="synthetic-contract-tooltip">Fixed duration closes on schedule. Open-ended stays open until you close it or its loss limit is reached. Automatic orders show their confirmed terms after execution.</div>}</div></div>
           <div className="synthetic-contract-options" role="radiogroup" aria-label="Manual contract type">
@@ -312,7 +261,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
             <div className="synthetic-auto-title"><h3 id="synthetic-auto-title">Automatic execution</h3><p>Set the per-order margin and funds Auto may use. Enabling Auto requires review.</p></div>
             <div className="synthetic-auto-state" role="status" aria-live="polite" aria-atomic="true" aria-busy={Boolean(executionTransition)}><span className={"status-chip " + (executionTransition ? "paused" : confirmedAuto ? "running" : "paused")}><i />{executionStatus}</span></div>
           </div>
-          {sharedDemo?.active && <p className="synthetic-auto-hint">These controls apply to wallet-funded automation. The shared demo uses {sharedDemo.synthetic_margin_usd != null ? money(Number(sharedDemo.synthetic_margin_usd)) : "its legacy engine default"} per Synthetic position and is not changed here.</p>}
           <div className="synthetic-auto-fields">
             <label className="amount-field">Auto amount per order<input value={autoAmount} onChange={(event) => setAutoAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic order size" /></label>
             <label className="amount-field">Set aside for Auto<input value={autoAllocation} onChange={(event) => setAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" /></label>
@@ -326,9 +274,9 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           </div>
           {confirmedAuto && !executionTransition && <><p className="synthetic-auto-hint">Automatic uses the confirmed per-order margin within its assigned capacity.</p><div className="activity-row" role="status" aria-live="polite"><div className="activity-info"><strong>{autoActivityTitle}</strong><small>{autoActivityDetail}</small></div></div></>}
         </section>
-        <div className="button-row" role="group" aria-label="Manual orders"><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || manualOrderPending("long")} onClick={() => openReview("long")}>{manualOrderPending("long") ? "Submitting…" : "Review Long"}</button><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || manualOrderPending("short")} onClick={() => openReview("short")}>{manualOrderPending("short") ? "Submitting…" : "Review Short"}</button></div>
+        <div className="button-row" role="group" aria-label="Manual orders"><button className="small-action" disabled={!snapshot.live_disclosure_accepted || manualOrderPending("long")} onClick={() => openReview("long")}>{manualOrderPending("long") ? "Submitting…" : "Review Long"}</button><button className="small-action" disabled={!snapshot.live_disclosure_accepted || manualOrderPending("short")} onClick={() => openReview("short")}>{manualOrderPending("short") ? "Submitting…" : "Review Short"}</button></div>
         {Object.entries(signalSubmissions).map(([id, submission]) => <div className="activity-row" key={"signal-pending:" + id} role="status" aria-live="polite"><div className="activity-info"><strong>{submission.market} · {submission.direction} approval pending</strong><small>Waiting for server confirmation. No order is marked successful until the server confirms it.</small></div></div>)}
-        {signals.filter((signal) => signal.expires_at * 1000 > now).slice(0, 3).map((signal) => { const key = "signal:" + signal.id + ":approve"; const approvalPending = pendingFor(key) || Boolean(signalSubmissions[signal.id]); const submitted = signalResults[signal.id] === "Submitted" || snapshot.positions.some((position) => position.signal_id === signal.id); return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - now) / 1000))}s</small></div><button className="small-action" disabled={(selectedFundingNeedsDisclosure && !snapshot.live_disclosure_accepted) || approvalPending || submitted} onClick={() => openReview("approve", signal)}>{approvalPending ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>; })}
+        {signals.filter((signal) => signal.expires_at * 1000 > now).slice(0, 3).map((signal) => { const key = "signal:" + signal.id + ":approve"; const approvalPending = pendingFor(key) || Boolean(signalSubmissions[signal.id]); const submitted = signalResults[signal.id] === "Submitted" || snapshot.positions.some((position) => position.signal_id === signal.id); return <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} signal</strong><small>Reference {Number(signal.reference_price).toFixed(5)} · Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - now) / 1000))}s</small></div><button className="small-action" disabled={!snapshot.live_disclosure_accepted || approvalPending || submitted} onClick={() => openReview("approve", signal)}>{approvalPending ? "Approving…" : submitted ? "Submitted" : "Review signal"}</button></div>; })}
         {signalError ? <p role="status">{signalError}</p> : !signals.some((signal) => signal.expires_at * 1000 > now) && <p role="status">No current signals. Waiting for the next update.</p>}
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       {!snapshot.partial && snapshot.positions.filter((position) => position.status === "open").map((position) => { const key = "synthetic-position:" + position.id + ":close"; const expiry = Number(position.contract_expires_at); const secondsToExpiry = Number.isFinite(expiry) ? Math.ceil(expiry - now / 1000) : null; const expiryStatus = normaliseManualContractType(position.contract_type) === "fixed" && secondsToExpiry !== null ? secondsToExpiry > 0 ? " · scheduled close in " + secondsToExpiry + "s" : " · expiry reached; awaiting settlement" : ""; return <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{liveNetPnlLabel(Number(position.user_net_unrealized_pnl_usd || 0))} · {money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"}</small><small>Spread {money(position.spread_charged_usd || 0)} · tier fee {money(position.tier_fee_usd || 0)}</small><small className="synthetic-contract-record">{contractTypeLabel(position.contract_type)}{normaliseManualContractType(position.contract_type) === "open_ended" && Number.isFinite(Number(position.maximum_loss_percent)) ? " · max loss " + Number(position.maximum_loss_percent) + "%" : ""}{Number.isFinite(Number(position.manual_stop_loss_percent)) ? " · stop " + Number(position.manual_stop_loss_percent) + "%" : ""}{expiryStatus} · {contractReasonLabel(position.contract_reason)}</small></div><button className="small-action" disabled={pendingFor(key)} onClick={() => void act("/v1/synthetic/positions/" + position.id + "/close", {}).catch(() => undefined)}>{pendingFor(key) ? "Closing…" : "Close"}</button></div>; })}

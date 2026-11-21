@@ -3,8 +3,7 @@
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
-import { DeskLocalized, useDeskLanguage } from "../desk-language";
-import { translateDeskPhrase } from "../../lib/desk-i18n";
+import { DeskLocalized } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
@@ -102,20 +101,23 @@ export function BotsWorkspace({
   reload,
   onActionResult,
   onNotice,
-  onOpenDemo,
   initialBotId = null,
+  initialView = "fleet",
+  flashbackOnly = false,
+  onLeaveFlashback,
 }: {
   data: WorkspaceDashboard;
   request: (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<any>;
   reload: () => Promise<void>;
   onActionResult: (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => void;
   onNotice: (message: string) => void;
-  onOpenDemo: () => void;
   initialBotId?: string | null;
+  initialView?: "fleet" | "flashback";
+  flashbackOnly?: boolean;
+  onLeaveFlashback?: () => void;
 }) {
-  const language = useDeskLanguage();
   const [view, setView] = useState<"fleet" | "create" | "detail" | "flashback">(
-    initialBotId ? "detail" : "fleet",
+    initialBotId ? "detail" : initialView,
   );
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
   const [amount, setAmount] = useState("20");
@@ -159,16 +161,15 @@ export function BotsWorkspace({
   const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
-    source: "wallet" | "demo" | "credit";
     amount: string;
     idempotencyKey: string;
   } | null>(null);
   useEffect(() => {
     setSelectedId(initialBotId);
-    setView(initialBotId ? "detail" : "fleet");
-  }, [initialBotId]);
+    setView(initialBotId ? "detail" : initialView);
+  }, [initialBotId, initialView]);
   const displayBots = data.bots
-    .filter((bot) => !closedBotIds.includes(bot.id))
+    .filter((bot) => !bot.demo_trial && !bot.demo_credit_only && !closedBotIds.includes(bot.id))
     .map((bot) => ({
       ...bot,
       state: stateOverrides[bot.id] ?? bot.state,
@@ -177,7 +178,7 @@ export function BotsWorkspace({
     }));
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
-  const runningStrategies = displayBots.filter((bot) => bot.state === "running" && !bot.demo_credit_only);
+  const runningStrategies = displayBots.filter((bot) => bot.state === "running");
   const latestFlashback = data.flashback || null;
   const flashbackSessions = data.flashback_sessions || (latestFlashback ? [latestFlashback] : []);
   const activeFlashbacks = flashbackSessions.filter((session) => session.state === "sealed" || session.state === "ready_to_reveal");
@@ -190,7 +191,6 @@ export function BotsWorkspace({
     ...activeFlashbacks,
     ...(flashback && !activeFlashbacks.some((session) => session.id === flashback.id) ? [flashback] : []),
   ];
-  const flashbackAvailable = String(data.environment || "").toLowerCase() === "mainnet";
   const flashbackRules = data.flashback_rules;
   const flashbackDirection = data.flashback_direction;
   const directionMarkets = flashbackDirection?.markets || [];
@@ -328,18 +328,13 @@ export function BotsWorkspace({
   }, [data.bots]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
-    // Active demo is always automatic; converted credit remains manual-only.
-    // Funded Memecoin automation continues to use the saved customer choice.
     setMemecoinAssets(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
     setMemecoinLeverage(3);
     setMemecoinCadence(300);
-    setMemecoinAutoEnabled(Boolean(selected.demo_trial) && !selected.demo_credit_only);
+    setMemecoinAutoEnabled(false);
     setIncludeTrench(false);
     setMemecoinAssetCategories({ DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap" });
-    if (selected.demo_credit_only) return;
-    const encoded = selected.demo_trial
-      ? data.memecoin?.demo_authorization?.settings_json
-      : data.memecoin?.authorization?.settings_json;
+    const encoded = data.memecoin?.authorization?.settings_json;
     if (!encoded) return;
     try {
       const settings = JSON.parse(encoded) as Record<string, unknown>;
@@ -359,13 +354,13 @@ export function BotsWorkspace({
       }
       if ([1, 3, 5, 10].includes(Number(settings.leverage))) setMemecoinLeverage(Number(settings.leverage));
       if ([60, 300, 900].includes(Number(settings.cadence_seconds))) setMemecoinCadence(Number(settings.cadence_seconds));
-      if (!selected.demo_trial && typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
+      if (typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
       if (typeof settings.include_trench === "boolean") setIncludeTrench(settings.include_trench);
     } catch {
       // An older authorization record should not prevent the default controls
       // from rendering or change the customer's existing allocation.
     }
-  }, [selected?.id, selected?.product, selected?.demo_trial, selected?.demo_credit_only, data.memecoin?.authorization?.settings_json, data.memecoin?.demo_authorization?.settings_json]);
+  }, [selected?.id, selected?.product, data.memecoin?.authorization?.settings_json]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
     void refreshMemecoinCatalog().catch(() => {
@@ -531,81 +526,6 @@ export function BotsWorkspace({
     ? Math.max(0, Math.ceil((flashback.expires_at * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))
     : 0;
   const flashbackTimeLabel = `${Math.floor(flashbackRemaining / 60)}:${String(flashbackRemaining % 60).padStart(2, "0")}`;
-  const flashbackFleetState = flashback?.state || "available";
-  const flashbackFleetStatus = flashbackFleetState === "sealed"
-    ? "sealed"
-    : flashbackFleetState === "ready_to_reveal"
-      ? "finalising"
-      : flashbackFleetState === "revealed"
-        ? "settled"
-        : "available";
-  const flashbackFleetTone = flashbackFleetState === "ready_to_reveal" || flashbackFleetState === "revealed"
-    ? "running"
-    : "paused";
-  const flashbackFleetAction = flashbackFleetState === "ready_to_reveal"
-    ? "Check status"
-    : flashbackFleetState === "revealed"
-      ? "Review Flashback"
-      : flashbackFleetState === "sealed"
-        ? "View session"
-        : "Open Flashback";
-  const flashbackFleetCard = flashbackAvailable ? (
-    <GradientPanel className="fleet-bot-card reveal-card" key="flashback">
-      <div className="fleet-bot-head">
-        <div>
-          <div className="bot-title">
-            <strong>Flashback</strong>
-            <span className={`status-chip ${flashbackFleetTone}`}>
-              <i />
-              {flashbackFleetStatus}
-            </span>
-          </div>
-          <span className="eyebrow">{directionContract ? "FLASHBACK DIRECTION" : "SEALED RETURN"}</span>
-          <strong className="fleet-amount">
-            {flashback ? money(Number(flashback.allocation_usd || 0)) : "Choose an entry"}
-          </strong>
-        </div>
-      </div>
-      <div className="fleet-metrics">
-        {!flashback && <>
-          <div><span>ENTRY RANGE</span><strong>{money(Number(flashbackRules?.min_entry_usd || 20))}–{money(Number(flashbackRules?.max_entry_usd || 1000))}</strong></div>
-          <div><span>MAX RETURN</span><strong>{Number(flashbackRules?.max_return_multiplier || 3).toFixed(2)}×</strong></div>
-          <div><span>STATUS</span><strong>AVAILABLE</strong></div>
-        </>}
-        {flashbackFleetState === "sealed" && directionContract && <>
-          <div><span>CALL</span><strong>{flashback?.market}/USD · {String(flashback?.direction || "").toUpperCase()}</strong></div>
-          <div><span>SETTLES IN</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></div>
-          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
-        </>}
-        {flashbackFleetState === "sealed" && !directionContract && <>
-          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
-          <div><span>REVEAL WINDOW</span><strong>{flashbackRemaining === 0 ? "FINALISING" : flashbackTimeLabel}</strong></div>
-          <div><span>STATUS</span><strong>SEALED</strong></div>
-        </>}
-        {flashbackFleetState === "ready_to_reveal" && <>
-          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
-          <div><span>RESULT</span><strong>FINALISING</strong></div>
-          <div><span>STATUS</span><strong>SETTLING</strong></div>
-        </>}
-        {flashbackFleetState === "revealed" && directionContract && <>
-          <div><span>CALL</span><strong>{flashback?.market}/USD · {String(flashback?.direction || "").toUpperCase()}</strong></div>
-          <div><span>NET CHANGE</span><strong className={Number(flashback?.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(flashback?.user_net_usd || 0))}</strong></div>
-          <div><span>STATUS</span><strong>SETTLED</strong></div>
-        </>}
-        {flashbackFleetState === "revealed" && !directionContract && <>
-          <div><span>ENTRY</span><strong>{money(Number(flashback?.allocation_usd || 0))}</strong></div>
-          <div><span>RETURNED</span><strong>{money(Number(flashback?.return_usd || 0))}</strong></div>
-          <div><span>STATUS</span><strong>SETTLED</strong></div>
-        </>}
-      </div>
-      <div className="fleet-bot-actions">
-        <span className="compound-chip">{directionContract ? "DIRECTION CONTRACT · SEPARATE FROM BOTS" : "SEALED RETURN · SEPARATE FROM BOTS"}</span>
-        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
-          {flashbackFleetAction} <ChevronRight />
-        </button>
-      </div>
-    </GradientPanel>
-  ) : null;
   const beginNewFlashbackSession = () => {
     setFlashbackAmount("20");
     setFlashbackType(null);
@@ -635,7 +555,7 @@ export function BotsWorkspace({
       setFlashbackNow(Date.now());
     }
   };
-  if (view === "flashback")
+  if (view === "flashback" || flashbackOnly)
     return (
       <DeskLocalized>
       <div className="bot-detail">
@@ -648,7 +568,8 @@ export function BotsWorkspace({
             return;
           }
           setFlashbackNewSession(false);
-          setView("fleet");
+          if (flashbackOnly) onLeaveFlashback?.();
+          else setView("fleet");
         }}>
           <StateIcon name="arrow-left" /> {flashbackInCreationFlow && flashback
             ? flashback.state === "revealed" ? "Back to result" : "Back to current contract"
@@ -959,13 +880,8 @@ export function BotsWorkspace({
     );
     if (view === "detail" && selected) {
       const paused = selected.state === "paused";
-      const isDemoCreditOnlyBot = selected.product === "memecoin" && Boolean(selected.demo_credit_only);
-      const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization" && !isDemoCreditOnlyBot;
-      const isDemoBot = Boolean(selected.demo_trial) && !isDemoCreditOnlyBot;
-      const isVirtualMemecoinBot = isDemoBot || isDemoCreditOnlyBot;
+      const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
       const isClosing = selected.state === "closing";
-      const activeDemoPool = data.demo?.pool_state === "active" && Number(data.demo.pool_available_usd || 0) > 0;
-      const activeDemoCredit = Number(data.demo?.credit_available_usd || 0) > 0;
       const selectedMemecoinCategories = new Set(memecoinAssets.map((asset) => memecoinAssetCategories[asset] || "microcap"));
       const baseCadenceCategories = [...selectedMemecoinCategories].filter((category) => category !== "microcap");
       const cadenceCategories = baseCadenceCategories.length ? baseCadenceCategories : [...selectedMemecoinCategories];
@@ -993,27 +909,24 @@ export function BotsWorkspace({
           <div>
             <span className="eyebrow">{selected.name.toUpperCase()} BOT</span>
             <h2>{selected.name}</h2>
-            <span className={`status-chip ${paused || awaitingAuthorization || isDemoCreditOnlyBot || isClosing ? "paused" : "running"}`}>
+            <span className={`status-chip ${paused || awaitingAuthorization || isClosing ? "paused" : "running"}`}>
               <i />
-              {isClosing ? "closing protected positions" : isDemoCreditOnlyBot ? "manual trading credit" : awaitingAuthorization ? "authorization required" : paused ? "paused" : "active"}
+              {isClosing ? "closing protected positions" : awaitingAuthorization ? "authorization required" : paused ? "paused" : "active"}
             </span>
           </div>
         </GradientPanel>
-        <button className="small-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
-          Open Flashback <ChevronRight />
-        </button>
         <div className="detail-stats">
           <GradientPanel>
-            <span>{isDemoBot ? "DEMO AVAILABLE" : isDemoCreditOnlyBot ? "CREDIT AVAILABLE" : "ALLOCATION"}</span>
-            <strong>{money(isDemoBot ? Number(data.demo?.pool_available_usd || 0) : isDemoCreditOnlyBot ? Number(data.demo?.credit_available_usd || 0) : selected.capital_usd)}</strong>
+            <span>ALLOCATION</span>
+            <strong>{money(selected.capital_usd)}</strong>
           </GradientPanel>
           <GradientPanel>
-            <span>{isDemoBot ? "DEMO LOCKED" : isDemoCreditOnlyBot ? "CREDIT LOCKED" : "COMPOUNDING"}</span>
-            <strong>{isDemoBot ? money(Number(data.demo?.pool_locked_usd || 0)) : isDemoCreditOnlyBot ? money(Number(data.demo?.credit_locked_usd || 0)) : `${selected.compound_percent}%`}</strong>
+            <span>COMPOUNDING</span>
+            <strong>{`${selected.compound_percent}%`}</strong>
           </GradientPanel>
           <GradientPanel>
-            <span>{isDemoBot ? "DEMO P&L" : isDemoCreditOnlyBot ? "EXECUTION" : "HIGH-WATER MARK"}</span>
-            <strong>{isDemoBot ? money(Number(data.demo?.pool_realised_pnl_usd || 0)) : isDemoCreditOnlyBot ? "Manual only" : money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
+            <span>HIGH-WATER MARK</span>
+            <strong>{money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
           </GradientPanel>
         </div>
         {selected.product === "memecoin" && (
@@ -1083,13 +996,12 @@ export function BotsWorkspace({
                 </div>;
               })}
               </div>}
-              {!isDemoBot && (selected.state === "running" || isDemoCreditOnlyBot) && (
+              {selected.state === "running" && (
                 <button
                   className="small-action"
-                  disabled={isActionPending(`memecoin-order:${selected.id}`) || (isDemoCreditOnlyBot ? !activeDemoCredit : false)}
+                  disabled={isActionPending(`memecoin-order:${selected.id}`)}
                   onClick={() => setMemecoinOrder({
                     direction: "long",
-                    source: isDemoCreditOnlyBot ? "credit" : "wallet",
                     amount: "20",
                     idempotencyKey: createMemecoinOrderIdempotencyKey(data.user.id, selected.id),
                   })}
@@ -1099,7 +1011,7 @@ export function BotsWorkspace({
               )}
             </GradientPanel>
           )}
-          {!isVirtualMemecoinBot && !isClosing && (
+          {!isClosing && (
             <GradientPanel className="compound-panel">
               <span className="eyebrow">COMPOUNDING</span>
               <div className="segment-control" role="radiogroup" aria-label="Compounding" onKeyDown={handleBotChoiceKeyDown}>
@@ -1122,20 +1034,14 @@ export function BotsWorkspace({
               </div>
             </GradientPanel>
           )}
-          {selected.product === "memecoin" && !isDemoCreditOnlyBot && !isClosing && (
+          {selected.product === "memecoin" && !isClosing && (
             <GradientPanel className="compound-panel">
-              <span className="eyebrow">{isDemoBot ? "SHARED DEMO CONTROLS" : awaitingAuthorization ? "FUNDED MEMECOIN BOT BETA" : "MEMECOIN STRATEGY CONTROLS"}</span>
+              <span className="eyebrow">{awaitingAuthorization ? "FUNDED MEMECOIN BOT BETA" : "MEMECOIN STRATEGY CONTROLS"}</span>
               <p>
-                {isDemoBot
-                  ? "The shared virtual demo runs automatically after activation. Per-position margins were set before launch; the controls below change future Memecoin strategy entries, not the Synthetic margin. Manual demo orders are never placed."
-                  : awaitingAuthorization
+                {awaitingAuthorization
                   ? "Only your Memecoin allocation is at risk. Results use live market data and settle within that allocation. Trench Mode checks fresh launches only after a same-network DEX quote and liquidity review; it cannot prevent rugs, taxes, freezes, or rapid loss."
                   : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
               </p>
-              {isDemoBot && <div className="fact-block">
-                <span>MEMECOIN MARGIN <b>{data.demo?.memecoin_margin_usd != null ? money(Number(data.demo?.memecoin_margin_usd)) + " per position" : "Legacy sizing · unchanged"}</b></span>
-                <span>SYNTHETIC MARGIN <b>{data.demo?.synthetic_margin_usd != null ? money(Number(data.demo?.synthetic_margin_usd)) + " per position" : "Legacy engine default · unchanged"}</b></span>
-              </div>}
               {awaitingAuthorization && <div className="activity-row" role="status">
                 <div className="activity-info">
                   <strong>Automatic entries cannot start yet.</strong>
@@ -1159,19 +1065,19 @@ export function BotsWorkspace({
               <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
                 {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
               </div>
-              <button type="button" className={isDemoBot || memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={isDemoBot || memecoinAutoEnabled} disabled={isDemoBot} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {isDemoBot ? "Always on" : memecoinAutoEnabled ? "On" : "Off"}</button>
+              <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
               <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
               <button
                 className="primary-action"
                 disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0}
-                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: isDemoBot ? true : memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
+                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
               >
-                {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : isDemoBot ? "Save demo controls" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize Memecoin Bot Beta") : "Save strategy controls"} <StateIcon name="check" />
+                {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize Memecoin Bot Beta") : "Save strategy controls"} <StateIcon name="check" />
               </button>
             </GradientPanel>
           )}
           <div className="detail-actions">
-            {!isVirtualMemecoinBot && !isClosing && <>
+            {!isClosing && <>
               <div className="amount-input">
                 <span>$</span>
                 <input
@@ -1196,7 +1102,7 @@ export function BotsWorkspace({
                 {isActionPending(`bot:${selected.id}:topup`) ? "Updating…" : "Top up allocation"} <Plus />
               </button>
             </>}
-          {!isDemoCreditOnlyBot && !isClosing && <button
+          {!isClosing && <button
             className="primary-action"
             disabled={awaitingAuthorization || isActionPending(`bot:${selected.id}:toggle`)}
             onClick={() =>
@@ -1209,7 +1115,7 @@ export function BotsWorkspace({
               swapKey={paused ? "bot-resume" : "bot-pause"}
             />
           </button>}
-            {!isVirtualMemecoinBot && <button
+            {!isClosing && <button
                 className="danger-action"
                 disabled={isActionPending(`bot:${selected.id}:close`)}
                 onClick={() => { setReviewError(""); setCloseReview(true); }}
@@ -1217,7 +1123,7 @@ export function BotsWorkspace({
                 {isClosing ? "Finish closing bot" : "Close bot"} <X />
               </button>}
           </div>
-          {memecoinOrder && !isDemoBot && (
+          {memecoinOrder && (
             <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!isActionPending(`memecoin-order:${selected.id}`)}>
               <span className="eyebrow">MANUAL MEMECOIN ORDER</span>
               <h2>Review order</h2>
@@ -1225,10 +1131,6 @@ export function BotsWorkspace({
               <div className="segment-control" role="radiogroup" aria-label="Memecoin order direction" onKeyDown={handleBotChoiceKeyDown}>
                 {(["long", "short"] as const).map((direction) => <button type="button" role="radio" aria-checked={memecoinOrder.direction === direction} tabIndex={memecoinOrder.direction === direction ? 0 : -1} key={direction} className={memecoinOrder.direction === direction ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, direction } : current)}>{direction === "long" ? "Long" : "Short"}</button>)}
               </div>
-              {!isDemoBot && !isDemoCreditOnlyBot && <div className="segment-control" role="radiogroup" aria-label="Memecoin order funding source" onKeyDown={handleBotChoiceKeyDown}>
-                <button type="button" role="radio" aria-checked={memecoinOrder.source === "wallet"} tabIndex={memecoinOrder.source === "wallet" ? 0 : -1} className={memecoinOrder.source === "wallet" ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, source: "wallet" } : current)}>Wallet allocation</button>
-                {activeDemoCredit && <button type="button" role="radio" aria-checked={memecoinOrder.source === "credit"} tabIndex={memecoinOrder.source === "credit" ? 0 : -1} className={memecoinOrder.source === "credit" ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, source: "credit" } : current)}>Demo trading credit</button>}
-              </div>}
               <div className="amount-input">
                 <span>$</span>
                 <input value={memecoinOrder.amount} onChange={(event) => setMemecoinOrder((current) => current ? { ...current, amount: event.target.value.replace(/[^0-9.]/g, "") } : current)} inputMode="decimal" aria-label="Memecoin order margin" />
@@ -1237,12 +1139,12 @@ export function BotsWorkspace({
                 <span>MARKET <b>{memecoinMarketLabel(memecoinMarket)}</b></span>
                 <span>LEVERAGE <b>{savedLeverage}×</b></span>
                 <span>CADENCE <b>{manualCadence === 60 ? "1 MINUTE" : manualCadence === 300 ? "5 MINUTES" : "15 MINUTES"}</b></span>
-                <span>FUNDING <b>{memecoinOrder.source === "demo" ? "SHARED DEMO" : memecoinOrder.source === "credit" ? "TRADING CREDIT" : "WALLET ALLOCATION"}</b></span>
+                <span>FUNDING <b>WALLET ALLOCATION</b></span>
               </div>
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
-                disabled={isActionPending(`memecoin-order:${selected.id}`) || Number(memecoinOrder.amount) <= 0 || (isDemoBot && !activeDemoPool) || (isDemoCreditOnlyBot && !activeDemoCredit)}
+                disabled={isActionPending(`memecoin-order:${selected.id}`) || Number(memecoinOrder.amount) <= 0}
                 aria-busy={isActionPending(`memecoin-order:${selected.id}`)}
                 onClick={async () => {
                   const placed = await run("/v1/memecoin/orders", {
@@ -1253,7 +1155,7 @@ export function BotsWorkspace({
                     amount: Number(memecoinOrder.amount),
                     leverage: savedLeverage,
                     cadence_seconds: manualCadence,
-                    funding_source: memecoinOrder.source,
+                    funding_source: "wallet",
                     idempotency_key: memecoinOrder.idempotencyKey,
                     settings: { include_trench: includeTrench },
                   });
@@ -1338,31 +1240,13 @@ export function BotsWorkspace({
           >
             <Plus /> Start strategy
           </button>
-          <button className="small-action fleet-flashback-action" onClick={() => { setFlashbackNewSession(false); setReviewError(""); setView("flashback"); }}>
-            Flashback <ChevronRight />
-          </button>
         </div>
       </div>
       {displayBots.length ? (
         <div className="fleet-bot-grid">
           {displayBots.map((bot) => {
-            const sharedDemo = Boolean(bot.demo_trial) && !bot.demo_credit_only;
-            const status = bot.demo_credit_only
-              ? "manual trading credit"
-              : sharedDemo
-                ? `demo ${data.demo?.pool_state || data.demo?.state || bot.state}`
-                : bot.state.replace(/_/g, " ");
-            const statusTone = status === "running" || status === "demo active" ? "running" : "paused";
-            const allocation = bot.demo_credit_only
-              ? Number(data.demo?.credit_available_usd || 0) + Number(data.demo?.credit_locked_usd || 0)
-              : sharedDemo
-                ? Number(data.demo?.pool_available_usd || 0) + Number(data.demo?.pool_locked_usd || 0)
-                : bot.capital_usd;
-            const source = bot.demo_credit_only
-              ? "TRADING CREDIT"
-              : sharedDemo
-                ? "VIRTUAL FUNDS"
-                : "ALLOCATION";
+            const status = bot.state.replace(/_/g, " ");
+            const statusTone = bot.state === "running" ? "running" : "paused";
             const isSynthetic = bot.product === "synthetic";
             const syntheticExecution = data.synthetic?.execution_mode || "MANUAL";
             const autoPosition = isSynthetic
@@ -1414,16 +1298,16 @@ export function BotsWorkspace({
                       {status}
                     </span>
                   </div>
-                  <span className="eyebrow">{source}</span>
+                  <span className="eyebrow">ALLOCATION</span>
                   <strong className="fleet-amount">
-                    {money(allocation)}
+                    {money(bot.capital_usd)}
                   </strong>
                 </div>
               </div>
               <div className="fleet-metrics">
                 <div>
-                  <span>{isSynthetic ? "EXECUTION" : bot.demo_credit_only ? "EXECUTION" : sharedDemo ? "POOL" : "COMPOUND"}</span>
-                  <strong>{isSynthetic ? `Auto ${syntheticExecution === "AUTO" ? "on" : "off"}` : bot.demo_credit_only ? "Manual only" : sharedDemo ? "Shared across products" : `${bot.compound_percent}%`}</strong>
+                  <span>{isSynthetic ? "EXECUTION" : "COMPOUND"}</span>
+                  <strong>{isSynthetic ? `Auto ${syntheticExecution === "AUTO" ? "on" : "off"}` : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
                   <span>{isSynthetic ? "ACTIVE AUTO ORDER" : "LATEST SETTLEMENT"}</span>
@@ -1442,7 +1326,7 @@ export function BotsWorkspace({
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
-                  {isSynthetic ? hasSettledPnl ? `${settledPnl >= 0 ? "ALL SETTLED P&L +" : "ALL SETTLED P&L −"}${money(Math.abs(settledPnl))}` : "NO SETTLED POSITIONS" : bot.demo_credit_only ? "MANUAL ONLY" : sharedDemo ? "SHARED VIRTUAL DEMO" : `COMPOUND ${bot.compound_percent}%`}
+                  {isSynthetic ? hasSettledPnl ? `${settledPnl >= 0 ? "ALL SETTLED P&L +" : "ALL SETTLED P&L −"}${money(Math.abs(settledPnl))}` : "NO SETTLED POSITIONS" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
                 <button
                   className="small-action"
@@ -1457,11 +1341,9 @@ export function BotsWorkspace({
             </GradientPanel>
             );
           })}
-          {flashbackFleetCard}
         </div>
       ) : (
         <>
-          {flashbackFleetCard && <div className="fleet-bot-grid">{flashbackFleetCard}</div>}
           <EmptyBots onLaunch={() => setView("create")} />
         </>
       )}
@@ -1482,27 +1364,6 @@ export function BotsWorkspace({
             </p>
           </div>
         </GradientPanel>
-      )}
-      {data?.demo?.state === "issued" && (
-        <button
-          className="demo-link"
-          onClick={onOpenDemo}
-        >
-          {Number(data?.demo?.grant_usd || 0) > 0
-            ? translateDeskPhrase(language, "Start the {amount} virtual demo", {
-                amount: money(Number(data?.demo?.grant_usd)),
-              })
-            : translateDeskPhrase(language, "Start shared virtual demo")}{" "}
-          <ChevronRight />
-        </button>
-      )}
-      {data?.demo?.state === "active" && (
-        <p className="demo-link" role="status">
-          {translateDeskPhrase(language, "Shared virtual demo · {available} available · {locked} locked · isolated from wallet", {
-            available: money(Number(data?.demo?.pool_available_usd || 0)),
-            locked: money(Number(data?.demo?.pool_locked_usd || 0)),
-          })}
-        </p>
       )}
     </div>
     </DeskLocalized>

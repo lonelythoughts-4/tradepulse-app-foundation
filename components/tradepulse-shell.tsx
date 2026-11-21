@@ -12,6 +12,7 @@ import { DashboardWorkspace } from "./workspaces/dashboard-workspace";
 import { SyntheticWorkspace } from "./workspaces/synthetic-workspace";
 import { WalletWorkspace } from "./workspaces/wallet-workspace";
 import { BotsWorkspace } from "./workspaces/bots-workspace";
+import { FlashbackWorkspace } from "./workspaces/flashback-workspace";
 import { DeskWorkspace } from "./workspaces/desk-workspace";
 import { AccountWorkspace } from "./workspaces/account-workspace";
 import { HelpWorkspace } from "./workspaces/help-workspace";
@@ -277,6 +278,7 @@ const ease = [0.16, 1, 0.3, 1] as const;
 const navItems = [
   { label: "Dashboard", icon: "dashboard" },
   { label: "Bots", icon: "bots" },
+  { label: "Flashback", icon: "desk" },
   { label: "Synthetic", icon: "desk" },
   { label: "Wallet", icon: "wallet" },
   { label: "Earn", icon: "earn" },
@@ -654,6 +656,7 @@ const mobilePrimaryNavItems: { label: string; icon: NavIconName }[] = [
 const mobileSecondaryNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Protection", icon: "account" },
   { label: "Earn", icon: "earn" },
+  { label: "Flashback", icon: "desk" },
   { label: "Live Desk", icon: "desk" },
   { label: "Community", icon: "community" },
   { label: "Help", icon: "help" },
@@ -943,26 +946,6 @@ type VisualDeskModel = {
       };
     };
   }>;
-  demo: {
-    state?: string;
-    grant_usd?: number;
-    expires_at?: number;
-    profit_snapshot_usd?: number;
-    gift_credit_usd?: number;
-    converted_at?: number;
-    pool_state?: string;
-    pool_available_usd?: number;
-    pool_locked_usd?: number;
-    pool_realised_pnl_usd?: number;
-    credit_available_usd?: number;
-    credit_locked_usd?: number;
-    credit_active?: boolean;
-    memecoin_margin_usd?: number | null;
-    synthetic_margin_usd?: number | null;
-    memecoin_min_margin_usd?: number;
-    synthetic_min_margin_usd?: number;
-    max_position_margin_usd?: number;
-  } | null;
 };
 
 function BalanceHero({ wallet }: { wallet?: VisualDeskModel["wallet"] }) {
@@ -1104,7 +1087,7 @@ function BotCard({
   onOpen?: () => void;
 }) {
   const factual = bot.truth;
-  const factualTone = factual?.status === "running" || factual?.status === "demo active" ? "running" : "paused";
+  const factualTone = factual?.status === "running" ? "running" : "paused";
   const paused = factual ? factualTone === "paused" : bot.state === "paused";
   return (
     <DeskLocalized>
@@ -1311,87 +1294,6 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
     {!position && !isNonFinancial && <p>This settlement record does not include a market-level execution record.</p>}
     <button className="ghost-action" type="button" onClick={onClose}>Close</button>
   </AccessibleDialog></DeskLocalized>;
-}
-function DemoBanner({
-  demo,
-  onStart,
-  hasFundedDesk = false,
-}: {
-  demo?: VisualDeskModel["demo"];
-  onStart?: () => void;
-  hasFundedDesk?: boolean;
-}) {
-  const language = useDeskLanguage();
-  const active = (demo?.pool_state || demo?.state) === "active";
-  const grant = Number(demo?.grant_usd || 0);
-  const available = Number(demo?.pool_available_usd || 0);
-  const locked = Number(demo?.pool_locked_usd || 0);
-  const realised = Number(demo?.pool_realised_pnl_usd || 0);
-  const activeEndsAt = Number(demo?.expires_at || 0);
-  const activeDemoSummary = translateDeskPhrase(
-    language,
-    "Virtual funds: {available} available · {locked} locked. Realized demo profit: {realised}.",
-    { available: money(available), locked: money(locked), realised: money(realised) },
-  );
-  const activeDemoExpiry = activeEndsAt
-    ? ` ${translateDeskPhrase(language, "Ends {expiry}.", {
-        expiry: new Date(activeEndsAt * 1000).toLocaleString(language),
-      })}`
-    : "";
-  // A zero authoritative balance means the credit was spent or is locked in
-  // an open position.  Only older payloads without the new field may fall
-  // back to the historical issued amount.
-  const tradingCredit = demo?.credit_available_usd === undefined
-    ? Number(demo?.gift_credit_usd || 0)
-    : Number(demo.credit_available_usd || 0);
-  // An unstarted virtual offer should never obscure a funded desk. Once it is
-  // active, show its actual status instead of repeating the launch invitation.
-  if (!demo || (!active && demo.state !== "issued" && tradingCredit <= 0)) return null;
-  if (demo.state === "issued" && hasFundedDesk) return null;
-  return (
-    <DeskLocalized>
-    <GradientPanel className="demo-banner reveal-card">
-      <div>
-        <span className="eyebrow">
-          {tradingCredit > 0
-            ? "DEMO TRADING CREDIT"
-            : active
-              ? "SHARED VIRTUAL DEMO ACTIVE"
-              : "SHARED VIRTUAL DEMO"}
-        </span>
-        <h2>
-          {tradingCredit > 0
-            ? `${money(tradingCredit)} trading credit available`
-            : active
-              ? "Your virtual demo is active"
-              : grant > 0
-                ? translateDeskPhrase(language, "Start a {grant} virtual demo", { grant: money(grant) })
-                : "Start shared virtual demo"}
-        </h2>
-        <p>
-          {tradingCredit > 0
-            ? "Non-withdrawable trading credit for eligible Memecoin and Synthetic orders. It is not cash or wallet balance."
-            : active
-              ? `${activeDemoSummary}${activeDemoExpiry}`
-              : "One shared virtual pool can be assigned across supported Memecoin and Synthetic activity. It is separate from your wallet."}
-        </p>
-      </div>
-      <img
-        src={active || tradingCredit > 0 ? "/illustrations/demo-hourglass.png" : "/illustrations/demo-banner.png"}
-        alt={active || tradingCredit > 0 ? "Virtual demo status" : "Paper money plane flying toward a virtual demo"}
-        className="illustration-demo-banner pointer-events-none select-none"
-        draggable={false}
-        decoding="async"
-        loading="eager"
-      />
-      {!active && tradingCredit <= 0 && (
-        <button aria-label="Review virtual demo terms" onClick={onStart}>
-          <ChevronRight size={17} />
-        </button>
-      )}
-    </GradientPanel>
-    </DeskLocalized>
-  );
 }
 function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
   return (
@@ -2248,7 +2150,7 @@ function WithdrawFlow({
               />
             </label>
             <small className="security-note">
-              Required to approve this withdrawal. Demo code:{" "}
+              Required to approve this withdrawal.
             </small>
             <button
               className="primary-action"
@@ -2358,7 +2260,7 @@ function WalletScreen({
   );
 }
 
-type BotView = "fleet" | "create-product" | "create-amount" | "detail" | "demo";
+type BotView = "fleet" | "create-product" | "create-amount" | "detail";
 
 function BotProductCard({
   name,
@@ -2730,49 +2632,6 @@ function OnboardingScreen() {
   );
 }
 
-function DemoScreen() {
-  return (
-    <DeskLocalized>
-    <div className="demo-screen">
-      <GradientPanel className="demo-terms">
-        <span className="eyebrow">PRACTICE MODE · DEMO</span>
-        <h2>Demo trading</h2>
-        <p>
-          This demo uses <strong>$2,000.00 shared virtual funds</strong>. They are not
-          real money, cannot be withdrawn, and never touch your wallet.
-        </p>
-        <div className="virtual-label">VIRTUAL / NON-WITHDRAWABLE</div>
-        <button className="primary-action">
-          Activate shared demo <ChevronRight />
-        </button>
-      </GradientPanel>
-      <GradientPanel className="demo-activation">
-        <div>
-          <span className="eyebrow">DEMO ACTIVE</span>
-          <h2>$2,000.00 shared virtual pool</h2>
-          <div className="demo-expiry-card">
-            <img
-              src="/illustrations/demo-hourglass.png"
-              alt="Demo time remaining"
-              className="demo-hourglass-art"
-              decoding="async"
-            />
-            <div>
-              <span className="eyebrow">DEMO EXPIRY</span>
-              <strong>
-                Expires in <span className="mono">23:59:42</span>
-              </strong>
-              <small>Assign the pool across Memecoin and Synthetic; unused value expires with the demo.</small>
-            </div>
-            <span className="amber-chip">ENDING SOON</span>
-          </div>
-        </div>
-        <div className="demo-countdown mono">23:59:42</div>
-      </GradientPanel>
-    </div>
-    </DeskLocalized>
-  );
-}
 function BotsScreen({
   bots,
   onToggle,
@@ -2794,7 +2653,6 @@ function BotsScreen({
         onToggle={() => onToggle(selectedBot.name)}
       />
     );
-  if (view === "demo") return <DemoScreen />;
   return (
     <div className="bots-screen">
       <GradientPanel className="fleet-hero">
@@ -2835,9 +2693,6 @@ function BotsScreen({
       ) : (
         <EmptyBots />
       )}
-      <button className="demo-link" onClick={() => setView("demo")}>
-        Explore the $2,000 shared virtual demo <ChevronRight />
-      </button>
     </div>
   );
 }
@@ -2846,14 +2701,12 @@ export function Dashboard({
   bots,
   model,
   onManage,
-  onStartDemo,
   onViewActivity,
   onOpenBot,
 }: {
   bots: Bot[];
   model?: VisualDeskModel;
   onManage?: () => void;
-  onStartDemo?: () => void;
   onViewActivity?: () => void;
   onOpenBot?: (bot: Bot) => void;
 }) {
@@ -2888,11 +2741,6 @@ export function Dashboard({
         </div>
       </section>
       <Activity ledger={model?.ledger} onViewAll={onViewActivity} />
-      <DemoBanner
-        demo={model?.demo}
-        onStart={onStartDemo}
-        hasFundedDesk={Boolean(bots.length || (model?.wallet.equity || 0) > 0)}
-      />
       <div className="sync-time">
         ACCOUNT SNAPSHOT · LIVE DATA
       </div>
@@ -4621,14 +4469,14 @@ const activationLanguages: Array<{ code: LanguageCode; label: string; flag: stri
 ];
 
 const activationCopy: Record<LanguageCode, { language: string; title: string; intro: string; terms: string; body: string; accept: string; opening: string }> = {
-  en: { language: "Choose language", title: "Confirm your access", intro: "Review the terms and risk notice before opening your desk.", terms: "Terms & risk notice", body: "You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls, virtual demo results, and market analysis do not guarantee execution or profit.", accept: "Accept terms and open desk", opening: "Opening desk…" },
-  ru: { language: "Выберите язык", title: "Подтвердите доступ", intro: "Ознакомьтесь с условиями и рисками перед открытием кабинета.", terms: "Условия и уведомление о рисках", body: "Вы отвечаете за сеть, адрес и сумму, которые отправляете. Депозиты зачисляются только после подтверждения в сети. Боты, виртуальная демо-версия и анализ рынка не гарантируют исполнение или прибыль.", accept: "Принять условия и открыть кабинет", opening: "Открываем кабинет…" },
-  hi: { language: "भाषा चुनें", title: "अपनी पहुंच की पुष्टि करें", intro: "अपना डेस्क खोलने से पहले नियम और जोखिम सूचना देखें।", terms: "नियम और जोखिम सूचना", body: "आपके द्वारा भेजे गए नेटवर्क, पते और राशि की जिम्मेदारी आपकी है। जमा राशि केवल ऑन-चेन पुष्टि के बाद जमा होती है। बॉट, वर्चुअल डेमो और मार्केट विश्लेषण निष्पादन या लाभ की गारंटी नहीं देते।", accept: "नियम स्वीकार करें और डेस्क खोलें", opening: "डेस्क खोला जा रहा है…" },
-  es: { language: "Elige idioma", title: "Confirma tu acceso", intro: "Revisa los términos y el aviso de riesgo antes de abrir tu escritorio.", terms: "Términos y aviso de riesgo", body: "Eres responsable de la red, dirección y cantidad que envíes. Los depósitos requieren confirmación en cadena. Los controles del bot, los resultados de demo virtuales y el análisis de mercado no garantizan ejecución ni ganancias.", accept: "Aceptar términos y abrir escritorio", opening: "Abriendo escritorio…" },
-  it: { language: "Scegli lingua", title: "Conferma l'accesso", intro: "Rivedi i termini e l'avviso sui rischi prima di aprire il desk.", terms: "Termini e avviso sui rischi", body: "Sei responsabile della rete, dell'indirizzo e dell'importo inviati. I depositi richiedono conferma on-chain. I controlli dei bot, i risultati demo virtuali e l'analisi di mercato non garantiscono esecuzione o profitto.", accept: "Accetta i termini e apri il desk", opening: "Apertura desk…" },
-  zh: { language: "选择语言", title: "确认访问权限", intro: "打开交易台前，请阅读条款和风险提示。", terms: "条款与风险提示", body: "您对提交的网络、地址和金额负责。存款需要链上确认。机器人控制、虚拟演示结果和市场分析不保证执行或盈利。", accept: "接受条款并打开交易台", opening: "正在打开交易台…" },
-  ja: { language: "言語を選択", title: "アクセスを確認", intro: "デスクを開く前に、利用規約とリスク通知をご確認ください。", terms: "利用規約とリスク通知", body: "送信するネットワーク、アドレス、金額はお客様の責任です。入金にはオンチェーン確認が必要です。ボット操作、仮想デモ結果、市場分析は約定や利益を保証しません。", accept: "規約に同意してデスクを開く", opening: "デスクを開いています…" },
-  ro: { language: "Alege limba", title: "Confirmă accesul", intro: "Examinează termenii și informarea privind riscurile înainte de a deschide biroul.", terms: "Termeni și informare privind riscurile", body: "Sunteți responsabil pentru rețea, adresă și suma trimisă. Depozitele necesită confirmare on-chain. Controalele botului, rezultatele demo virtuale și analiza de piață nu garantează execuția sau profitul.", accept: "Acceptă termenii și deschide biroul", opening: "Se deschide biroul…" },
+  en: { language: "Choose language", title: "Confirm your access", intro: "Review the terms and risk notice before opening your desk.", terms: "Terms & risk notice", body: "You are responsible for the network, address, and amount you submit. Deposits require on-chain confirmation. Bot controls and market analysis do not guarantee execution or profit.", accept: "Accept terms and open desk", opening: "Opening desk…" },
+  ru: { language: "Выберите язык", title: "Подтвердите доступ", intro: "Ознакомьтесь с условиями и рисками перед открытием кабинета.", terms: "Условия и уведомление о рисках", body: "Вы отвечаете за сеть, адрес и сумму, которые отправляете. Депозиты зачисляются только после подтверждения в сети. Боты и анализ рынка не гарантируют исполнение или прибыль.", accept: "Принять условия и открыть кабинет", opening: "Открываем кабинет…" },
+  hi: { language: "भाषा चुनें", title: "अपनी पहुंच की पुष्टि करें", intro: "अपना डेस्क खोलने से पहले नियम और जोखिम सूचना देखें।", terms: "नियम और जोखिम सूचना", body: "आपके द्वारा भेजे गए नेटवर्क, पते और राशि की जिम्मेदारी आपकी है। जमा राशि केवल ऑन-चेन पुष्टि के बाद जमा होती है। बॉट और मार्केट विश्लेषण निष्पादन या लाभ की गारंटी नहीं देते।", accept: "नियम स्वीकार करें और डेस्क खोलें", opening: "डेस्क खोला जा रहा है…" },
+  es: { language: "Elige idioma", title: "Confirma tu acceso", intro: "Revisa los términos y el aviso de riesgo antes de abrir tu escritorio.", terms: "Términos y aviso de riesgo", body: "Eres responsable de la red, dirección y cantidad que envíes. Los depósitos requieren confirmación en cadena. Los controles del bot y el análisis de mercado no garantizan ejecución ni ganancias.", accept: "Aceptar términos y abrir escritorio", opening: "Abriendo escritorio…" },
+  it: { language: "Scegli lingua", title: "Conferma l'accesso", intro: "Rivedi i termini e l'avviso sui rischi prima di aprire il desk.", terms: "Termini e avviso sui rischi", body: "Sei responsabile della rete, dell'indirizzo e dell'importo inviati. I depositi richiedono conferma on-chain. I controlli dei bot e l'analisi di mercato non garantiscono esecuzione o profitto.", accept: "Accetta i termini e apri il desk", opening: "Apertura desk…" },
+  zh: { language: "选择语言", title: "确认访问权限", intro: "打开交易台前，请阅读条款和风险提示。", terms: "条款与风险提示", body: "您对提交的网络、地址和金额负责。存款需要链上确认。机器人控制和市场分析不保证执行或盈利。", accept: "接受条款并打开交易台", opening: "正在打开交易台…" },
+  ja: { language: "言語を選択", title: "アクセスを確認", intro: "デスクを開く前に、利用規約とリスク通知をご確認ください。", terms: "利用規約とリスク通知", body: "送信するネットワーク、アドレス、金額はお客様の責任です。入金にはオンチェーン確認が必要です。ボット操作と市場分析は約定や利益を保証しません。", accept: "規約に同意してデスクを開く", opening: "デスクを開いています…" },
+  ro: { language: "Alege limba", title: "Confirmă accesul", intro: "Examinează termenii și informarea privind riscurile înainte de a deschide biroul.", terms: "Termeni și informare privind riscurile", body: "Sunteți responsabil pentru rețea, adresă și suma trimisă. Depozitele necesită confirmare on-chain. Controalele botului și analiza de piață nu garantează execuția sau profitul.", accept: "Acceptă termenii și deschide biroul", opening: "Se deschide biroul…" },
 };
 
 const activationProgress: Record<LanguageCode, (step: number) => string> = {
@@ -4647,49 +4495,41 @@ const activationStories: Record<LanguageCode, Array<[string, string]>> = {
     ["Your TradeMemo desk", "See your wallet, Memecoin, Synthetic, and account activity in one place."],
     ["You stay in control", "Choose each allocation. Pause, resume, or close automation at any time."],
     ["Check every transfer", "Confirm the network, address, and amount. Digital assets and automated trading can lose value. Results are not guaranteed."],
-    ["Try the demo first", "Virtual credit is optional, cannot be withdrawn, and never changes your mainnet wallet."],
   ],
   ru: [
     ["Ваш кабинет TradeMemo", "Просматривайте кошелёк, Memecoin, Synthetic и активность аккаунта в одном месте."],
     ["Вы всё контролируете", "Выбирайте распределение средств. Приостанавливайте, возобновляйте или останавливайте автоматизацию."],
     ["Проверяйте каждый перевод", "Проверьте сеть, адрес и сумму. Цифровые активы и автоматическая торговля могут привести к убыткам."],
-    ["Сначала попробуйте демо", "Виртуальные средства необязательны, их нельзя вывести, и они не меняют основной кошелёк."],
   ],
   hi: [
     ["आपका TradeMemo डेस्क", "वॉलेट, Memecoin, Synthetic और खाते की गतिविधि एक जगह देखें।"],
     ["नियंत्रण आपके पास है", "हर आवंटन चुनें। ऑटोमेशन को कभी भी रोकें, फिर शुरू करें या बंद करें।"],
     ["हर ट्रांसफ़र जाँचें", "नेटवर्क, पता और राशि की पुष्टि करें। डिजिटल संपत्ति और ऑटोमेटेड ट्रेडिंग में नुकसान हो सकता है।"],
-    ["पहले डेमो आज़माएँ", "वर्चुअल क्रेडिट वैकल्पिक है, निकाला नहीं जा सकता और मुख्य वॉलेट नहीं बदलता।"],
   ],
   es: [
     ["Tu espacio TradeMemo", "Consulta tu cartera, Memecoin, Synthetic y la actividad de tu cuenta en un solo lugar."],
     ["Tú mantienes el control", "Elige cada asignación. Pausa, reanuda o cierra la automatización cuando quieras."],
     ["Comprueba cada transferencia", "Confirma la red, la dirección y el importe. Los activos digitales y el trading automatizado pueden perder valor."],
-    ["Prueba primero la demo", "El crédito virtual es opcional, no se puede retirar y no cambia tu cartera principal."],
   ],
   it: [
     ["Il tuo desk TradeMemo", "Consulta portafoglio, Memecoin, Synthetic e attività dell'account in un unico posto."],
     ["Il controllo è tuo", "Scegli ogni allocazione. Puoi sospendere, riprendere o chiudere l'automazione in qualsiasi momento."],
     ["Controlla ogni trasferimento", "Verifica rete, indirizzo e importo. Gli asset digitali e il trading automatico possono perdere valore."],
-    ["Prova prima la demo", "Il credito virtuale è facoltativo, non è prelevabile e non modifica il portafoglio principale."],
   ],
   zh: [
     ["您的 TradeMemo 工作台", "在一个位置查看钱包、Memecoin、Synthetic 和账户活动。"],
     ["操作由您掌控", "自行选择每项配置。可随时暂停、恢复或关闭自动化。"],
     ["核对每笔转账", "确认网络、地址和金额。数字资产和自动交易可能造成损失。"],
-    ["先试用模拟体验", "虚拟额度可选、不可提现，也不会影响主网钱包。"],
   ],
   ja: [
     ["TradeMemo デスク", "ウォレット、Memecoin、Synthetic、アカウントの動きを一か所で確認できます。"],
     ["操作はいつでも自分で管理", "配分を選び、自動化をいつでも一時停止・再開・終了できます。"],
     ["送金内容を必ず確認", "ネットワーク、アドレス、金額を確認してください。デジタル資産と自動取引には損失のリスクがあります。"],
-    ["まずはデモをお試しください", "仮想クレジットは任意で、出金できず、メインネットのウォレットにも影響しません。"],
   ],
   ro: [
     ["Spațiul tău TradeMemo", "Vezi portofelul, Memecoin, Synthetic și activitatea contului într-un singur loc."],
     ["Tu deții controlul", "Alegi fiecare alocare. Poți opri, relua sau închide automatizarea oricând."],
     ["Verifică fiecare transfer", "Confirmă rețeaua, adresa și suma. Activele digitale și tranzacționarea automată pot genera pierderi."],
-    ["Încearcă mai întâi demo-ul", "Creditul virtual este opțional, nu poate fi retras și nu schimbă portofelul principal."],
   ],
 };
 
@@ -5831,7 +5671,6 @@ function LiveWalletScreen({
     wallet?: Partial<LiveDashboard["wallet"]>;
     withdrawal?: LiveDashboard["withdrawals"][number];
     deposits?: LiveDashboard["deposits"];
-    demo?: LiveDashboard["demo"];
     bots?: LiveDashboard["bots"];
   }) => void;
   onNotice: (message: string) => void;
@@ -6703,7 +6542,7 @@ function LiveWalletScreen({
   );
 }
 
-const deskTabs = ["Dashboard", "Bots", "Wallet", "Desk", "Account", "Earn", "Help", "Protection", "Synthetic", "Admin"] as const;
+const deskTabs = ["Dashboard", "Bots", "Flashback", "Wallet", "Desk", "Account", "Earn", "Help", "Protection", "Synthetic", "Admin"] as const;
 type DeskTab = (typeof deskTabs)[number];
 
 function deskTabFromHash(): DeskTab | null {
@@ -6928,17 +6767,6 @@ function LiveTradePulse() {
   const [broadcastText, setBroadcastText] = useState("");
   const [broadcastConfirm, setBroadcastConfirm] = useState("");
   const [securityCode, setSecurityCode] = useState("");
-  const [demoReviewOpen, setDemoReviewOpen] = useState(false);
-  const [demoMemecoinMargin, setDemoMemecoinMargin] = useState("");
-  const [demoSyntheticMargin, setDemoSyntheticMargin] = useState("");
-  const openDemoReview = () => {
-    if (!data) return;
-    const grant = Number(data.demo?.grant_usd || 0);
-    const maximum = Number(data.demo?.max_position_margin_usd || Math.floor(grant * 0.2 * 100) / 100);
-    setDemoMemecoinMargin(String(maximum));
-    setDemoSyntheticMargin(String(Math.min(25, maximum)));
-    setDemoReviewOpen(true);
-  };
   const [webEnvironment, setWebEnvironment] = useState<"mainnet" | "testnet">(
     "mainnet",
   );
@@ -7194,17 +7022,6 @@ function LiveTradePulse() {
     void load("mainnet");
   }, [data?.user.is_admin, webEnvironment]);
   useEffect(() => {
-    const demo = data?.demo;
-    const state = demo?.pool_state || demo?.state;
-    const endsAt = Number(demo?.expires_at || 0);
-    if (state !== "active" || !Number.isFinite(endsAt) || endsAt <= 0) return;
-    const timer = window.setTimeout(
-      () => void load(),
-      Math.max(0, endsAt * 1000 - Date.now()) + 100,
-    );
-    return () => window.clearTimeout(timer);
-  }, [data?.demo?.expires_at, data?.demo?.pool_state, data?.demo?.state, webEnvironment]);
-  useEffect(() => {
     if (!notice || !data) return;
     const timer = window.setTimeout(() => setNotice(""), 6500);
     return () => window.clearTimeout(timer);
@@ -7438,11 +7255,6 @@ function LiveTradePulse() {
         };
       });
     }
-    if (path === "/v1/demo/start" && response.trial && typeof response.trial === "object") {
-      updateDashboard((current) =>
-        current ? { ...current, demo: response.trial as LiveDashboard["demo"] } : current,
-      );
-    }
     if (path.startsWith("/v1/flashback/") && response.session && typeof response.session === "object") {
       const session = response.session as NonNullable<LiveDashboard["flashback"]>;
       const sessions = Array.isArray(response.sessions)
@@ -7463,9 +7275,7 @@ function LiveTradePulse() {
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     const actionKey = botAction
       ? `bot:${botAction[1]}:${String(payload.action || "action")}`
-      : path === "/v1/demo/start"
-        ? "demo:start"
-        : path;
+      : path;
     if (isActionPending(actionKey)) return false;
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
@@ -7475,9 +7285,6 @@ function LiveTradePulse() {
       });
       applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
-      if (path === "/v1/demo/start") {
-        void load().catch(() => undefined);
-      }
       return true;
     } catch (error) {
       const message = error instanceof DOMException && error.name === "AbortError"
@@ -7596,7 +7403,7 @@ function LiveTradePulse() {
   const profileName =
     data.user.first_name || data.user.username || "Telegram user";
   const unreadNoticeCount = noticeCenter.unread;
-  const visualBots: Bot[] = data.bots.map((bot) => ({
+  const visualBots: Bot[] = data.bots.filter((bot) => !bot.demo_trial && !bot.demo_credit_only).map((bot) => ({
     id: bot.id,
     name: bot.product === "memecoin" ? "Memecoin" : "Synthetic Indices",
     allocation: money(bot.capital_usd),
@@ -7604,18 +7411,10 @@ function LiveTradePulse() {
     percent: 0,
     gain: "",
     state: bot.state === "paused" ? "paused" : "running",
-    compound: bot.demo_trial || bot.demo_credit_only ? "" : `COMPOUND ${bot.compound_percent}%`,
+    compound: `COMPOUND ${bot.compound_percent}%`,
     truth: {
-      status: bot.demo_credit_only
-        ? "manual trading credit"
-        : bot.demo_trial
-          ? `demo ${data.demo?.pool_state || data.demo?.state || bot.state}`
-          : bot.state.replace(/_/g, " "),
-      source: bot.demo_credit_only
-        ? "Non-withdrawable trading credit"
-        : bot.demo_trial
-          ? "Shared virtual demo"
-          : "Allocation",
+      status: bot.state.replace(/_/g, " "),
+      source: "Allocation",
     },
   }));
   const visualModel: VisualDeskModel = {
@@ -7623,7 +7422,6 @@ function LiveTradePulse() {
     tier: data.user.tier,
     alerts: data.alerts.length,
     ledger: data.ledger,
-    demo: data.demo,
   };
   const chromeActive = tab === "Desk" ? "Live Desk" : tab;
   const selectChromeTab = (value: string) => {
@@ -7759,18 +7557,6 @@ function LiveTradePulse() {
   };
   const walletEnvironment = data.user.is_admin ? webEnvironment : "mainnet";
   const workspacePresence = getWorkspacePresencePlan(Boolean(reduceMotion));
-  const demoGrant = Number(data.demo?.grant_usd || 0);
-  const demoMaximumMargin = Number(data.demo?.max_position_margin_usd || Math.floor(demoGrant * 0.2 * 100) / 100);
-  const demoMemecoinMinimum = Number(data.demo?.memecoin_min_margin_usd || 20);
-  const demoSyntheticMinimum = Number(data.demo?.synthetic_min_margin_usd || 25);
-  const validDemoMargin = (value: string, minimum: number) => (
-    /^\d+(?:\.\d{1,2})?$/.test(value.trim())
-    && Number.isFinite(Number(value))
-    && Number(value) >= minimum
-    && Number(value) <= demoMaximumMargin
-  );
-  const demoSizingValid = validDemoMargin(demoMemecoinMargin, demoMemecoinMinimum)
-    && validDemoMargin(demoSyntheticMargin, demoSyntheticMinimum);
   return (
     <DeskLanguageProvider language={uiLanguage}>
     <DeskLocalized>
@@ -7805,80 +7591,6 @@ function LiveTradePulse() {
           setTab("Account");
           setOpenNotificationsRequest(true);
         }} />
-        {demoReviewOpen && data.demo?.state === "issued" && (
-          <AccessibleDialog
-            label="Configure shared virtual demo"
-            onClose={() => setDemoReviewOpen(false)}
-            dismissible={!isActionPending("demo:start")}
-          >
-            <div className="demo-review-heading">
-              <h2 id="demo-review-title">Choose automatic position sizes</h2>
-              <span className="status-chip paused">NOT STARTED</span>
-            </div>
-            <div className="fact-block">
-              <span>VIRTUAL FUNDS <b>{demoGrant > 0 ? money(demoGrant) : "Offer unavailable"}</b></span>
-              <span>ACTIVATION DEADLINE <b>{data?.demo?.expires_at ? new Date(data.demo.expires_at * 1000).toLocaleString() : "Confirmed when available"}</b></span>
-              <span>MAXIMUM PER POSITION <b>{money(demoMaximumMargin)}</b></span>
-            </div>
-            <div className="demo-sizing-fields" aria-labelledby="demo-review-title">
-              <label className="amount-field" htmlFor="demo-memecoin-margin">
-                Memecoin margin per position
-                <input
-                  id="demo-memecoin-margin"
-                  type="number"
-                  min={demoMemecoinMinimum}
-                  max={demoMaximumMargin}
-                  step="0.01"
-                  value={demoMemecoinMargin}
-                  onChange={(event) => setDemoMemecoinMargin(event.target.value)}
-                  inputMode="decimal"
-                  aria-label="Memecoin demo margin per position"
-                  data-dialog-initial-focus
-                />
-              </label>
-              <label className="amount-field" htmlFor="demo-synthetic-margin">
-                Synthetic margin per position
-                <input
-                  id="demo-synthetic-margin"
-                  type="number"
-                  min={demoSyntheticMinimum}
-                  max={demoMaximumMargin}
-                  step="0.01"
-                  value={demoSyntheticMargin}
-                  onChange={(event) => setDemoSyntheticMargin(event.target.value)}
-                  inputMode="decimal"
-                  aria-label="Synthetic demo margin per position"
-                />
-              </label>
-            </div>
-            <div className="fact-block">
-              <span>MEMECOIN STRATEGY <b>Curated basket · 3× max · 5-minute reviews</b></span>
-              <span>SYNTHETIC STRATEGY <b>Automatic signals · risk-adjusted base margin</b></span>
-              <span>SHARED POOL <b>Open positions reduce capacity for both</b></span>
-            </div>
-            {!demoSizingValid && (
-              <p role="alert">
-                Choose Memecoin margin from {money(demoMemecoinMinimum)} to {money(demoMaximumMargin)} and Synthetic margin from {money(demoSyntheticMinimum)} to {money(demoMaximumMargin)}.
-              </p>
-            )}
-            <p>Memecoin uses DOGE, SHIB, PEPE, WIF and BONK; Trench Mode starts off. Synthetic may reduce its selected base margin under volatility checks. Both wait for qualifying signals and risk checks, so a trade is not guaranteed on every review.</p>
-            <p>Virtual funds are separate from your wallet and cannot be withdrawn. Your first qualifying, verified mainnet deposit while the demo is active is credited to your wallet and ends the demo immediately. Only positive realized demo profit may create separate, capped, non-withdrawable trading credit, subject to the demo’s conversion limits. Unused virtual funds and any unconverted demo profit expire when the demo ends; locked positions and unrealized profit are not transferred. A qualifying deposit before the demo starts voids the unstarted offer; without an active demo, no demo credit is created.</p>
-            <button
-              type="button"
-              className="primary-action"
-              disabled={isActionPending("demo:start") || !demoSizingValid || demoGrant <= 0}
-              onClick={async () => {
-                if (await act("/v1/demo/start", {
-                  memecoin_margin_usd: Number(demoMemecoinMargin),
-                  synthetic_margin_usd: Number(demoSyntheticMargin),
-                })) setDemoReviewOpen(false);
-              }}
-            >
-              {isActionPending("demo:start") ? "Starting…" : "Start demo with these sizes"}
-            </button>
-            <button type="button" className="ghost-action" disabled={isActionPending("demo:start")} onClick={() => setDemoReviewOpen(false)}>Go back</button>
-          </AccessibleDialog>
-        )}
         {avatarPickerOpen && (
           <AvatarPicker
             selected={avatarId}
@@ -7927,7 +7639,6 @@ function LiveTradePulse() {
                 setBotEntryId(null);
                 setTab("Bots");
               }}
-              onStartDemo={openDemoReview}
               onViewActivity={() => {
                 setWalletEntry("activity");
                 setTab("Wallet");
@@ -8057,8 +7768,17 @@ function LiveTradePulse() {
               reload={reloadDashboard}
               onActionResult={applyActionResult}
               onNotice={setNotice}
-              onOpenDemo={openDemoReview}
               initialBotId={botEntryId}
+            />
+          )}
+          {tab === "Flashback" && (
+            <FlashbackWorkspace
+              data={data}
+              request={request}
+              reload={reloadDashboard}
+              onActionResult={applyActionResult}
+              onNotice={setNotice}
+              onBackToBots={() => setTab("Bots")}
             />
           )}
           {tab === "Wallet" && (
@@ -8067,14 +7787,13 @@ function LiveTradePulse() {
               poll={(signal) => request("/v1/dashboard", { signal }, walletEnvironment)}
               request={request}
               environment={walletEnvironment}
-              onWalletUpdate={({ wallet, withdrawal, deposits, demo, bots }) =>
+              onWalletUpdate={({ wallet, withdrawal, deposits, bots }) =>
                 updateDashboard((current) =>
                   current
                     ? {
                         ...current,
                         wallet: wallet ? { ...current.wallet, ...wallet } : current.wallet,
                         deposits: deposits || current.deposits,
-                        demo: demo || current.demo,
                         bots: bots || current.bots,
                         withdrawals: withdrawal
                           ? [withdrawal, ...current.withdrawals.filter((row) => row.id !== withdrawal.id)]
@@ -8129,7 +7848,6 @@ function LiveTradePulse() {
               marketChart={MarketChart}
               onDashboardPatch={updateDashboard}
               onNotice={setNotice}
-              onOpenDemo={openDemoReview}
               request={request}
               store={deskStore}
             />

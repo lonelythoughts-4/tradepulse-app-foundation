@@ -559,7 +559,7 @@ export function AccountWorkspace({
                 <p>
                   This clears personal desk preferences and alerts only. It
                   cannot change your balance, bots, deposits, withdrawals,
-                  security code, trial history, or demo trading credit.
+                  security code, or financial activity.
                 </p>
                 <button
                   className="danger-action"

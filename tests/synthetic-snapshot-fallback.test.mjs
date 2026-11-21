@@ -6,15 +6,29 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "components", "workspaces", "synthetic-workspace.tsx"), "utf8");
+const botsSource = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
+const flashbackWorkspace = fs.readFileSync(path.join(root, "components", "workspaces", "flashback-workspace.tsx"), "utf8");
+const shellSource = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
 
-test("a delayed snapshot falls back to the live stream instead of showing an outage", () => {
-  assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
-  assert.match(source, /request\("\/v1\/synthetic\/stream\?market=" \+ market, \{\}, environment\)/);
-  assert.match(source, /return \{ market, partial: true, latest, ticks: \[latest\], positions: stream\.positions \|\| \[\], settings: \{\} \} as Snapshot/);
+test("Bots hides disabled Demo accounts and Flashback has a separate workspace", () => {
+  assert.match(botsSource, /\.filter\(\(bot\) => !bot\.demo_trial && !bot\.demo_credit_only/);
+  assert.doesNotMatch(botsSource, /fleet-flashback-action|Open Flashback|SHARED VIRTUAL DEMO/);
+  assert.match(flashbackWorkspace, /initialView="flashback"\s+flashbackOnly/);
+  assert.match(shellSource, /label: "Flashback"/);
+  assert.match(shellSource, /<FlashbackWorkspace/);
 });
 
-test("the fast stream seeds a read-only partial view until the snapshot arrives", () => {
-  assert.match(source, /current\?\.market === market \? current : \{ market, partial: true, latest, ticks: \[latest\], positions: \[\], settings: \{\} \} as Snapshot/);
+test("a delayed account snapshot keeps its last verified value and reports staleness", () => {
+  assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
+  assert.match(source, /setLoadError\(error instanceof Error \? error\.message : "Market data is temporarily unavailable\."\);\s+return undefined;/);
+  assert.match(source, /useResourcePoller<Snapshot>/);
+});
+
+test("the visible fast stream updates quotes without overwriting verified account details", () => {
+  assert.match(source, /useResourcePoller<Record<string, unknown>>/);
+  assert.match(source, /1000, true, `synthetic-quotes:\$\{environment\}:\$\{market\}`/);
+  assert.match(source, /positions: base\.partial && Array\.isArray\(stream\.positions\) \? stream\.positions : base\.positions/);
+  assert.match(source, /current\?\.market === market\s+\? current\s+: \{ market, partial: true, latest, ticks: \[latest\], positions: \[\], settings: \{\} \} as Snapshot/);
   assert.match(source, /snapshot\.partial \? <div className="activity-row" role="status"/);
   assert.match(source, /if \(!snapshot \|\| snapshot\.partial \|\| environment !== "mainnet"\) return;/);
   assert.match(source, /if \(snapshot\?\.partial\) \{ onNotice\("Account and trading details are still loading\./);
