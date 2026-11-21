@@ -11,7 +11,11 @@ test("admin onboarding reset accepts an account username without sharing the fun
   assert.match(source, /const \[onboardingTarget, setOnboardingTarget\] = useState\(""\)/);
   assert.match(source, /aria-label="User to reset onboarding by Telegram ID or username"/);
   assert.match(source, /@username or numeric Telegram ID/);
-  assert.match(source, /const validOnboardingTarget =[\s\S]*\^@?\[A-Za-z\]/);
+  assert.ok(
+    source.includes(
+      "/^@?[A-Za-z][A-Za-z0-9_]{4,31}$/.test(normalizedOnboardingTarget)",
+    ),
+  );
   assert.match(source, /disabled=\{!validOnboardingTarget \|\| pendingAccountActions\.onboarding\}/);
   assert.match(source, /"\/v1\/admin\/onboarding\/reset",\s*\{ target: normalizedOnboardingTarget \}/);
   assert.match(source, /"Onboarding reset\.",\s*true,/);
