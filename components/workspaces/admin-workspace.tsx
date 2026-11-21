@@ -188,6 +188,7 @@ export function AdminWorkspace({
   onLiveDeskEnabledChange: (enabled: boolean) => void;
 }) {
   const [target, setTarget] = useState("");
+  const [onboardingTarget, setOnboardingTarget] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const fundingIdempotencyKeys = useRef(new Map<string, string>());
@@ -506,6 +507,10 @@ export function AdminWorkspace({
   const validTarget = /^@?[A-Za-z0-9_]{5,32}$/.test(adminMember) || /^\d+$/.test(adminMember);
   const validCommunityGroup = /^@[A-Za-z0-9_]{5,32}$/.test(communityGroup) || /^-\d{5,20}$/.test(communityGroup);
   const validFunding = /^\d+$/.test(target) && Number(amount) > 0 && Boolean(reason.trim());
+  const normalizedOnboardingTarget = onboardingTarget.trim();
+  const validOnboardingTarget =
+    /^\d+$/.test(normalizedOnboardingTarget) ||
+    /^@?[A-Za-z][A-Za-z0-9_]{4,31}$/.test(normalizedOnboardingTarget);
   const fundingState = fundingFeedback(pendingAccountActions.fund, fundingOutcome);
   const adminTicketOpenKey = adminTicket ? `support:${adminTicket.id}:open` : "";
   const adminTicketReplyKey = adminTicket ? `support:${adminTicket.id}:reply` : "";
@@ -524,6 +529,7 @@ export function AdminWorkspace({
     message: string,
     actionKey = path,
     onSuccess?: (response: Record<string, unknown>) => void,
+    useResponseMessage = false,
   ) => {
     if (isAdminActionPending(actionKey)) return false;
     setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
@@ -531,7 +537,11 @@ export function AdminWorkspace({
       const response = await request(path, { method: "POST", body: JSON.stringify(body) });
       onSuccess?.(response);
       scheduleReconcile();
-      onNotice(message);
+      onNotice(
+        useResponseMessage && typeof response.message === "string"
+          ? response.message
+          : message,
+      );
       return true;
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "Admin action failed.");
@@ -663,12 +673,13 @@ export function AdminWorkspace({
     path: string,
     body: object,
     message: string,
+    useResponseMessage = false,
   ) => {
     if (accountActionSubmitting.current[action]) return;
     accountActionSubmitting.current[action] = true;
     setPendingAccountActions((current) => ({ ...current, [action]: true }));
     try {
-      await post(path, body, message);
+      await post(path, body, message, path, undefined, useResponseMessage);
     } finally {
       accountActionSubmitting.current[action] = false;
       setPendingAccountActions((current) => ({ ...current, [action]: false }));
@@ -1270,7 +1281,7 @@ export function AdminWorkspace({
         <p>Use this workspace to review and act on the selected environment. Mainnet changes affect live operations; testnet changes affect isolated testing only.</p>
         <div className="admin-help-list">
           <div><strong>Movement queues</strong><span>Review confirmed deposits, withdrawal approvals, recovery cases, and their audit trail before acting.</span></div>
-          <div><strong>Account operations</strong><span>Fund, reset onboarding, or reissue demo access only for the named Telegram account.</span></div>
+          <div><strong>Account operations</strong><span>Reset onboarding by Telegram ID or @username. Funding still requires a numeric ID; all actions apply only to the named account.</span></div>
           <div><strong>Runtime controls</strong><span>Settings update shared product rules. Save one value at a time and recheck the result before making another change.</span></div>
           <div><strong>Channel gate</strong><span>Onboarding requires membership in the fixed @TradememoLabs official channel. The gate cannot be disabled or redirected.</span></div>
         </div>
@@ -1731,7 +1742,7 @@ export function AdminWorkspace({
           <div className="admin-category-grid">
         <GradientPanel className="admin-table">
           <span className="eyebrow">ACCOUNT OPERATIONS</span>
-          <h2>Fund or reset a user</h2>
+          <h2>Fund or reset onboarding</h2>
           <label className="amount-field" htmlFor={`${fundingFieldId}-user`}>Telegram user ID</label>
           <input
             id={`${fundingFieldId}-user`}
@@ -1760,10 +1771,25 @@ export function AdminWorkspace({
           />
           <p className="security-feedback" role="status">
             {!/^[0-9]+$/.test(target)
-              ? "Enter a numeric Telegram user ID to enable onboarding reset."
+              ? "Funding requires a numeric Telegram user ID."
               : !validFunding
                 ? "Funding also needs a positive USD amount and a clear reason."
                 : fundingState.status}
+          </p>
+          <label className="amount-field" htmlFor={`${fundingFieldId}-onboarding-user`}>User to reset · Telegram ID or @username</label>
+          <input
+            id={`${fundingFieldId}-onboarding-user`}
+            value={onboardingTarget}
+            aria-label="User to reset onboarding by Telegram ID or username"
+            aria-describedby={`${fundingFieldId}-onboarding-help`}
+            onChange={(event) => setOnboardingTarget(event.target.value)}
+            placeholder="@username or numeric Telegram ID"
+            autoCapitalize="none"
+            autoComplete="off"
+            maxLength={33}
+          />
+          <p className="security-feedback" id={`${fundingFieldId}-onboarding-help`} role="status">
+            Resets channel verification, onboarding progress, and Terms acceptance. Admin access, balances, and account history are retained.
           </p>
           <div className="admin-actions">
             <button
@@ -1776,14 +1802,15 @@ export function AdminWorkspace({
             </button>
             <button
               className="danger-action"
-              disabled={!/^\d+$/.test(target) || pendingAccountActions.onboarding}
+              disabled={!validOnboardingTarget || pendingAccountActions.onboarding}
               aria-busy={pendingAccountActions.onboarding}
               onClick={() =>
                 void runAccountAction(
                   "onboarding",
                   "/v1/admin/onboarding/reset",
-                  { user_id: Number(target) },
+                  { target: normalizedOnboardingTarget },
                   "Onboarding reset.",
+                  true,
                 )
               }
             >
