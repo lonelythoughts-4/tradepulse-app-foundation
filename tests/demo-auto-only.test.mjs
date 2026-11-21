@@ -7,10 +7,9 @@ const root = process.cwd();
 const bots = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
 const synthetic = fs.readFileSync(path.join(root, "components", "workspaces", "synthetic-workspace.tsx"), "utf8");
 
-test("active demo Memecoin controls are automatic-only", () => {
-  assert.match(bots, /Automatic entries: \{isDemoBot \? "Always on"/);
-  assert.match(bots, /!isDemoBot && \(selected\.state === "running" \|\| isDemoCreditOnlyBot\)/);
-  assert.match(bots, /auto_enabled: isDemoBot \? true : memecoinAutoEnabled/);
+test("disabled Demo bots and controls stay out of customer bot views", () => {
+  assert.match(bots, /\.filter\(\(bot\) => !bot\.demo_trial && !bot\.demo_credit_only/);
+  assert.doesNotMatch(bots, /isDemoBot|Automatic entries: \{isDemoBot/);
 });
 
 test("Synthetic does not offer the active demo pool as manual order funding", () => {
