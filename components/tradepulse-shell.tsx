@@ -7441,6 +7441,7 @@ function LiveTradePulse() {
       [
         "Dashboard",
         "Bots",
+        "Flashback",
         "Wallet",
         "Earn",
         "Account",
