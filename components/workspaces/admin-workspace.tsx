@@ -1283,7 +1283,7 @@ export function AdminWorkspace({
           <div><strong>Movement queues</strong><span>Review confirmed deposits, withdrawal approvals, recovery cases, and their audit trail before acting.</span></div>
           <div><strong>Account operations</strong><span>Reset onboarding by Telegram ID or @username. Funding still requires a numeric ID; all actions apply only to the named account.</span></div>
           <div><strong>Runtime controls</strong><span>Settings update shared product rules. Save one value at a time and recheck the result before making another change.</span></div>
-          <div><strong>Channel gate</strong><span>Onboarding requires membership in the fixed @TradememoLabs official channel. The gate cannot be disabled or redirected.</span></div>
+          <div><strong>Channel gate</strong><span>Onboarding requires membership in the fixed @TradememoLab official channel. The gate cannot be disabled or redirected.</span></div>
         </div>
         <button className="primary-action" onClick={() => setAdminHelpOpen(false)}>Close guide</button>
       </AccessibleDialog>}

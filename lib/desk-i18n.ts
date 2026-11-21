@@ -241,7 +241,8 @@ const catalog: Record<LanguageCode, Record<DeskMessageKey, string>> = {
 
 export function translateDesk(language: LanguageCode | string | undefined, key: DeskMessageKey): string {
   const selected = language && language in catalog ? language as LanguageCode : "en";
-  return catalog[selected][key] || catalog.en[key];
+  const text = catalog[selected][key] || catalog.en[key];
+  return text.replaceAll("@TradememoLabs", "@TradememoLab");
 }
 
 type PhraseTranslations = readonly [

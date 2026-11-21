@@ -4569,7 +4569,7 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
   const copy = activationCopy[language];
   const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable");   } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : localizeApiError(language, "", 500)); } finally { setChecking(false); } };
   const verified = Boolean(channel?.verified || state === "verified");
-  const channelUrl = channel?.url || "https://t.me/TradememoLabs";
+  const channelUrl = channel?.url || "https://t.me/TradememoLab";
   const accept = async () => {
     if (accepting) return;
     setAccepting(true);
