@@ -651,12 +651,12 @@ const mobilePrimaryNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Bots", icon: "bots" },
   { label: "Synthetic", icon: "desk" },
   { label: "Wallet", icon: "wallet" },
-  { label: "Account", icon: "account" },
+  { label: "Flashback", icon: "desk" },
 ];
 const mobileSecondaryNavItems: { label: string; icon: NavIconName }[] = [
   { label: "Protection", icon: "account" },
   { label: "Earn", icon: "earn" },
-  { label: "Flashback", icon: "desk" },
+  { label: "Account", icon: "account" },
   { label: "Live Desk", icon: "desk" },
   { label: "Community", icon: "community" },
   { label: "Help", icon: "help" },
