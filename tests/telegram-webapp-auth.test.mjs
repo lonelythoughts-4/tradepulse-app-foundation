@@ -88,3 +88,19 @@ test("Telegram Mini Apps recover to secure handoff only after bridge detection a
   assert.match(shell, /sessionBootstrapComplete \? \(\s*<BrowserBotHandoff/);
   assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
 });
+
+test("an authenticated desk keeps its projection while a lost credential enters secure recovery", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const request = shell.slice(
+    shell.indexOf("const request = useCallback"),
+    shell.indexOf("const noticeCenter"),
+  );
+
+  assert.match(request, /if \(response\.status === 401\) \{\s*await recoverAuthentication\(\);\s*throw new DeskApiError/);
+  assert.doesNotMatch(request, /path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\)/);
+  assert.match(shell, /const recoverAuthentication = useCallback\(async \(\) =>/);
+  assert.match(shell, /setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);/);
+});

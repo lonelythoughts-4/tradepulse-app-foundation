@@ -6635,6 +6635,7 @@ function LiveTradePulse() {
   const [telegramIdentityPending, setTelegramIdentityPending] = useState(false);
   const [telegramLaunchContext, setTelegramLaunchContext] = useState(false);
   const [sessionBootstrapComplete, setSessionBootstrapComplete] = useState(false);
+  const [authenticationRecovery, setAuthenticationRecovery] = useState(false);
   useEffect(() => {
     setTelegramLaunchContext(openedInsideTelegram());
   }, []);
@@ -6840,6 +6841,15 @@ function LiveTradePulse() {
     "X-Telegram-Init-Data": telegramInitData(),
     "X-TradePulse-Environment": targetEnvironment,
   });
+  const recoverAuthentication = useCallback(async () => {
+    // A 401 after the desk has loaded means neither the signed Mini App proof
+    // nor the first-party session reached this request. Keep the projection on
+    // screen and use the one-time Telegram handoff to restore its cookie.
+    setTelegramIdentityPending(false);
+    setTelegramLaunchContext(false);
+    setSessionBootstrapComplete(true);
+    setAuthenticationRecovery(true);
+  }, []);
   const request = useCallback(async (
     path: string,
     options: RequestInit = {},
@@ -6885,12 +6895,7 @@ function LiveTradePulse() {
             ? body
             : undefined;
         if (response.status === 401) {
-          setNotice(message);
-          if (path === "/v1/dashboard") {
-            updateDashboard(null);
-          } else {
-            sessionValidationRef.current?.(targetEnvironment);
-          }
+          await recoverAuthentication();
           throw new DeskApiError(message, response.status, reference, responseMessage, responseBody);
         }
         throw new DeskApiError(message, response.status, reference, responseMessage, responseBody);
@@ -6909,7 +6914,7 @@ function LiveTradePulse() {
       window.clearTimeout(timeout);
       callerSignal?.removeEventListener("abort", abortFromCaller);
     }
-  }, [webEnvironment]);
+  }, [recoverAuthentication, webEnvironment]);
   const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async () => {
     // Notification polling must not replace the desk projection. Replacing
     // it tears down the Synthetic live effects every 30 seconds and looks
@@ -7637,6 +7642,24 @@ function LiveTradePulse() {
           setTab("Account");
           setOpenNotificationsRequest(true);
         }} />
+        {authenticationRecovery && (
+          <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="desk-reconnect-title">
+            <section className="account-modal gradient-panel">
+              <span className="eyebrow">SECURE RECONNECTION</span>
+              <h2 id="desk-reconnect-title">Reconnect your TradeMemo session</h2>
+              <p>Your desk remains visible while Telegram restores its secure browser session.</p>
+              <BrowserBotHandoff onComplete={async () => {
+                telegramHandoffSessionRef.current = true;
+                const loaded = await load();
+                if (loaded) {
+                  setAuthenticationRecovery(false);
+                  setNotice("");
+                }
+                return loaded;
+              }} />
+            </section>
+          </div>
+        )}
         {avatarPickerOpen && (
           <AvatarPicker
             selected={avatarId}

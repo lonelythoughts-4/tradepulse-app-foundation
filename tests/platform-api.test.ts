@@ -65,3 +65,30 @@ test("forwards the platform logout cookie deletion to the browser", async () => 
     }
   }
 });
+
+test("forwards a Mini App session cookie from an ordinary platform response", async () => {
+  const previousOrigin = process.env.TRADEPULSE_API_ORIGIN;
+  const previousFetch = globalThis.fetch;
+  const sessionCookie = "tradepulse_browser_session=signed-session; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax";
+  process.env.TRADEPULSE_API_ORIGIN = "https://api.example.test";
+  globalThis.fetch = async () => new Response(JSON.stringify({ user: { id: 42 } }), {
+    headers: {
+      "content-type": "application/json",
+      "set-cookie": sessionCookie,
+    },
+  });
+
+  try {
+    const request = new NextRequest("https://web.example.test/api/v1/dashboard");
+    const response = await proxyPlatformRequest(request, "/v1/dashboard");
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("set-cookie"), sessionCookie);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousOrigin === undefined) {
+      delete process.env.TRADEPULSE_API_ORIGIN;
+    } else {
+      process.env.TRADEPULSE_API_ORIGIN = previousOrigin;
+    }
+  }
+});
