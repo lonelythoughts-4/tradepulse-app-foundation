@@ -10,7 +10,7 @@ const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
 
 test("Auto changes show a distinct pending state until the server confirms the mode", () => {
   assert.match(source, /setExecutionTransition\(payload\.execution_mode === "AUTO" \? "AUTO" : "MANUAL"\)/);
-  assert.match(source, /executionTransition === "AUTO" \? "Enabling Auto…" : executionTransition === "MANUAL" \? "Switching to Manual…"/);
+  assert.match(source, /executionTransition === "AUTO" \? "Enabling Auto…" : executionTransition === "MANUAL" \? "Turning Auto off…"/);
   assert.match(source, /execution_mode: response\.execution_mode, execution: \{ \.\.\.current\.execution, \.\.\.response \}/);
   assert.match(source, /executionCapacityRefreshing \? "Updating…" : money/);
   assert.match(source, /Capacity is refreshing\. New orders are checked against current funding before submission\./);
@@ -23,7 +23,10 @@ test("Auto changes show a distinct pending state until the server confirms the m
 test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);
-  assert.match(source, /"Switch to Manual"/);
+  assert.match(source, /"Turn Auto off"/);
+  assert.match(source, /typeof dailyGoalPercent === "number" && Number\.isFinite\(dailyGoalPercent\)/);
+  assert.match(source, /measured on today's settled plus open Auto P&amp;L/);
+  assert.match(source, /Each position targets 0\.2–0\.3% net after applicable spread and fees/);
   assert.match(styles, /\.synthetic-auto-fields\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-fields,\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
@@ -57,6 +60,6 @@ test("the mobile brand keeps its wordmark without the marked SVG", () => {
 
 test("Auto activity explains when a risk circuit breaker blocks new entries", () => {
   assert.match(source, /A protective loss-streak check is blocking new entries/);
-  assert.match(source, /A daily-loss limit is blocking new entries/);
+  assert.match(source, /The 1% daily-loss reference was reached\. Auto continues and open positions follow their normal exits\./);
   assert.match(source, /"Auto entries paused"/);
 });
