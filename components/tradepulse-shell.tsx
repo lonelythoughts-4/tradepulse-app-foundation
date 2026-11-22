@@ -2723,24 +2723,45 @@ export function Dashboard({
               My Bots <small>{String(bots.length).padStart(2, "0")}</small>
             </h2>
           </div>
-          <div className="dashboard-bot-actions">
-            <button className="view-all" onClick={onManage}>
-              Manage <ChevronRight size={14} />
-            </button>
-          </div>
+          {bots.length > 0 && (
+            <div className="dashboard-bot-actions">
+              <button className="view-all" onClick={onManage}>
+                Manage <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
-        <div className="bot-grid">
-          {bots.map((bot) => (
-            <BotCard
-              key={bot.name}
-              bot={bot}
-              onOpen={() => {
-                if (onOpenBot) onOpenBot(bot);
-                else onManage?.();
-              }}
+        {bots.length === 0 ? (
+          <GradientPanel className="empty-bots">
+            <img
+              src="/illustrations/empty-bots.png"
+              alt="Empty wallet scene with a butterfly"
+              className="illustration-empty-bots pointer-events-none select-none"
+              draggable={false}
+              decoding="async"
+              loading="eager"
             />
-          ))}
-        </div>
+            <span className="eyebrow">YOUR BOT FLEET</span>
+            <h2>Start a new strategy</h2>
+            <p>Choose Memecoin or Synthetic Indices when at least $20 is available.</p>
+            <button className="empty-bots-action" onClick={() => onManage?.()}>
+              Set up your first automation <ChevronRight size={14} />
+            </button>
+          </GradientPanel>
+        ) : (
+          <div className="bot-grid">
+            {bots.map((bot) => (
+              <BotCard
+                key={bot.name}
+                bot={bot}
+                onOpen={() => {
+                  if (onOpenBot) onOpenBot(bot);
+                  else onManage?.();
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
       <Activity ledger={model?.ledger} onViewAll={onViewActivity} />
       <div className="sync-time">
@@ -5023,7 +5044,7 @@ async function detectTelegramLaunch() {
   // their bridge just after the React shell starts. Give that bridge a short,
   // bounded chance to appear before treating this as an ordinary browser.
   if (openedInsideTelegram()) return true;
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 100));
     if (openedInsideTelegram()) return true;
   }

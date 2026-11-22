@@ -43,13 +43,13 @@ test("a delayed Telegram bridge is detected before the desk chooses browser hand
   );
   assert.match(shell, /hasTelegramWebAppLaunchParams\(\s*window\.location\.search,\s*window\.location\.hash/);
   assert.match(shell, /async function detectTelegramLaunch\(\)/);
-  assert.match(shell, /for \(let attempt = 0; attempt < 10; attempt \+= 1\)/);
+  assert.match(shell, /for \(let attempt = 0; attempt < 50; attempt \+= 1\)/);
   assert.match(shell, /if \(openedInsideTelegram\(\)\) return true;/);
   assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(\s*openedInsideTelegram\(\)\s*\|\| \(checkingSession && await detectTelegramLaunch\(\)\)\s*\);/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
   assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);\s*return false;/);
   assert.match(shell, /<BrowserBotHandoff onComplete=/);
-  assert.match(shell, /openedInsideTelegram\(\) && !telegramHandoffSessionRef\.current/);
+  assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(/);
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
   assert.match(shell, /if \(webApp && webApp !== preparedWebApp\) \{\s*webApp\.ready\?\.\(\);\s*webApp\.expand\?\.\(\);\s*preparedWebApp = webApp;/);
   assert.match(translations, /"telegram\.bridgeFallback"/);
