@@ -22,7 +22,7 @@ test("a delayed account snapshot keeps its last verified value and surfaces refr
   assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
   assert.match(source, /setLoadError\(error instanceof Error \? error\.message : "Market data is temporarily unavailable\."\);\s+return undefined;/);
   assert.match(source, /useResourcePoller<Snapshot>/);
-  assert.match(source, /const snapshot = storedSnapshot \?\? fallbackSnapshot;/);
+  assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
   assert.match(source, /loadError && <p role="status">\{loadError\} Action requests are checked against the current server state\.<\/p>/);
 });
