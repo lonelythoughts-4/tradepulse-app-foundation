@@ -48,6 +48,8 @@ type AutouserSchedule = {
 function autouserScheduleLabel(item: AutouserScheduleItem) {
   const labels: Record<string, string> = {
     deposit: "Simulated Testnet deposit",
+    withdrawal: "Simulated Testnet withdrawal",
+    topup: "Simulated Testnet top-up",
     flashback_start: "Flashback Direction entry",
     flashback_reveal: "Flashback Direction reveal",
   };
@@ -119,7 +121,7 @@ export type AdminOverview = {
       completed_flashback_actions?: number;
       next_action_at?: number | null;
     }>;
-    forecast: Array<{ date: string; day?: string; deposits: number; flashbacks?: number; total: number }>;
+    forecast: Array<{ date: string; day?: string; deposits: number; withdrawals?: number; topups?: number; flashbacks?: number; total: number }>;
     issues?: Array<{ issue_type: "event" | "action" | "import"; issue_id: string; run_id: string; kind: string; attempts: number; last_error: string; status: string; user_id: number; created_at: number; retryable: number; issue_count: number }>;
     run_count?: number;
     run_limit?: number;
@@ -240,6 +242,11 @@ export function AdminWorkspace({
   const [autouserScheduleTimes, setAutouserScheduleTimes] = useState<Record<string, string>>({});
   const [autouserScheduleSavePending, setAutouserScheduleSavePending] = useState<Record<string, boolean>>({});
   const [autouserScheduleSaveErrors, setAutouserScheduleSaveErrors] = useState<Record<string, string>>({});
+  const [autouserManualKind, setAutouserManualKind] = useState<"deposit" | "withdrawal" | "topup">("deposit");
+  const [autouserManualAmount, setAutouserManualAmount] = useState("");
+  const [autouserManualTime, setAutouserManualTime] = useState("12:00");
+  const [autouserManualPending, setAutouserManualPending] = useState(false);
+  const [autouserManualError, setAutouserManualError] = useState("");
   const autouserScheduleRef = useRef<AutouserSchedule | null>(null);
   const autouserScheduleRefreshRef = useRef<(date: string, force?: boolean) => Promise<void>>(async () => {});
   const autouserScheduleRequest = useRef(0);
@@ -1113,6 +1120,55 @@ export function AdminWorkspace({
       }
     }
   };
+  const createManualAutouserEvent = async () => {
+    const date = autouserScheduleDate;
+    const amount = parseAutoUserAmount(autouserManualAmount);
+    if (!date || amount === null || autouserManualPending) {
+      setAutouserManualError("Enter a valid amount from $0.01 to $100,000.00.");
+      return;
+    }
+    setAutouserManualPending(true);
+    setAutouserManualError("");
+    try {
+      const result = await request("/v1/admin/autousers/schedule/events", {
+        method: "POST",
+        body: JSON.stringify({ kind: autouserManualKind, amount, date, time: autouserManualTime }),
+      }, "testnet");
+      setAutouserManualAmount("");
+      onNotice(result.message || "Testnet activity scheduled.");
+      scheduleReconcile();
+      void refreshAutouserSchedule(date, true);
+    } catch (error) {
+      setAutouserManualError(error instanceof Error ? error.message : "The schedule item could not be created.");
+    } finally {
+      setAutouserManualPending(false);
+    }
+  };
+  const deleteAutouserScheduleItem = async (item: AutouserScheduleItem) => {
+    const date = autouserScheduleDate;
+    const itemKey = `${item.source}:${item.id}`;
+    if (!date || !item.editable || autouserScheduleSaving.current.has(itemKey)) return;
+    autouserScheduleSaving.current.add(itemKey);
+    setAutouserScheduleSavePending((current) => ({ ...current, [itemKey]: true }));
+    try {
+      const result = await request(`/v1/admin/autousers/schedule/${item.source}/${encodeURIComponent(item.id)}/delete`, {
+        method: "POST",
+        body: JSON.stringify({ run_id: item.run_id }),
+      }, "testnet");
+      onNotice(result.message || "Scheduled item removed.");
+      scheduleReconcile();
+      void refreshAutouserSchedule(date, true);
+    } catch (error) {
+      setAutouserScheduleSaveErrors((current) => ({ ...current, [itemKey]: error instanceof Error ? error.message : "The scheduled item could not be removed." }));
+    } finally {
+      autouserScheduleSaving.current.delete(itemKey);
+      setAutouserScheduleSavePending((current) => {
+        const next = { ...current };
+        delete next[itemKey];
+        return next;
+      });
+    }
+  };
   const confirmAutouserCancel = async () => {
     if (!autouserCancelRun || autouserRunPending[`${autouserCancelRun.id}:cancel`]) return;
     if (await updateAutouserRun(autouserCancelRun.id, "cancel")) setAutouserCancelRun(null);
@@ -1169,10 +1225,10 @@ export function AdminWorkspace({
         <div className="autouser-schedule-header">
           <div className="autouser-schedule-title">
             <h2>Scheduled activity · {autouserScheduleDate}</h2>
-            <p>These are testnet-only entries. Times use Africa/Lagos; you can change the time of day, but not the date, amount, or activity type. Items already processing or due within one minute are locked.</p>
+            <p>These are testnet-only entries. Times use U.S. Central Time; you can change a future time, add a planned activity, or remove an unfinished chain. Items already processing or due within one minute are locked.</p>
           </div>
           <div className="autouser-schedule-header-actions">
-            <span className="status-chip">TESTNET · AFRICA/LAGOS</span>
+            <span className="status-chip">TESTNET · U.S. CENTRAL</span>
             <button className="small-action" onClick={closeAutouserSchedule}>Close</button>
           </div>
         </div>
@@ -1181,6 +1237,21 @@ export function AdminWorkspace({
             Schedule state could not refresh. Showing the last loaded state; another refresh will retry automatically. {autouserScheduleRefreshError}
           </p>
         )}
+        {autouserSchedule && <div className="admin-row">
+          <div>
+            <strong>Add planned activity</strong>
+            <small>Server selects an eligible active Auto User and enforces funding age, balance, and event order.</small>
+          </div>
+          <div className="admin-actions">
+            <select aria-label="Activity type" value={autouserManualKind} disabled={autouserManualPending} onChange={(event) => setAutouserManualKind(event.target.value as "deposit" | "withdrawal" | "topup")}>
+              <option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option><option value="topup">Top-up</option>
+            </select>
+            <input aria-label="Activity amount in USD" inputMode="decimal" value={autouserManualAmount} placeholder="Amount / USD" disabled={autouserManualPending} onChange={(event) => setAutouserManualAmount(event.target.value)} />
+            <input aria-label="Activity time in U.S. Central Time" type="time" step={60} value={autouserManualTime} disabled={autouserManualPending} onChange={(event) => setAutouserManualTime(event.target.value)} />
+            <button className="small-action" disabled={autouserManualPending} aria-busy={autouserManualPending} onClick={() => void createManualAutouserEvent()}>{autouserManualPending ? "Adding…" : "+ Add"}</button>
+          </div>
+          {autouserManualError && <small className="security-feedback" role="alert">{autouserManualError}</small>}
+        </div>}
         {autouserScheduleLoadPending[autouserScheduleDate] ? (
           <p role="status" aria-live="polite">Loading exact schedule…</p>
         ) : autouserScheduleLoadError ? (
@@ -1238,6 +1309,9 @@ export function AdminWorkspace({
                       onClick={() => void saveAutouserScheduleTime(item, timeValue)}
                     >
                       {savePending ? "Saving…" : "Save time"}
+                    </button>
+                    <button className="small-action" disabled={!item.editable || savePending} onClick={() => void deleteAutouserScheduleItem(item)}>
+                      {savePending ? "Working…" : "Delete"}
                     </button>
                   </div>
                 </div>
@@ -1941,7 +2015,7 @@ export function AdminWorkspace({
             <div className="admin-row" key={day.date}>
               <div>
                 <strong>{day.date} / {Number(day.total || 0).toLocaleString()} planned steps</strong>
-                <small className="mono">{Number(day.deposits || 0).toLocaleString()} simulated deposits / {Number(day.flashbacks || 0).toLocaleString()} Flashback Direction steps</small>
+                <small className="mono">{Number(day.deposits || 0).toLocaleString()} deposits / {Number(day.withdrawals || 0).toLocaleString()} withdrawals / {Number(day.topups || 0).toLocaleString()} top-ups / {Number(day.flashbacks || 0).toLocaleString()} Flashback steps</small>
               </div>
               <div className="admin-actions">
                 {environment === "testnet" ? (
