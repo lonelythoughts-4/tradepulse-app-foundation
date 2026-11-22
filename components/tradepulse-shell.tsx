@@ -2701,14 +2701,12 @@ export function Dashboard({
   bots,
   model,
   onManage,
-  onChooseStrategy,
   onViewActivity,
   onOpenBot,
 }: {
   bots: Bot[];
   model?: VisualDeskModel;
   onManage?: () => void;
-  onChooseStrategy?: () => void;
   onViewActivity?: () => void;
   onOpenBot?: (bot: Bot) => void;
 }) {
@@ -2726,11 +2724,6 @@ export function Dashboard({
             </h2>
           </div>
           <div className="dashboard-bot-actions">
-            {onChooseStrategy && (
-              <button className="primary-action" onClick={onChooseStrategy}>
-                Pick a strategy <ChevronRight size={14} />
-              </button>
-            )}
             <button className="view-all" onClick={onManage}>
               Manage <ChevronRight size={14} />
             </button>
@@ -6603,7 +6596,6 @@ function LiveTradePulse() {
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
   const [botEntryId, setBotEntryId] = useState<string | null>(null);
-  const [botEntryView, setBotEntryView] = useState<"fleet" | "create">("fleet");
   const [identityPending, setIdentityPending] = useState(false);
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
@@ -7465,7 +7457,6 @@ function LiveTradePulse() {
     ) {
       if (value === "Bots") {
         setBotEntryId(null);
-        setBotEntryView("fleet");
       }
       if (value === "Wallet") setWalletEntry("overview");
       setTab(value as typeof tab);
@@ -7473,12 +7464,6 @@ function LiveTradePulse() {
   };
   const openBotFleet = () => {
     setBotEntryId(null);
-    setBotEntryView("fleet");
-    setTab("Bots");
-  };
-  const openStrategyPicker = () => {
-    setBotEntryId(null);
-    setBotEntryView("create");
     setTab("Bots");
   };
   const openIdentityUtility = () => {
@@ -7665,14 +7650,12 @@ function LiveTradePulse() {
               onManage={() => {
                 openBotFleet();
               }}
-              onChooseStrategy={openStrategyPicker}
               onViewActivity={() => {
                 setWalletEntry("activity");
                 setTab("Wallet");
               }}
               onOpenBot={(bot) => {
                 setBotEntryId(bot.id === undefined ? null : String(bot.id));
-                setBotEntryView("fleet");
                 setTab("Bots");
               }}
             />
@@ -7745,25 +7728,6 @@ function LiveTradePulse() {
                 </GradientPanel>
               );
             })}
-          {tab === "Dashboard" && !data.bots.length && (
-            <GradientPanel className="empty-bots">
-              <img
-                src="/illustrations/empty-bots.png"
-                alt="No bots running"
-                className="illustration-empty-bots"
-                decoding="async"
-              />
-              <span className="eyebrow">YOUR BOT FLEET</span>
-              <h2>Set up your first automation</h2>
-              <p>
-                Choose Memecoin or Synthetic Indices when at least $20 is
-                available.
-              </p>
-              <button className="primary-action" onClick={openStrategyPicker}>
-                Pick a strategy
-              </button>
-            </GradientPanel>
-          )}
           {tab === "Dashboard" &&
             data.bots.some((bot) => bot.state === "paused") && (
               <GradientPanel className="bot-card">
@@ -7797,7 +7761,6 @@ function LiveTradePulse() {
               onActionResult={applyActionResult}
               onNotice={setNotice}
               initialBotId={botEntryId}
-              initialView={botEntryView}
             />
           )}
           {tab === "Flashback" && (
