@@ -1815,12 +1815,12 @@ export function AdminWorkspace({
         <GradientPanel className="admin-table">
           <span className="eyebrow">COMMUNITY EVENT CARDS</span>
           <h2>Dedicated activity feed</h2>
-          <p>Posts confirmed activity to <strong>@TradememoLab</strong>. Deposits, top-ups, and withdrawals use topic 2; Flashback cards use topic 1.</p>
+          <p>Posts confirmed activity to <strong>@TradememoLab</strong>. Deposits, top-ups, withdrawals, Flashback, and big-win cards all use topic 2.</p>
           <p className="mono">
             {admin.community_cards?.renderer?.ready ? "RENDERER READY" : "RENDERER UNAVAILABLE"} / {admin.community_cards?.config?.enabled ? "PUBLICATION ON" : "PUBLICATION OFF"} / {admin.community_cards?.config?.stress_test_presentation ? "DEMO STRESS FORMAT" : "TEST LABELS"}
           </p>
           <small>{admin.community_cards?.renderer?.reason || "Renderer status unavailable."}</small>
-          <small className="mono">FIXED CHANNEL  @TradememoLab / FINANCIAL TOPIC 2 / FLASHBACK TOPIC 1</small>
+          <small className="mono">FIXED CHANNEL  @TradememoLab / FINANCIAL + FLASHBACK TOPIC 2</small>
           <div className="admin-actions">
             <button
               className="small-action"
@@ -1850,9 +1850,9 @@ export function AdminWorkspace({
               className="small-action"
               disabled={!admin.community_cards?.config?.enabled || !admin.community_cards?.renderer?.ready || isAdminActionPending("community:test")}
               aria-busy={isAdminActionPending("community:test")}
-              onClick={() => void post("/v1/admin/community-cards/test", {}, "Test card queued for the dedicated group.", "community:test")}
+              onClick={() => void post("/v1/admin/community-cards/test", {}, "Simulated Testnet deposit card queued for topic 2.", "community:test")}
             >
-              {isAdminActionPending("community:test") ? "Queuing…" : "Send test card"}
+              {isAdminActionPending("community:test") ? "Queuing…" : "Send simulated deposit test"}
             </button>
           </div>
           {!admin.community_cards?.config?.enabled && (
