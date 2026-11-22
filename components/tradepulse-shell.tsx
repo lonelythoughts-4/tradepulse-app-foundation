@@ -6910,7 +6910,9 @@ function LiveTradePulse() {
       webApp?.ready?.();
       webApp?.expand?.();
       if (telegramContext && !telegramInitData()) {
-        setTelegramIdentityPending(true);
+        setTelegramIdentityPending(false);
+        setTelegramLaunchContext(false);
+        setSessionBootstrapComplete(true);
         return false;
       }
       setTelegramIdentityPending(false);
