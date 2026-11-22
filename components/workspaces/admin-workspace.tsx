@@ -1783,7 +1783,7 @@ export function AdminWorkspace({
             maxLength={33}
           />
           <p className="security-feedback" id={`${fundingFieldId}-onboarding-help`} role="status">
-            Resets channel verification, onboarding progress, and Terms acceptance. Admin access, balances, and account history are retained.
+            Resets channel verification, onboarding progress, and Terms acceptance, and invalidates existing browser sessions and sign-in links. Admin access, balances, security, and account history are retained.
           </p>
           <div className="admin-actions">
             <button
@@ -1803,7 +1803,7 @@ export function AdminWorkspace({
                   "onboarding",
                   "/v1/admin/onboarding/reset",
                   { target: normalizedOnboardingTarget },
-                  "Onboarding reset.",
+                  "Onboarding reset; existing browser sessions and sign-in links revoked.",
                   true,
                 )
               }

@@ -18,6 +18,6 @@ test("admin onboarding reset accepts an account username without sharing the fun
   );
   assert.match(source, /disabled=\{!validOnboardingTarget \|\| pendingAccountActions\.onboarding\}/);
   assert.match(source, /"\/v1\/admin\/onboarding\/reset",\s*\{ target: normalizedOnboardingTarget \}/);
-  assert.match(source, /"Onboarding reset\.",\s*true,/);
-  assert.match(source, /channel verification, onboarding progress, and Terms acceptance/);
+  assert.match(source, /"Onboarding reset; existing browser sessions and sign-in links revoked\.",\s*true,/);
+  assert.match(source, /channel verification, onboarding progress, and Terms acceptance, and invalidates existing browser sessions and sign-in links/);
 });
