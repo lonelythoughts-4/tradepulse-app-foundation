@@ -55,4 +55,9 @@ test("customer Flashback UI exposes Direction only", async () => {
   assert.match(workspace, /<h2>Active Direction<\/h2>/);
   assert.match(workspace, /\{recentFlashbackSessions\.length > 0 && <GradientPanel/);
   assert.doesNotMatch(workspace, /!flashbackInCreationFlow && recentFlashbackSessions/);
+  const recentDirections = workspace.indexOf("{recentFlashbackSessions.length > 0 && <GradientPanel");
+  const directionEntry = workspace.indexOf("Review Flashback Direction");
+  const activeContract = workspace.indexOf('{flashback?.state === "sealed" && directionContract');
+  assert.ok(directionEntry >= 0 && recentDirections > directionEntry);
+  assert.ok(activeContract >= 0 && recentDirections > activeContract);
 });

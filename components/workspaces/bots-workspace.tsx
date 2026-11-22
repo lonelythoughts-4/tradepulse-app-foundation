@@ -173,7 +173,7 @@ export function BotsWorkspace({
   const [basketPickerLoading, setBasketPickerLoading] = useState(false);
   const [basketPickerError, setBasketPickerError] = useState("");
   const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ symbol?: string; bot_id?: number | null; environment?: string; partial?: boolean; points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
   const [memecoinOrder, setMemecoinOrder] = useState<{
     direction: "long" | "short";
     amount: string;
@@ -438,7 +438,27 @@ export function BotsWorkspace({
       `/v1/memecoin/snapshot?bot_id=${selected?.id}&symbol=${memecoinMarket}`,
       { signal },
     ),
-    (snapshot) => setMemecoinSnapshot(snapshot || {}),
+    (snapshot) => {
+      if (!snapshot?.partial) {
+        setMemecoinSnapshot(snapshot || {});
+        return;
+      }
+      setMemecoinSnapshot((current) => {
+        const sameMarket = current.symbol === snapshot.symbol;
+        const sameOwnerScope = current.bot_id === snapshot.bot_id && current.environment === snapshot.environment;
+        return {
+          ...current,
+          bot_id: snapshot.bot_id,
+          environment: snapshot.environment,
+          symbol: snapshot.symbol,
+          points: sameMarket && current.points?.length ? current.points : snapshot.points || [],
+          candles: sameMarket && current.candles?.length ? current.candles : snapshot.candles || [],
+          latest: sameMarket && current.latest ? current.latest : snapshot.latest,
+          positions: sameOwnerScope ? current.positions : [],
+          events: sameOwnerScope ? current.events : [],
+        };
+      });
+    },
     5_000,
     Boolean(selected && selected.product === "memecoin"),
     `memecoin:${selected?.id || ""}:${memecoinMarket}`,
@@ -637,16 +657,6 @@ export function BotsWorkspace({
           <div className="fact-block">{activeFlashbacks.length ? activeFlashbacks.map((session) => <span key={session.id}><b>DIRECTION · {session.market}/USD · {String(session.direction || "").toUpperCase()}</b><b>{session.state === "sealed" ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s LEFT` : "SETTLING AUTOMATICALLY"}</b></span>) : <span><b>NO ACTIVE DIRECTION</b><b>READY</b></span>}</div>
           {!flashbackInCreationFlow && activeFlashbacks.length > 0 && canStartAnyFlashback && <button type="button" className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>}
         </GradientPanel>
-        {recentFlashbackSessions.length > 0 && <GradientPanel className="compound-panel">
-          <h2>Recent Directions</h2>
-          <p>Read-only settlement records from this account.</p>
-          <div className="flashback-history-list">
-            {recentFlashbackSessions.map((session) => <button type="button" key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); setFlashbackType(null); }}>
-              <span><b>{session.market}/USD · {String(session.direction || "").toUpperCase()}</b><small>{session.close_reason === "tie_refund" ? "Tie · entry returned" : session.close_reason === "reference_unavailable_refund" ? "Reference unavailable · entry returned" : Number(session.user_net_usd || 0) > 0 ? "Correct" : "Incorrect"}</small></span>
-              <strong className={Number(session.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(session.user_net_usd || 0))}</strong>
-            </button>)}
-          </div>
-        </GradientPanel>}
         {flashbackInCreationFlow && <>
           {!flashbackType && canStartDirection && <GradientPanel className="compound-panel">
             <h2>Flashback Direction</h2>
@@ -771,6 +781,16 @@ export function BotsWorkspace({
             </GradientPanel>
           </>}
         </>}
+        {recentFlashbackSessions.length > 0 && <GradientPanel className="compound-panel">
+          <h2>Recent Directions</h2>
+          <p>Read-only settlement records from this account.</p>
+          <div className="flashback-history-list">
+            {recentFlashbackSessions.map((session) => <button type="button" key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); setFlashbackType(null); }}>
+              <span><b>{session.market}/USD · {String(session.direction || "").toUpperCase()}</b><small>{session.close_reason === "tie_refund" ? "Tie · entry returned" : session.close_reason === "reference_unavailable_refund" ? "Reference unavailable · entry returned" : Number(session.user_net_usd || 0) > 0 ? "Correct" : "Incorrect"}</small></span>
+              <strong className={Number(session.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(session.user_net_usd || 0))}</strong>
+            </button>)}
+          </div>
+        </GradientPanel>}
         {flashbackReview && <AccessibleDialog label={flashbackType === "direction" ? "Review Flashback Direction" : "Review Flashback"} onClose={() => setFlashbackReview(false)} dismissible={!isActionPending(flashbackType === "direction" ? "flashback:direction:start" : "flashback:start")}>
           <h2>{flashbackType === "direction" ? "Confirm Flashback Direction?" : "Start a sealed Flashback?"}</h2>
           {flashbackType === "direction" ? <><p>TradeMemo will lock {money(flashbackAmountNumber)} on {flashbackDirectionMarket}/USD · {String(flashbackDirectionChoice || "").toUpperCase()} for 30 seconds. A correct direction returns {money(flashbackAmountNumber * currentDirectionMultiplier)} ({currentDirectionMultiplier.toFixed(2)}×); an incorrect direction loses the full entry. An exact tie returns the full entry. Settlement uses the Kraken USD midpoint. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmountNumber))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmountNumber)}</b></span><span>SETTLEMENT <b>AUTOMATIC</b></span></div></> : <><p>TradeMemo will lock {money(flashbackAmountNumber)} for {Number(flashbackRules?.duration_seconds || 30)} seconds and commit the published return table before the result is sealed. Your entire entry is at risk; the highest total return is {money(flashbackAmountNumber * Number(flashbackRules?.max_return_multiplier || 3))}. There is no performance fee.</p><div className="fact-block"><span>AVAILABLE AFTER <b>{money(Math.max(0, data.wallet.available - flashbackAmountNumber))}</b></span><span>AMOUNT AT RISK <b>{money(flashbackAmountNumber)}</b></span><span>RESULT <b>SEALED</b></span></div></>}
