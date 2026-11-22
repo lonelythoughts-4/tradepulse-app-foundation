@@ -7515,7 +7515,6 @@ function LiveTradePulse() {
       setTab("Account");
     } else if (utility === "vector") {
       setBotEntryId(null);
-      setBotEntryView("fleet");
       setTab("Bots");
     } else {
       setTab("Account");
