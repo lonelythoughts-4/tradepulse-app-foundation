@@ -50,7 +50,8 @@ test("activation asks for a language only on the first step", () => {
 test("the official channel gate is mandatory and uses the only configured channel", () => {
   assert.match(messages, /Join @TradememoLabs/);
   assert.match(messages, /the only official channel we operate/);
-  assert.match(shell, /channel\?\.url \|\| "https:\/\/t\.me\/TradememoLabs"/);
+  assert.match(messages, /replaceAll\("@TradememoLabs", "@TradememoLab"\)/);
+  assert.match(shell, /channel\?\.url \|\| "https:\/\/t\.me\/TradememoLab"/);
   assert.match(shell, /if \(!verified\) \{/);
   assert.match(shell, /activation\.channelIntro/);
 });

@@ -47,7 +47,7 @@ test("customer Flashback UI exposes Direction only", async () => {
     "utf8",
   );
   assert.doesNotMatch(workspace, /Choose Sealed Return/);
-  assert.doesNotMatch(workspace, /Sealed Return is already active/);
+  assert.doesNotMatch(workspace, /setFlashbackType\("sealed"\)/);
   assert.match(workspace, /\.filter\(\(session\) => session\.product_version === "market-direction-v1"\)/);
   assert.match(workspace, /Recent Directions/);
 });
