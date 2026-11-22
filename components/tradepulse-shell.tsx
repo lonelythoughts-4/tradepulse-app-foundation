@@ -5018,6 +5018,17 @@ function openedInsideTelegram() {
     telegramWebApp()?.platform,
   );
 }
+async function detectTelegramLaunch() {
+  // Some Telegram mobile WebViews use a standard browser user agent and add
+  // their bridge just after the React shell starts. Give that bridge a short,
+  // bounded chance to appear before treating this as an ordinary browser.
+  if (openedInsideTelegram()) return true;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+    if (openedInsideTelegram()) return true;
+  }
+  return false;
+}
 async function waitForTelegramWebApp() {
   // The Mini App bridge is injected asynchronously on some Android and iOS
   // clients. Give it a real chance to arrive before making an unauthenticated
@@ -6894,7 +6905,10 @@ function LiveTradePulse() {
     const performLoad = async () => {
     const languageRevisionAtRequest = languageRevisionRef.current;
     const checkingSession = !data;
-    const telegramContext = openedInsideTelegram() && !telegramHandoffSessionRef.current;
+    const telegramContext = !telegramHandoffSessionRef.current && (
+      openedInsideTelegram()
+      || (checkingSession && await detectTelegramLaunch())
+    );
     setTelegramLaunchContext(telegramContext);
     if (checkingSession) setLoading(true);
     try {
