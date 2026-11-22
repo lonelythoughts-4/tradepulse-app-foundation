@@ -18,12 +18,13 @@ export function getFlashbackStartAvailability(
   sessions: readonly FlashbackSessionAvailability[],
 ): { sealed: boolean; direction: boolean } {
   const active = sessions.filter(
-    (session) => session.state === "sealed" || session.state === "ready_to_reveal",
+    (session) => session.product_version === DIRECTION_PRODUCT_VERSION
+      && (session.state === "sealed" || session.state === "ready_to_reveal"),
   );
   const hasOpenSlot = active.length < 2;
 
   return {
-    sealed: hasOpenSlot && !active.some((session) => session.product_version !== DIRECTION_PRODUCT_VERSION),
+    sealed: false,
     direction: hasOpenSlot && !active.some((session) => session.product_version === DIRECTION_PRODUCT_VERSION),
   };
 }

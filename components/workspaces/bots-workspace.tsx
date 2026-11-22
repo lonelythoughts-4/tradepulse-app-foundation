@@ -180,8 +180,12 @@ export function BotsWorkspace({
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running");
   const latestFlashback = data.flashback || null;
-  const flashbackSessions = data.flashback_sessions || (latestFlashback ? [latestFlashback] : []);
+  const flashbackSessions = (data.flashback_sessions || (latestFlashback ? [latestFlashback] : []))
+    .filter((session) => session.product_version === "market-direction-v1");
   const activeFlashbacks = flashbackSessions.filter((session) => session.state === "sealed" || session.state === "ready_to_reveal");
+  const recentFlashbackSessions = flashbackSessions
+    .filter((session) => session.state === "revealed")
+    .slice(0, 8);
   // The selected contract is a reading choice. Its state must never pause the
   // clock for another contract that is still live.
   const activeCountdownSession = activeFlashbacks.find((session) => session.state === "sealed") || null;
@@ -573,7 +577,7 @@ export function BotsWorkspace({
         }}>
           <StateIcon name="arrow-left" /> {flashbackInCreationFlow && flashback
             ? flashback.state === "revealed" ? "Back to result" : "Back to current contract"
-            : "Fleet overview"}
+            : "Back to Bots"}
         </button>
         <GradientPanel className="detail-hero">
           <div>
@@ -601,28 +605,30 @@ export function BotsWorkspace({
           </div>
         </GradientPanel>}
         {!flashbackInCreationFlow && <GradientPanel className="compound-panel">
-          <h2>Active contracts</h2>
-          <p>One Sealed Return and one Flashback Direction may run together. Each settles on its own 30-second contract clock.</p>
-          <div className="fact-block">{activeFlashbacks.length ? activeFlashbacks.map((session) => <span key={session.id}><b>{session.product_version === "market-direction-v1" ? "DIRECTION" : "SEALED RETURN"}</b><b>{session.state === "sealed" ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s` : "SETTLING"}</b></span>) : <span><b>NO ACTIVE CONTRACTS</b><b>READY</b></span>}</div>
+          <h2>Active Direction</h2>
+          <p>One Flashback Direction can be active. It settles automatically on a 30-second contract clock.</p>
+          <div className="fact-block">{activeFlashbacks.length ? activeFlashbacks.map((session) => <span key={session.id}><b>DIRECTION · {session.market}/USD · {String(session.direction || "").toUpperCase()}</b><b>{session.state === "sealed" ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s LEFT` : "SETTLING AUTOMATICALLY"}</b></span>) : <span><b>NO ACTIVE DIRECTION</b><b>READY</b></span>}</div>
           {activeFlashbacks.length > 0 && canStartAnyFlashback && <button type="button" className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>}
         </GradientPanel>}
+        {!flashbackInCreationFlow && recentFlashbackSessions.length > 0 && <GradientPanel className="compound-panel">
+          <h2>Recent Directions</h2>
+          <p>Recent settlements from this account. These records reconcile to the canonical ledger.</p>
+          <div className="flashback-history-list">
+            {recentFlashbackSessions.map((session) => <button type="button" key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); }}>
+              <span><b>{session.market}/USD · {String(session.direction || "").toUpperCase()}</b><small>{session.close_reason === "tie_refund" ? "Tie · entry returned" : session.close_reason === "reference_unavailable_refund" ? "Reference unavailable · entry returned" : Number(session.user_net_usd || 0) > 0 ? "Correct" : "Incorrect"}</small></span>
+              <strong className={Number(session.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(session.user_net_usd || 0))}</strong>
+            </button>)}
+          </div>
+        </GradientPanel>}
         {flashbackInCreationFlow && <>
-          {!flashbackType && canStartAnyFlashback && <div className="flashback-type-grid">
-            <GradientPanel className="compound-panel">
-              <h2>Sealed Return</h2>
-              <p>Lock a published return table. The result remains hidden until the reveal window closes; this is not a market trade.</p>
-              <button className="small-action" disabled={!canStartSealedReturn} onClick={() => { setFlashbackType("sealed"); setReviewError(""); }}>
-                {canStartSealedReturn ? "Choose Sealed Return" : hasActiveSealedReturn ? "Sealed Return active" : "No contract slot available"} <ChevronRight />
-              </button>
-            </GradientPanel>
-            <GradientPanel className="compound-panel">
-              <h2>Flashback Direction</h2>
-              <p>Choose an enabled market and Up or Down. The result settles automatically from a public USD reference after 30 seconds.</p>
-              <button className="small-action" disabled={!canStartDirection} onClick={() => { setFlashbackType("direction"); setFlashbackDirectionMarket(directionMarkets[0]?.symbol || ""); setFlashbackDirectionChoice(null); setReviewError(""); }}>
-                {!directionMarkets.length ? "No markets enabled" : hasActiveDirection ? "Direction active" : !canStartDirection ? "No contract slot available" : "Choose Direction"} <ChevronRight />
-              </button>
-            </GradientPanel>
-          </div>}
+          {!flashbackType && canStartDirection && <GradientPanel className="compound-panel">
+            <h2>Flashback Direction</h2>
+            <p>Choose BTC, ETH, SOL, XRP or DOGE and call Higher or Lower for 30 seconds.</p>
+            <p><b>At risk:</b> an incorrect call loses the full entry. A tie returns the full entry.</p>
+            <button className="small-action" onClick={() => { setFlashbackType("direction"); setFlashbackDirectionMarket(directionMarkets[0]?.symbol || ""); setFlashbackDirectionChoice(null); setReviewError(""); }}>
+              Choose Direction <ChevronRight />
+            </button>
+          </GradientPanel>}
           {!flashbackType && !canStartAnyFlashback && <GradientPanel className="compound-panel" role="status">{flashbackStartBlockedMessage}</GradientPanel>}
           {flashbackType && !flashbackTypeAvailable && <GradientPanel className="compound-panel" role="alert">
             <p>{flashbackTypeUnavailableMessage}</p>

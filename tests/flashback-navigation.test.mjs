@@ -40,3 +40,14 @@ test("Flashback follows Synthetic in mobile primary navigation", async () => {
   assert.match(secondaryItems, /\{ label: "Account"/);
   assert.doesNotMatch(secondaryItems, /\{ label: "Flashback"/);
 });
+
+test("customer Flashback UI exposes Direction only", async () => {
+  const workspace = await readFile(
+    new URL("../components/workspaces/bots-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(workspace, /Choose Sealed Return/);
+  assert.doesNotMatch(workspace, /Sealed Return is already active/);
+  assert.match(workspace, /\.filter\(\(session\) => session\.product_version === "market-direction-v1"\)/);
+  assert.match(workspace, /Recent Directions/);
+});

@@ -28,7 +28,7 @@ test("Flashback status polling continues while the automatic result is finalisin
   );
 });
 
-test("one active Sealed Return leaves only the Direction slot available", () => {
+test("Sealed Return is hidden and a legacy sealed session does not occupy the Direction slot", () => {
   assert.deepEqual(
     getFlashbackStartAvailability([
       { state: "sealed", product_version: "sealed-return-v2" },
@@ -37,12 +37,12 @@ test("one active Sealed Return leaves only the Direction slot available", () => 
   );
 });
 
-test("one active Direction contract leaves only the Sealed Return slot available", () => {
+test("one active Direction contract leaves no new Direction slot", () => {
   assert.deepEqual(
     getFlashbackStartAvailability([
       { state: "ready_to_reveal", product_version: "market-direction-v1" },
     ]),
-    { sealed: true, direction: false },
+    { sealed: false, direction: false },
   );
 });
 
@@ -56,12 +56,12 @@ test("both active slots remain unavailable even when starting a session from his
   );
 });
 
-test("settled sessions do not occupy a Flashback start slot", () => {
+test("settled sessions do not occupy a Flashback Direction start slot", () => {
   assert.deepEqual(
     getFlashbackStartAvailability([
       { state: "revealed", product_version: "sealed-return-v2" },
     ]),
-    { sealed: true, direction: true },
+    { sealed: false, direction: true },
   );
 });
 
