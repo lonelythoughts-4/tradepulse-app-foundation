@@ -527,6 +527,17 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
 .dashboard-grid .balance-change { overflow-wrap: anywhere; }
 .dashboard-grid .balance-breakdown, .dashboard-grid .balance-change,
 .dashboard-grid .balance-hero > .panel-heading { flex-wrap: wrap; }
+.dashboard-bot-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bots-section .dashboard-bot-actions .primary-action {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+.dashboard-bot-actions .view-all { min-height: 44px; }
 @media (min-width: 700px) {
   .dashboard-grid > .stat-chips { grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr)); }
 }
@@ -573,6 +584,9 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
   .stat-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat-chip:last-child { grid-column: 1 / -1; }
   .bots-section, .activity-card { padding: 16px; }
+  .bots-section .section-heading { flex-wrap: wrap; }
+  .dashboard-bot-actions { width: 100%; justify-content: space-between; }
+  .bots-section .dashboard-bot-actions .primary-action { flex: 1 1 auto; }
   .section-heading h2, .flow-title h2, .ledger-header h2 { font-size: 18px; }
   .bot-card { padding: 14px; }
   .fleet-hero { align-items: flex-start; flex-direction: column; gap: 12px; }

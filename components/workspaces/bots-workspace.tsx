@@ -112,7 +112,7 @@ export function BotsWorkspace({
   onActionResult: (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => void;
   onNotice: (message: string) => void;
   initialBotId?: string | null;
-  initialView?: "fleet" | "flashback";
+  initialView?: "fleet" | "create" | "flashback";
   flashbackOnly?: boolean;
   onLeaveFlashback?: () => void;
 }) {
