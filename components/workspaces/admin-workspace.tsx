@@ -326,9 +326,6 @@ export function AdminWorkspace({
     setWithdrawalReview(null);
     setWithdrawalError("");
   }, [environment]);
-  useEffect(() => {
-    setCommunityGroup(admin.community_cards?.config?.group || "");
-  }, [admin.community_cards?.config?.group]);
   const reviewWithdrawal = (row: AdminOverview["withdrawals"][number], action: "approve" | "reject") => {
     setWithdrawalError("");
     setWithdrawalReview({ row: { ...row }, action, environment });
