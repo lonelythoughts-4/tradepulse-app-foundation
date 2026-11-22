@@ -47,15 +47,9 @@ type AutouserSchedule = {
 
 function autouserScheduleLabel(item: AutouserScheduleItem) {
   const labels: Record<string, string> = {
-    deposit: "Deposit",
-    withdrawal: "Withdrawal",
-    topup: "Top-up",
-    flashback_start: "Flashback entry",
-    flashback_reveal: "Flashback reveal",
-    bot_pause: "Pause event bot",
-    bot_resume: "Resume event bot",
-    bot_compound: "Compound event bot",
-    bot_close: "Close event bot",
+    deposit: "Simulated Testnet deposit",
+    flashback_start: "Flashback Direction entry",
+    flashback_reveal: "Flashback Direction reveal",
   };
   return labels[item.kind] || item.kind.replace(/_/g, " ");
 }
@@ -104,7 +98,7 @@ export type AdminOverview = {
   }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
-    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; completed_withdrawals?: number; completed_topups?: number; event_participants?: number; active_event_bots?: number; total_actions?: number; scheduled_actions?: number; completed_actions?: number; blocked_actions?: number; completed_flashback_actions?: number; failed_imports?: number };
+    totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; total_actions?: number; scheduled_actions?: number; completed_actions?: number; blocked_actions?: number; completed_flashback_actions?: number; failed_imports?: number };
     runs: Array<{
       id: string;
       status: "scheduled" | "paused" | "cancelled" | "completed";
@@ -115,10 +109,6 @@ export type AdminOverview = {
       completed_events: number;
       scheduled_events: number;
       blocked_events?: number;
-      completed_withdrawals?: number;
-      completed_topups?: number;
-      event_participants?: number;
-      active_event_bots?: number;
       imported_accounts?: number;
       pending_imports?: number;
       failed_imports?: number;
@@ -129,7 +119,7 @@ export type AdminOverview = {
       completed_flashback_actions?: number;
       next_action_at?: number | null;
     }>;
-    forecast: Array<{ date: string; day?: string; deposits: number; withdrawals: number; topups: number; flashbacks?: number; lifecycle?: number; total: number }>;
+    forecast: Array<{ date: string; day?: string; deposits: number; flashbacks?: number; total: number }>;
     issues?: Array<{ issue_type: "event" | "action" | "import"; issue_id: string; run_id: string; kind: string; attempts: number; last_error: string; status: string; user_id: number; created_at: number; retryable: number; issue_count: number }>;
     run_count?: number;
     run_limit?: number;
@@ -1878,20 +1868,20 @@ export function AdminWorkspace({
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">AUTO-USER LOAD ACTIVITY</span>
-          <h2>Staggered testnet activity</h2>
+          <h2>Simulated deposits + Flashback Direction</h2>
           <p>
             Import a UTF-8 <span className="mono">.csv</span>, <span className="mono">.tsv</span>, <span className="mono">.txt</span>, or <span className="mono">.json</span> name list. Every account and event in this section is synthetic Testnet data only; it cannot fund or message real customer accounts.
           </p>
           <div className="admin-row">
             <div>
               <strong>Duplicates stay protected</strong>
-              <small>Repeated names in this file or an earlier upload are skipped. Existing test accounts and their scheduled activity remain untouched.</small>
+              <small>Names already in an active run are skipped. Cancelled or completed history stays intact; a fresh run creates new synthetic accounts.</small>
             </div>
           </div>
           <div className="admin-row">
             <div>
-              <strong>Activity stays isolated</strong>
-              <small>Deposits, top-ups, withdrawals, bot actions, and Flashback steps update synthetic balances and Testnet cards only. No Demo claim, real wallet funding, or customer notification is created.</small>
+              <strong>Deposits fund Flashback Direction</strong>
+              <small>Each account receives simulated Testnet deposits and eligible accounts run Flashback Direction. No real wallet funding or customer notification is created.</small>
             </div>
           </div>
           <p className="mono">TESTNET LEDGER ONLY / NO MAINNET FUNDING / NO REAL CUSTOMER MESSAGES / AUTO-USER ACTIVITY CARDS ONLY</p>
@@ -1934,24 +1924,24 @@ export function AdminWorkspace({
           <small>{autouserInputHint}</small>
           <label className="check-confirm">
             <input type="checkbox" checked={autouserConfirmed} onChange={(event) => { setAutouserConfirmed(event.target.checked); setAutouserError(""); }} />
-            I understand this schedules testnet-only deposit, withdrawal, and top-up activity—not real transfers.
+            I understand this schedules simulated Testnet deposits and Flashback Direction only—not real transfers.
           </label>
           <button className="primary-action" disabled={!canQueueAutouserRun} aria-busy={autouserPending} onClick={() => void submitAutouserRun()}>
-            {autouserPending ? "Queuing activity run…" : "Queue activity run"}
+            {autouserPending ? "Queuing Testnet run…" : "Queue Testnet run"}
           </button>
           {autouserError && <small id={autouserErrorId} className="security-feedback" role="alert">{autouserError}</small>}
           <div className="admin-row">
             <div>
-              <strong>{Number(autouserData?.totals?.scheduled_events || 0).toLocaleString()} events scheduled</strong>
-              <small className="mono">{Number(autouserData?.totals?.completed_events || 0).toLocaleString()} money events complete / {Number(autouserData?.totals?.completed_actions || 0).toLocaleString()} lifecycle actions complete / {Number(autouserData?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(autouserData?.totals?.blocked_events || 0).toLocaleString() + Number(autouserData?.totals?.blocked_actions || 0).toLocaleString()} waiting safely / {Number(autouserData?.totals?.failed_imports || 0).toLocaleString()} import rows needing retry</small>
+              <strong>{Number(autouserData?.totals?.scheduled_events || 0).toLocaleString()} simulated deposits queued</strong>
+              <small className="mono">{Number(autouserData?.totals?.completed_events || 0).toLocaleString()} simulated funding events complete / {Number(autouserData?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(autouserData?.totals?.blocked_events || 0).toLocaleString() + Number(autouserData?.totals?.blocked_actions || 0).toLocaleString()} waiting safely / {Number(autouserData?.totals?.failed_imports || 0).toLocaleString()} import rows needing retry</small>
               {(autouserData?.forecast || []).length > 0 && <small className="mono">UPCOMING ACTIVITY ({autouserData?.timezone || "Africa/Lagos"}): {autouserData?.forecast?.[0]?.date} → {autouserData?.forecast?.[Math.min((autouserData?.forecast?.length || 1) - 1, 13)]?.date} / {Math.min((autouserData?.forecast || []).length, 14)} ACTIVE DAYS SHOWN</small>}
             </div>
           </div>
           {(autouserData?.forecast || []).slice(0, 14).map((day) => (
             <div className="admin-row" key={day.date}>
               <div>
-                <strong>{day.date} / {Number(day.total || 0).toLocaleString()} predicted events</strong>
-                <small className="mono">{Number(day.deposits || 0).toLocaleString()} deposits / {Number(day.withdrawals || 0).toLocaleString()} withdrawals / {Number(day.topups || 0).toLocaleString()} top-ups / {Number(day.flashbacks || 0).toLocaleString()} Flashback steps / {Number(day.lifecycle || 0).toLocaleString()} lifecycle steps</small>
+                <strong>{day.date} / {Number(day.total || 0).toLocaleString()} planned steps</strong>
+                <small className="mono">{Number(day.deposits || 0).toLocaleString()} simulated deposits / {Number(day.flashbacks || 0).toLocaleString()} Flashback Direction steps</small>
               </div>
               <div className="admin-actions">
                 {environment === "testnet" ? (
@@ -1974,7 +1964,7 @@ export function AdminWorkspace({
             <div className="admin-row" key={run.id}>
               <div>
                 <strong>{run.status === "paused" && !run.import_complete ? "importing" : run.status.replace("_", " ")} / {run.id.slice(0, 8)}</strong>
-                <small className="mono">{run.status === "paused" && !run.import_complete ? `${Number(run.imported_accounts || 0).toLocaleString()}/${Number(run.imported_users || 0).toLocaleString()} accounts prepared / ${Number(run.pending_imports || 0).toLocaleString()} remaining / ${Number(run.failed_imports || 0).toLocaleString()} rows need retry` : `${Number(run.completed_events || 0).toLocaleString()} money events complete / ${Number(run.completed_actions || 0).toLocaleString()} lifecycle steps complete / ${Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / ${Number(run.scheduled_actions || 0).toLocaleString()} lifecycle steps queued / ${Number(run.active_event_bots || 0).toLocaleString()}/${Number(run.event_participants || 0).toLocaleString()} event bots active`}</small>
+                <small className="mono">{run.status === "paused" && !run.import_complete ? `${Number(run.imported_accounts || 0).toLocaleString()}/${Number(run.imported_users || 0).toLocaleString()} accounts prepared / ${Number(run.pending_imports || 0).toLocaleString()} remaining / ${Number(run.failed_imports || 0).toLocaleString()} rows need retry` : `${Number(run.completed_events || 0).toLocaleString()} simulated funding events complete / ${Number(run.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / ${Number(run.scheduled_actions || 0).toLocaleString()} actions queued`}</small>
               </div>
               <div className="admin-actions">
                 {run.status === "scheduled" && <button className="small-action" disabled={Boolean(autouserRunPending[`${run.id}:pause`])} aria-busy={Boolean(autouserRunPending[`${run.id}:pause`])} onClick={() => void updateAutouserRun(run.id, "pause")}>{autouserRunPending[`${run.id}:pause`] ? "Pausing…" : "Pause"}</button>}
