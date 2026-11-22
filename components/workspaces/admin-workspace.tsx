@@ -960,7 +960,7 @@ export function AdminWorkspace({
       ) as AutouserSchedule;
       if (
         response.date !== date ||
-        response.timezone !== "Africa/Lagos" ||
+        response.timezone !== "America/Chicago" ||
         !Array.isArray(response.items)
       ) {
         throw new Error("The server returned an invalid schedule.");
@@ -1006,7 +1006,7 @@ export function AdminWorkspace({
       ) as AutouserSchedule;
       if (
         response.date !== date ||
-        response.timezone !== "Africa/Lagos" ||
+        response.timezone !== "America/Chicago" ||
         !Array.isArray(response.items)
       ) {
         throw new Error("The server returned an invalid schedule.");
@@ -2008,7 +2008,7 @@ export function AdminWorkspace({
             <div>
               <strong>{Number(autouserData?.totals?.scheduled_events || 0).toLocaleString()} simulated deposits queued</strong>
               <small className="mono">{Number(autouserData?.totals?.completed_events || 0).toLocaleString()} simulated funding events complete / {Number(autouserData?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(autouserData?.totals?.blocked_events || 0).toLocaleString() + Number(autouserData?.totals?.blocked_actions || 0).toLocaleString()} waiting safely / {Number(autouserData?.totals?.failed_imports || 0).toLocaleString()} import rows needing retry</small>
-              {(autouserData?.forecast || []).length > 0 && <small className="mono">UPCOMING ACTIVITY ({autouserData?.timezone || "Africa/Lagos"}): {autouserData?.forecast?.[0]?.date} → {autouserData?.forecast?.[Math.min((autouserData?.forecast?.length || 1) - 1, 13)]?.date} / {Math.min((autouserData?.forecast || []).length, 14)} ACTIVE DAYS SHOWN</small>}
+              {(autouserData?.forecast || []).length > 0 && <small className="mono">UPCOMING ACTIVITY ({autouserData?.timezone || "America/Chicago"}): {autouserData?.forecast?.[0]?.date} → {autouserData?.forecast?.[Math.min((autouserData?.forecast?.length || 1) - 1, 13)]?.date} / {Math.min((autouserData?.forecast || []).length, 14)} ACTIVE DAYS SHOWN</small>}
             </div>
           </div>
           {(autouserData?.forecast || []).slice(0, 14).map((day) => (
