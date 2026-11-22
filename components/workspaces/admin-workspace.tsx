@@ -1848,15 +1848,16 @@ export function AdminWorkspace({
             </button>
             <button
               className="small-action"
-              disabled={!admin.community_cards?.config?.enabled || !admin.community_cards?.renderer?.ready || isAdminActionPending("community:test")}
+              disabled={!admin.community_cards?.config?.group || !admin.community_cards?.renderer?.ready || isAdminActionPending("community:test")}
               aria-busy={isAdminActionPending("community:test")}
               onClick={() => void post("/v1/admin/community-cards/test", {}, "Simulated Testnet deposit card queued for topic 2.", "community:test")}
             >
               {isAdminActionPending("community:test") ? "Queuing…" : "Send simulated deposit test"}
             </button>
           </div>
+          <small>One $1 simulated Testnet deposit-style card goes to topic 2. It creates no deposit intent, balance, or ledger change, and does not enable activity publication.</small>
           {!admin.community_cards?.config?.enabled && (
-            <small className="mono">SET DESTINATION / CHECK TELEGRAM POSTING ACCESS / ENABLE PUBLICATION</small>
+            <small className="mono">LIVE CUSTOMER ACTIVITY REMAINS OFF UNTIL PUBLICATION IS ENABLED</small>
           )}
           <div className="admin-row">
             <div>
