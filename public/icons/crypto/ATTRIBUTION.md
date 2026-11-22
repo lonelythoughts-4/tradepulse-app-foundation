@@ -16,5 +16,23 @@ The WIF PNG was downloaded from the maintained Trust Wallet Assets CDN at
 on 2026-10-25. Trust Wallet Assets is MIT-licensed. The mark is used only to
 identify dogwifhat in the market selector.
 
+The Bitcoin, XRP, Cardano, Chainlink, Polkadot, and Litecoin SVGs are adapted
+from their corresponding files in
+[Simple Icons](https://github.com/simple-icons/simple-icons), licensed under
+CC0 1.0 Universal ([license](https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md)).
+The original sources are [Bitcoin](https://github.com/simple-icons/simple-icons/blob/develop/icons/bitcoin.svg),
+[XRP](https://github.com/simple-icons/simple-icons/blob/develop/icons/xrp.svg),
+[Cardano](https://github.com/simple-icons/simple-icons/blob/develop/icons/cardano.svg),
+[Chainlink](https://github.com/simple-icons/simple-icons/blob/develop/icons/chainlink.svg),
+[Polkadot](https://github.com/simple-icons/simple-icons/blob/develop/icons/polkadot.svg), and
+[Litecoin](https://github.com/simple-icons/simple-icons/blob/develop/icons/litecoin.svg).
+The adapted files are in `public/icons/crypto/`. The SVGs use a current-color
+fill so the existing card renderer can apply its established monochrome
+treatment. These marks identify only the selected market; their names and
+logos remain the property of their owners.
+
+Avalanche intentionally retains the ticker fallback because a production-use
+logo source and licence have not been verified.
+
 The compact fallback badge is reserved for a newly eligible market whose logo
 has not been legally verified yet. It is not presented as an official logo.

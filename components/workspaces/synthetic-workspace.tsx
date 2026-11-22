@@ -11,6 +11,7 @@ import { reconcileSyntheticTicks } from "../../lib/synthetic-ticks";
 import { MAXIMUM_OPEN_ENDED_LOSS_CAP, MINIMUM_OPEN_ENDED_LOSS_CAP, contractReasonLabel, contractTypeLabel, manualContractPreferences, manualSyntheticOrderActionKey, normaliseManualContractType, validateOpenEndedTerms, type ManualContractType } from "../../lib/synthetic-contract-terms";
 import { activateContractInfo, contractInfoExpanded, contractInfoFocus, contractInfoHover, initialContractInfoState } from "../../lib/synthetic-contract-info";
 import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
+import { syntheticQuoteStatus } from "../../lib/synthetic-quote-status";
 import { useResourcePoller } from "./use-resource-poller";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
@@ -38,11 +39,15 @@ function SyntheticQuoteStatus({ environment, error, market, store }: { environme
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
-  const tickTimestamp = Number(quote?.latest.timestamp ?? quote?.latest.created_at);
-  const tickAge = Number(quote?.server_updated_at) - tickTimestamp;
-  const tickIsFresh = Number.isFinite(tickAge) && tickAge >= -1 && tickAge <= 1;
-  const live = quote?.market === market && now - quote.received_at <= 2500 && tickIsFresh;
-  return <span className="live-indicator" role="status"><i />{error ? "Feed reconnecting" : live ? "LIVE QUOTE · 1s" : "Connecting…"}</span>;
+  const status = syntheticQuoteStatus({ error, market, now, quote });
+  const label = status === "reconnecting"
+    ? "Feed reconnecting"
+    : status === "live"
+      ? "LIVE QUOTE · 1s"
+      : status === "delayed"
+        ? "Quote delayed"
+        : "Connecting…";
+  return <span className="live-indicator" role="status"><i />{label}</span>;
 }
 
 const MemoizedQuoteStatus = memo(SyntheticQuoteStatus);
