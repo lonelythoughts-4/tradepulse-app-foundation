@@ -29,6 +29,16 @@ export function getFlashbackStartAvailability(
   };
 }
 
+export function shouldOpenDirectionOnFlashbackEntry(
+  flashbackViewIsActive: boolean,
+  sessions: readonly FlashbackSessionAvailability[],
+  hasEnabledMarkets: boolean,
+): boolean {
+  return flashbackViewIsActive
+    && hasEnabledMarkets
+    && getFlashbackStartAvailability(sessions).direction;
+}
+
 export function parseFlashbackEntryAmount(value: string): number | null {
   const normalized = value.trim();
   if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(normalized)) return null;

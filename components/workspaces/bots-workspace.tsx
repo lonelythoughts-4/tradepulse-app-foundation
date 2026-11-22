@@ -7,7 +7,12 @@ import { DeskLocalized } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
-import { getFlashbackStartAvailability, parseFlashbackEntryAmount, shouldPollFlashbackStatus } from "../../lib/flashback-controls";
+import {
+  getFlashbackStartAvailability,
+  parseFlashbackEntryAmount,
+  shouldOpenDirectionOnFlashbackEntry,
+  shouldPollFlashbackStatus,
+} from "../../lib/flashback-controls";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
 import { useResourcePoller } from "./use-resource-poller";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
@@ -116,6 +121,13 @@ export function BotsWorkspace({
   flashbackOnly?: boolean;
   onLeaveFlashback?: () => void;
 }) {
+  const initialFlashbackSessions = (data.flashback_sessions || (data.flashback ? [data.flashback] : []))
+    .filter((session) => session.product_version === "market-direction-v1");
+  const openDirectionOnEntry = shouldOpenDirectionOnFlashbackEntry(
+    initialView === "flashback",
+    initialFlashbackSessions,
+    Boolean(data.flashback_direction?.markets?.length),
+  );
   const [view, setView] = useState<"fleet" | "create" | "detail" | "flashback">(
     initialBotId ? "detail" : initialView,
   );
@@ -133,7 +145,7 @@ export function BotsWorkspace({
   const [flashbackReview, setFlashbackReview] = useState(false);
   const [flashbackNewSession, setFlashbackNewSession] = useState(false);
   const [selectedFlashbackId, setSelectedFlashbackId] = useState<string | null>(null);
-  const [flashbackType, setFlashbackType] = useState<"sealed" | "direction" | null>(null);
+  const [flashbackType, setFlashbackType] = useState<"sealed" | "direction" | null>(() => openDirectionOnEntry ? "direction" : null);
   const [flashbackDirectionMarket, setFlashbackDirectionMarket] = useState("");
   const [flashbackDirectionChoice, setFlashbackDirectionChoice] = useState<"up" | "down" | null>(null);
   const flashbackMarketStepRef = useRef<HTMLHeadingElement | null>(null);
@@ -225,7 +237,9 @@ export function BotsWorkspace({
     ? "Both Flashback contract slots are occupied. Wait for one contract to settle before starting another."
     : hasActiveSealedReturn && !directionMarkets.length
       ? "A Sealed Return is already active, and no Direction markets are currently enabled."
-      : "No Flashback contract type is available to start right now.";
+      : !directionMarkets.length
+        ? "No Direction markets are currently enabled. Try again when an administrator publishes one."
+        : "No Flashback contract type is available to start right now.";
   const flashbackTypeAvailable = flashbackType === "sealed"
     ? canStartSealedReturn
     : flashbackType === "direction" && canStartDirection;
@@ -544,7 +558,8 @@ export function BotsWorkspace({
   const flashbackTimeLabel = `${Math.floor(flashbackRemaining / 60)}:${String(flashbackRemaining % 60).padStart(2, "0")}`;
   const beginNewFlashbackSession = () => {
     setFlashbackAmount("20");
-    setFlashbackType(null);
+    setFlashbackType("direction");
+    setFlashbackDirectionMarket("");
     setFlashbackDirectionChoice(null);
     setReviewError("");
     setFlashbackNewSession(true);
@@ -600,7 +615,7 @@ export function BotsWorkspace({
             </span>
           </div>
         </GradientPanel>
-        {flashbackSessionChoices.length > 1 && !flashbackInCreationFlow && <GradientPanel className="compound-panel">
+        {flashbackSessionChoices.length > 1 && <GradientPanel className="compound-panel">
           <h2>Choose a contract</h2>
           <p>Each contract has its own entry, settlement clock, and result. Select one to view its exact outcome.</p>
           <div className="segment-control flashback-session-selector" role="radiogroup" aria-label="Flashback contract" onKeyDown={handleBotChoiceKeyDown}>
@@ -612,21 +627,21 @@ export function BotsWorkspace({
                 : session.state === "sealed"
                   ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s left`
                   : "Settled";
-              return <button type="button" role="radio" aria-checked={isSelected} tabIndex={isSelected ? 0 : -1} className={isSelected ? "active" : ""} key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); }}>{kind} · {money(Number(session.allocation_usd || 0))} · {status}</button>;
+              return <button type="button" role="radio" aria-checked={isSelected} tabIndex={isSelected ? 0 : -1} className={isSelected ? "active" : ""} key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); setFlashbackType(null); }}>{kind} · {money(Number(session.allocation_usd || 0))} · {status}</button>;
             })}
           </div>
         </GradientPanel>}
-        {!flashbackInCreationFlow && <GradientPanel className="compound-panel">
+        <GradientPanel className="compound-panel">
           <h2>Active Direction</h2>
           <p>One Flashback Direction can be active. It settles automatically on a 30-second contract clock.</p>
           <div className="fact-block">{activeFlashbacks.length ? activeFlashbacks.map((session) => <span key={session.id}><b>DIRECTION · {session.market}/USD · {String(session.direction || "").toUpperCase()}</b><b>{session.state === "sealed" ? `${Math.max(0, Math.ceil(((session.expires_at || 0) * 1000 - (flashbackNow + flashbackClockOffset)) / 1000))}s LEFT` : "SETTLING AUTOMATICALLY"}</b></span>) : <span><b>NO ACTIVE DIRECTION</b><b>READY</b></span>}</div>
-          {activeFlashbacks.length > 0 && canStartAnyFlashback && <button type="button" className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>}
-        </GradientPanel>}
-        {!flashbackInCreationFlow && recentFlashbackSessions.length > 0 && <GradientPanel className="compound-panel">
+          {!flashbackInCreationFlow && activeFlashbacks.length > 0 && canStartAnyFlashback && <button type="button" className="small-action" onClick={beginNewFlashbackSession}>Choose another contract <Plus /></button>}
+        </GradientPanel>
+        {recentFlashbackSessions.length > 0 && <GradientPanel className="compound-panel">
           <h2>Recent Directions</h2>
           <p>Read-only settlement records from this account.</p>
           <div className="flashback-history-list">
-            {recentFlashbackSessions.map((session) => <button type="button" key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); }}>
+            {recentFlashbackSessions.map((session) => <button type="button" key={session.id} onClick={() => { setSelectedFlashbackId(session.id || null); setFlashbackNewSession(false); setFlashbackType(null); }}>
               <span><b>{session.market}/USD · {String(session.direction || "").toUpperCase()}</b><small>{session.close_reason === "tie_refund" ? "Tie · entry returned" : session.close_reason === "reference_unavailable_refund" ? "Reference unavailable · entry returned" : Number(session.user_net_usd || 0) > 0 ? "Correct" : "Incorrect"}</small></span>
               <strong className={Number(session.user_net_usd || 0) >= 0 ? "up" : "down"}>{money(Number(session.user_net_usd || 0))}</strong>
             </button>)}

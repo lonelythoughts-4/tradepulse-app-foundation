@@ -4,8 +4,18 @@ import test from "node:test";
 import {
   getFlashbackStartAvailability,
   parseFlashbackEntryAmount,
+  shouldOpenDirectionOnFlashbackEntry,
   shouldPollFlashbackStatus,
 } from "../lib/flashback-controls.ts";
+
+test("Flashback opens Direction directly only when no Direction is active and markets are available", () => {
+  assert.equal(shouldOpenDirectionOnFlashbackEntry(true, [], true), true);
+  assert.equal(shouldOpenDirectionOnFlashbackEntry(false, [], true), false);
+  assert.equal(shouldOpenDirectionOnFlashbackEntry(true, [], false), false);
+  assert.equal(shouldOpenDirectionOnFlashbackEntry(true, [
+    { state: "sealed", product_version: "market-direction-v1" },
+  ], true), false);
+});
 
 test("Flashback status polling continues while the automatic result is finalising", () => {
   assert.equal(

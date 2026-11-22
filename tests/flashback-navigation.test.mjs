@@ -50,4 +50,9 @@ test("customer Flashback UI exposes Direction only", async () => {
   assert.doesNotMatch(workspace, /setFlashbackType\("sealed"\)/);
   assert.match(workspace, /\.filter\(\(session\) => session\.product_version === "market-direction-v1"\)/);
   assert.match(workspace, /Recent Directions/);
+  assert.match(workspace, /shouldOpenDirectionOnFlashbackEntry/);
+  assert.match(workspace, /No Direction markets are currently enabled\. Try again when an administrator publishes one\./);
+  assert.match(workspace, /<h2>Active Direction<\/h2>/);
+  assert.match(workspace, /\{recentFlashbackSessions\.length > 0 && <GradientPanel/);
+  assert.doesNotMatch(workspace, /!flashbackInCreationFlow && recentFlashbackSessions/);
 });
