@@ -421,7 +421,16 @@ button:focus-visible, a:focus-visible { outline-color: var(--tp-accent-strong); 
 .amount-input { border-bottom-color: rgba(232, 182, 80, .6); }.amount-input>span { color: var(--tp-accent); }
 .quick-amounts button, .segment-control button { color: var(--tp-accent); background: var(--tp-surface-raised); border-color: rgba(244, 239, 227, .16); }
 .wallet-actions button:hover, .choice-grid button.selected, .choice-grid button:hover, .product-card:hover, .product-card.selected { border-color: var(--tp-accent); background: #1a201b; }
-.product-icon, .demo-mark { background: linear-gradient(135deg, var(--tp-accent), #b87538); color: #17120a; }
+.demo-mark { background: linear-gradient(135deg, var(--tp-accent), #b87538); color: #17120a; }
+html:not([data-theme="light"]) .confirm-modal {
+  background-image:
+    linear-gradient(#141b25, #141b25) padding-box,
+    linear-gradient(180deg, rgba(230, 234, 242, .2), rgba(230, 234, 242, .08)) border-box;
+}
+html:not([data-theme="light"]) .confirm-modal .fact-block {
+  border-color: rgba(230, 234, 242, .16);
+  background: #0c1017;
+}
 .warning-block, .minimum-warning { border-left-color: var(--tp-accent); background: rgba(232, 182, 80, .08); }.warning-block strong, .minimum-warning strong { color: var(--tp-accent-strong); }
 .blocking-banner { border-color: rgba(232, 182, 80, .32); background: rgba(232, 182, 80, .08); }.blocking-banner>svg, .blocking-banner button { color: var(--tp-accent); }
 ::selection { background: rgba(232, 182, 80, .34); color: #fffaf0; }
@@ -601,7 +610,7 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
 
 @keyframes tp-dialog-backdrop-in {
   from { background-color: rgba(2,4,8,0); }
-  to { background-color: rgba(2,4,8,.78); }
+  to { background-color: rgba(2,4,8,.62); }
 }
 
 @keyframes tp-dialog-panel-in {

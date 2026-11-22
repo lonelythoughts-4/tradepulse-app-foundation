@@ -13,8 +13,8 @@ import { useResourcePoller } from "./use-resource-poller";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
 import { ChevronRight, GradientPanel, PaymentMark, Plus, StateIcon, StateSwapIcon, X, Zap, money } from "./shared-ui";
 
-function BotProductCard({ name, description, icon, selected, onClick }: { name: string; description: string; icon: string; selected?: boolean; onClick: () => void }) {
-  return <DeskLocalized><button className={`product-card ${selected ? "selected" : ""}`} onClick={onClick}><span className="product-icon">{icon}</span><span><strong>{name}</strong><small>{description}</small></span><ChevronRight /></button></DeskLocalized>;
+function BotProductCard({ name, description, selected, onClick }: { name: string; description: string; selected?: boolean; onClick: () => void }) {
+  return <DeskLocalized><button className={`product-card ${selected ? "selected" : ""}`} onClick={onClick}><span><strong>{name}</strong><small>{description}</small></span><ChevronRight /></button></DeskLocalized>;
 }
 function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
   return <DeskLocalized><GradientPanel className="empty-bots"><img src="/illustrations/empty-bots.png" alt="Empty wallet scene with a butterfly" className="illustration-empty-bots pointer-events-none select-none" draggable={false} decoding="async" loading="eager" /><p>No bots are running yet.</p><button className="empty-bots-action" onClick={onLaunch}>Launch your first bot <ChevronRight size={14} /></button></GradientPanel></DeskLocalized>;
@@ -795,14 +795,12 @@ export function BotsWorkspace({
           <BotProductCard
             name="Memecoin"
             description="Automated crypto strategy"
-            icon="M"
             selected={product === "memecoin"}
             onClick={() => setProduct("memecoin")}
           />
           <BotProductCard
             name="Synthetic Indices"
             description="Automated synthetic index strategy"
-            icon="S"
             selected={product === "synthetic"}
             onClick={() => setProduct("synthetic")}
           />
