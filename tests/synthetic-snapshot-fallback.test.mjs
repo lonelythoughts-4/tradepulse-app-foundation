@@ -38,7 +38,8 @@ test("one-second quote updates stay separate from account controls", () => {
   assert.doesNotMatch(source, /snapshot\.partial \? <div className="activity-row" role="status"/);
   assert.doesNotMatch(source, /if \(snapshot\?\.partial\) \{ onNotice\(/);
   assert.doesNotMatch(source, /value > capacity/);
-  assert.match(source, /disabled=\{manualOrderPending\("long"\)\}/);
+  assert.match(source, /Set aside at least/);
+  assert.doesNotMatch(source, /manualOrderPending|disabled=\{manualOrderPending/);
 });
 
 test("the chart retains same-market cached ticks and rejects a late market response", () => {

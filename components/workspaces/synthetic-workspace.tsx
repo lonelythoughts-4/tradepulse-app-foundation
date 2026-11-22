@@ -291,7 +291,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const latestAuto = snapshot?.auto_activity?.[0];
   const autoActivityReason = (reason?: string) => {
     if (reason && /loss[_ -]streak/i.test(reason)) return "A protective loss-streak check is blocking new entries. Auto remains on until the server-side risk check clears.";
-    if (reason && /daily[_ -]drawdown/i.test(reason)) return "The 1% daily-loss reference was reached. Auto continues and open positions follow their normal exits.";
+    if (reason && /daily[_ -]drawdown/i.test(reason)) return "Auto continues evaluating shared signals.";
     return reason;
   };
   const autoActivityTitle = !latestAuto ? "No Auto activity yet" : latestAuto.event_type === "auto_signal_rejected" && /loss[_ -]streak/i.test(latestAuto.reason || "") ? "Auto entries paused" : latestAuto.event_type === "auto_signal_rejected" ? "No order opened" : latestAuto.event_type === "position_opened" ? "Order opened" : "Auto activity recorded";
@@ -299,7 +299,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const confirmedAuto = snapshot.execution_mode === "AUTO";
   const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : snapshot.partial && !snapshot.execution_mode ? "Checking" : confirmedAuto ? "Auto on" : "Auto off";
   const executionLabel = executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "TURNING AUTO OFF" : snapshot.partial && !snapshot.execution_mode ? "CHECKING" : confirmedAuto ? "AUTO" : "AUTO OFF";
-  const dailyGoalPercent = snapshot.execution?.daily_goal_percent;
+  const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
   return <DeskLocalized><div className="desk-screen"><div className="gradient-panel synthetic-pilot">
     <div className="synthetic-market-header">
       <div><h2>Market</h2><MemoizedQuoteStatus environment={environment} error={quoteError} market={market} store={store} /></div>
@@ -316,7 +316,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       {environment === "mainnet" ? <>
         <section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title" aria-busy={Boolean(executionTransition)}>
           <div className="synthetic-auto-heading">
-            <div className="synthetic-auto-title"><h3 id="synthetic-auto-title">Automatic execution</h3><p>Auto evaluates shared signals for your account. Each position targets 0.2–0.3% net after applicable spread and fees. Set its per-order margin and total allocation; enabling requires review.</p></div>
+            <div className="synthetic-auto-title"><h3 id="synthetic-auto-title">Automatic execution</h3><p>Auto evaluates shared signals for your account using its assigned allocation. Set the per-order margin and total allocation; enabling requires review.</p></div>
             <div className="synthetic-auto-state" role="status" aria-live="polite" aria-atomic="true" aria-busy={Boolean(executionTransition)}><span className={"status-chip " + (executionTransition ? "paused" : confirmedAuto ? "running" : "paused")}><i />{executionStatus}</span></div>
           </div>
           <div className="synthetic-auto-fields">
@@ -326,14 +326,14 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           <div className="synthetic-auto-capacity" aria-label="Automatic and unassigned available capacity"><span>Auto available <b>{snapshot.partial ? "Checking" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_available_usd || 0))}</b></span><span>Unassigned Synthetic capacity <b>{snapshot.partial ? "Checking" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.manual_available_usd || snapshot.allocation?.available_usd || 0))}</b></span></div>
           {executionCapacityRefreshing && <p className="synthetic-auto-hint" role="status">Capacity is refreshing. New orders are checked against current funding before submission.</p>}
           {Number(autoAllocation) < Number(autoAmount) && <p className="synthetic-auto-hint" role="status">Set aside at least {money(Math.max(20, Number(autoAmount) || 20))} for one Auto order. The remaining Synthetic capacity will not be used by Auto.</p>}
-          {confirmedAuto && typeof dailyGoalPercent === "number" && Number.isFinite(dailyGoalPercent) && <p className="synthetic-auto-hint" role="status">
-            Daily settled net: {money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} / {money(Number(snapshot.execution?.daily_goal_usd || 0))} target ({dailyGoalPercent.toFixed(3)}% of Auto allocation). Goals vary from 2–4% and are not guaranteed. The 1% daily-loss reference, measured on today's settled plus open Auto P&amp;L, {snapshot.execution?.daily_loss_target_reached ? "has been reached" : "has not been reached"}; it does not stop Auto or close positions. The separate three-loss-streak safeguard can pause new entries.
+          {confirmedAuto && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">
+            Daily Auto progress: {money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} settled of {money(dailyGoalUsd)} goal.
           </p>}
           <div className="synthetic-auto-actions">
             <button className="primary-action" disabled={pendingFor(autoKey) || Boolean(executionTransition) || Number(autoAmount) < 20 || Number(autoAllocation) < Number(autoAmount)} onClick={() => openReview()}>{executionTransition === "AUTO" ? "Enabling Auto…" : confirmedAuto ? "Review Auto changes" : "Review & enable Auto"}</button>
             {(confirmedAuto || snapshot.partial) && <button className="small-action" disabled={pendingFor(manualKey) || Boolean(executionTransition)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" }).catch(() => undefined)}>{executionTransition === "MANUAL" ? "Turning Auto off…" : pendingFor(manualKey) ? "Saving…" : "Turn Auto off"}</button>}
           </div>
-          {confirmedAuto && !executionTransition && <><p className="synthetic-auto-hint">Daily goals are targets, not a profit ceiling or guarantee. Auto continues after the 1% loss reference; open positions keep their normal exit rules.</p><div className="activity-row" role="status" aria-live="polite"><div className="activity-info"><strong>{autoActivityTitle}</strong><small>{autoActivityDetail}</small></div></div></>}
+          {confirmedAuto && !executionTransition && <div className="activity-row" role="status" aria-live="polite"><div className="activity-info"><strong>{autoActivityTitle}</strong><small>{autoActivityDetail}</small></div></div>}
         </section>
         <SyntheticSignalList signals={signals} signalError={signalError} />
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
@@ -350,7 +350,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       <span>AUTO CAPACITY <b>{money(Number((review.payload as { auto_allocation_usd?: number }).auto_allocation_usd || 0))}</b></span>
       <span>ESTIMATED TIER FEE <b>{review.fee === null ? "Calculated at execution" : money(review.fee)}</b></span>
     </div>
-    <p>Auto selects eligible shared signals using the stated capacity and per-order margin. Each position targets 0.2–0.3% net after applicable spread and fees; a daily goal is not a profit ceiling. You can lose the full reserved margin, and the 1% loss reference does not stop Auto.</p>
+    <p>Auto evaluates eligible shared signals using the settings above. You can lose the full reserved margin; returns are not guaranteed.</p>
     <label className="toggle-row"><span>I understand Auto uses only the stated allocation and margin per order; the remaining Synthetic capacity is not auto-traded.</span><input type="checkbox" checked={autoAcknowledged} disabled={activeReviewActionPending} onChange={(event) => setAutoAcknowledged(event.target.checked)} /><i aria-hidden="true" /></label>
     {reviewError && <p role="alert">{reviewError}</p>}
     {review.kind === "auto" && activeReviewActionPending && <p role="status">Saving the Auto setting. The state changes to on only after the server confirms the allocation.</p>}

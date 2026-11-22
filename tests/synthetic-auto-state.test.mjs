@@ -15,7 +15,7 @@ test("Auto changes show a distinct pending state until the server confirms the m
   assert.match(source, /executionCapacityRefreshing \? "Updating…" : money/);
   assert.match(source, /Capacity is refreshing\. New orders are checked against current funding before submission\./);
   assert.doesNotMatch(source, /kind !== "auto" && value > capacity && !executionCapacityRefreshing/);
-  assert.match(source, /kind === "auto" && \(!Number\.isFinite\(reserved\) \|\| reserved < value\)/);
+  assert.match(source, /!Number\.isFinite\(reserved\) \|\| reserved < value/);
   assert.doesNotMatch(source, /if \(executionCapacityRefreshing && \(path === "\/v1\/synthetic\/orders"/);
   assert.match(source, /Saving the Auto setting\. The state changes to on only after the server confirms the allocation\./);
 });
@@ -24,9 +24,9 @@ test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);
   assert.match(source, /"Turn Auto off"/);
-  assert.match(source, /typeof dailyGoalPercent === "number" && Number\.isFinite\(dailyGoalPercent\)/);
-  assert.match(source, /measured on today's settled plus open Auto P&amp;L/);
-  assert.match(source, /Each position targets 0\.2–0\.3% net after applicable spread and fees/);
+  assert.match(source, /typeof dailyGoalUsd === "number" && Number\.isFinite\(dailyGoalUsd\)/);
+  assert.match(source, /Daily Auto progress: \{money\(Number\(snapshot\.execution\?\.daily_settled_net_pnl_usd \|\| 0\)\)\} settled of \{money\(dailyGoalUsd\)\} goal/);
+  assert.doesNotMatch(source, /0\.2–0\.3%|daily-loss reference|profit ceiling/);
   assert.match(styles, /\.synthetic-auto-fields\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-fields,\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
@@ -38,17 +38,10 @@ test("Synthetic contract and action controls keep readable theme-aware states", 
   assert.match(styles, /\.synthetic-pilot \.activity-row>\.small-action:disabled\{[^}]*opacity:1/);
 });
 
-test("signal approval closes review immediately and reports pending until server confirmation", () => {
-  const approval = source.match(/if \(signal\) \{([\s\S]*?)\n    \}/)?.[1] || "";
-  const start = approval.indexOf("const action = act(submission.path, submission.payload);");
-  const closeReview = approval.indexOf("setReview(null);", start);
-  const awaitAction = approval.indexOf("await action;", start);
-  assert.ok(start >= 0 && closeReview > start && awaitAction > closeReview);
-  assert.match(approval, /setSignalSubmissions/);
-  assert.match(approval, /if \(submitted\) setSignalResults\(\(current\) => \(\{ \.\.\.current, \[signalId\]: "Submitted" \}\)\)/);
-  assert.match(approval, /delete next\[signalId\]/);
-  assert.match(source, /No order is marked successful until the server confirms it/);
-  assert.match(source, /const approvalPending = pendingFor\(key\) \|\| Boolean\(signalSubmissions\[signal\.id\]\)/);
+test("shared signals are informational and manual order controls are absent", () => {
+  assert.match(source, /function SyntheticSignalList/);
+  assert.match(source, /shared signal/);
+  assert.doesNotMatch(source, /signalSubmissions|signalResults|manualOrderPending|Approve signal/);
 });
 
 test("the mobile brand keeps its wordmark without the marked SVG", () => {
@@ -60,6 +53,6 @@ test("the mobile brand keeps its wordmark without the marked SVG", () => {
 
 test("Auto activity explains when a risk circuit breaker blocks new entries", () => {
   assert.match(source, /A protective loss-streak check is blocking new entries/);
-  assert.match(source, /The 1% daily-loss reference was reached\. Auto continues and open positions follow their normal exits\./);
+  assert.doesNotMatch(source, /The 1% daily-loss reference was reached/);
   assert.match(source, /"Auto entries paused"/);
 });
