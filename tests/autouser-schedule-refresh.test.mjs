@@ -28,3 +28,14 @@ test("open auto-user schedules refresh state without replacing unsaved time edit
   assert.match(save, /autouserScheduleForceServerTimes\.current\.add\(itemKey\)/);
   assert.match(save, /void refreshAutouserSchedule\(date, refreshAfterSave\)/);
 });
+
+test("auto-user schedule takes Nigeria input but preserves Central card times", async () => {
+  const source = await readFile(new URL("../components/workspaces/admin-workspace.tsx", import.meta.url), "utf8");
+  assert.match(source, /const AUTOUSER_DISPLAY_TIMEZONE = "America\/Chicago"/);
+  assert.match(source, /const AUTOUSER_INPUT_TIMEZONE = "Africa\/Lagos"/);
+  assert.match(source, /function nigeriaTimePreview/);
+  assert.match(source, /input_timezone: AUTOUSER_INPUT_TIMEZONE/);
+  assert.match(source, /Card time · \{item\.local_time\} \{autouserSchedule\.timezone\}/);
+  assert.match(source, /Nigeria input · \{autouserSchedule\.operator_timezone\}/);
+  assert.match(source, /Will appear on the card as \$\{autouserManualPreview\.time\} U\.S\. Central/);
+});

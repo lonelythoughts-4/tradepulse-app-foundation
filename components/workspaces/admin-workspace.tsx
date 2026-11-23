@@ -10,6 +10,29 @@ import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 
 const AUTOUSER_SCHEDULE_CONFLICT_MESSAGE =
   "This item changed while you were editing it. The latest schedule is loading.";
+const AUTOUSER_DISPLAY_TIMEZONE = "America/Chicago";
+const AUTOUSER_INPUT_TIMEZONE = "Africa/Lagos";
+
+function nigeriaTimePreview(scheduleDate: string, nigeriaTime: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduleDate) || !/^\d{2}:\d{2}$/.test(nigeriaTime)) return null;
+  const instant = new Date(`${scheduleDate}T${nigeriaTime}:00+01:00`);
+  if (Number.isNaN(instant.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: AUTOUSER_DISPLAY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant).reduce<Record<string, string>>((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  const date = `${parts.year}-${parts.month}-${parts.day}`;
+  const time = `${parts.hour}:${parts.minute}`;
+  return { date, time, staysOnScheduleDay: date === scheduleDate };
+}
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -33,6 +56,8 @@ type AutouserScheduleItem = {
   status: string;
   scheduled_at: number;
   local_time: string;
+  operator_date: string;
+  operator_time: string;
   amount_usd: number | null;
   amount_label: string;
   detail: string;
@@ -42,6 +67,7 @@ type AutouserScheduleItem = {
 type AutouserSchedule = {
   date: string;
   timezone: string;
+  operator_timezone: string;
   items: AutouserScheduleItem[];
 };
 
@@ -960,7 +986,8 @@ export function AdminWorkspace({
       ) as AutouserSchedule;
       if (
         response.date !== date ||
-        response.timezone !== "America/Chicago" ||
+        response.timezone !== AUTOUSER_DISPLAY_TIMEZONE ||
+        response.operator_timezone !== AUTOUSER_INPUT_TIMEZONE ||
         !Array.isArray(response.items)
       ) {
         throw new Error("The server returned an invalid schedule.");
@@ -1006,7 +1033,8 @@ export function AdminWorkspace({
       ) as AutouserSchedule;
       if (
         response.date !== date ||
-        response.timezone !== "America/Chicago" ||
+        response.timezone !== AUTOUSER_DISPLAY_TIMEZONE ||
+        response.operator_timezone !== AUTOUSER_INPUT_TIMEZONE ||
         !Array.isArray(response.items)
       ) {
         throw new Error("The server returned an invalid schedule.");
@@ -1049,7 +1077,7 @@ export function AdminWorkspace({
     }, 5_000);
     return () => window.clearInterval(interval);
   }, [autouserScheduleDate]);
-  const saveAutouserScheduleTime = async (item: AutouserScheduleItem, localTime: string) => {
+  const saveAutouserScheduleTime = async (item: AutouserScheduleItem, nigeriaTime: string) => {
     const date = autouserScheduleDate;
     const schedule = autouserSchedule;
     const itemKey = `${item.source}:${item.id}`;
@@ -1068,7 +1096,13 @@ export function AdminWorkspace({
         `/v1/admin/autousers/schedule/${item.source}/${encodeURIComponent(item.id)}/time`,
         {
           method: "POST",
-          body: JSON.stringify({ run_id: item.run_id, date, time: localTime }),
+          body: JSON.stringify({
+            run_id: item.run_id,
+            date,
+            input_date: item.operator_date,
+            time: nigeriaTime,
+            input_timezone: AUTOUSER_INPUT_TIMEZONE,
+          }),
         },
         "testnet",
       );
@@ -1080,12 +1114,12 @@ export function AdminWorkspace({
             ...currentSchedule,
             items: currentSchedule.items.map((scheduledItem) =>
               scheduledItem.source === item.source && scheduledItem.id === item.id
-                ? { ...scheduledItem, local_time: localTime }
+                ? { ...scheduledItem, operator_time: nigeriaTime }
                 : scheduledItem,
             ),
           }, true);
         }
-        setAutouserScheduleTimes((current) => ({ ...current, [itemKey]: localTime }));
+        setAutouserScheduleTimes((current) => ({ ...current, [itemKey]: nigeriaTime }));
       }
       scheduleReconcile();
       onNotice("Scheduled time updated.");
@@ -1132,7 +1166,14 @@ export function AdminWorkspace({
     try {
       const result = await request("/v1/admin/autousers/schedule/events", {
         method: "POST",
-        body: JSON.stringify({ kind: autouserManualKind, amount, date, time: autouserManualTime }),
+        body: JSON.stringify({
+          kind: autouserManualKind,
+          amount,
+          date,
+          input_date: date,
+          time: autouserManualTime,
+          input_timezone: AUTOUSER_INPUT_TIMEZONE,
+        }),
       }, "testnet");
       setAutouserManualAmount("");
       onNotice(result.message || "Testnet activity scheduled.");
@@ -1202,6 +1243,9 @@ export function AdminWorkspace({
   const autouserRunLimit = Math.max(1, Number(autouserData?.run_limit || 12));
   const autouserRunCount = Number(autouserData?.run_count ?? autouserData?.runs?.length ?? 0);
   const autouserRuns = autouserData?.runs || [];
+  const autouserManualPreview = autouserScheduleDate
+    ? nigeriaTimePreview(autouserScheduleDate, autouserManualTime)
+    : null;
   const autouserMinimumValue = parseAutoUserAmount(autouserMinimum);
   const autouserMaximumValue = parseAutoUserAmount(autouserMaximum);
   const autouserInputHint = autouserMinimum && autouserMaximum
@@ -1225,10 +1269,10 @@ export function AdminWorkspace({
         <div className="autouser-schedule-header">
           <div className="autouser-schedule-title">
             <h2>Scheduled activity · {autouserScheduleDate}</h2>
-            <p>These are testnet-only entries. Times use U.S. Central Time; you can change a future time, add a planned activity, or remove an unfinished chain. Items already processing or due within one minute are locked.</p>
+            <p>These are testnet-only entries. Cards always show U.S. Central Time. Enter or adjust a time in Nigeria time and review its Central-Time conversion before saving. Items already processing or due within one minute are locked.</p>
           </div>
           <div className="autouser-schedule-header-actions">
-            <span className="status-chip">TESTNET · U.S. CENTRAL</span>
+            <span className="status-chip">CARDS · U.S. CENTRAL / INPUT · NIGERIA</span>
             <button className="small-action" onClick={closeAutouserSchedule}>Close</button>
           </div>
         </div>
@@ -1247,9 +1291,16 @@ export function AdminWorkspace({
               <option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option><option value="topup">Top-up</option>
             </select>
             <input aria-label="Activity amount in USD" inputMode="decimal" value={autouserManualAmount} placeholder="Amount / USD" disabled={autouserManualPending} onChange={(event) => setAutouserManualAmount(event.target.value)} />
-            <input aria-label="Activity time in U.S. Central Time" type="time" step={60} value={autouserManualTime} disabled={autouserManualPending} onChange={(event) => setAutouserManualTime(event.target.value)} />
-            <button className="small-action" disabled={autouserManualPending} aria-busy={autouserManualPending} onClick={() => void createManualAutouserEvent()}>{autouserManualPending ? "Adding…" : "+ Add"}</button>
+            <label className="autouser-schedule-time">Nigeria time · Africa/Lagos
+              <input aria-label="Activity time in Nigeria time" type="time" step={60} value={autouserManualTime} disabled={autouserManualPending} onChange={(event) => setAutouserManualTime(event.target.value)} />
+            </label>
+            <button className="small-action" disabled={autouserManualPending || !autouserManualPreview?.staysOnScheduleDay} aria-busy={autouserManualPending} onClick={() => void createManualAutouserEvent()}>{autouserManualPending ? "Adding…" : "+ Add"}</button>
           </div>
+          {autouserManualPreview && <small className="security-feedback" role="status">
+            {autouserManualPreview.staysOnScheduleDay
+              ? `Will appear on the card as ${autouserManualPreview.time} U.S. Central.`
+              : `This converts to ${autouserManualPreview.date} ${autouserManualPreview.time} U.S. Central, outside this card’s day. Open that Central-Time day instead.`}
+          </small>}
           {autouserManualError && <small className="security-feedback" role="alert">{autouserManualError}</small>}
         </div>}
         {autouserScheduleLoadPending[autouserScheduleDate] ? (
@@ -1267,7 +1318,8 @@ export function AdminWorkspace({
           autouserSchedule.items.map((item) => {
             const itemKey = `${item.source}:${item.id}`;
             const label = autouserScheduleLabel(item);
-            const timeValue = autouserScheduleTimes[itemKey] ?? item.local_time;
+            const timeValue = autouserScheduleTimes[itemKey] ?? item.operator_time;
+            const centralPreview = nigeriaTimePreview(item.operator_date, timeValue);
             const savePending = Boolean(autouserScheduleSavePending[itemKey]);
             return (
               <div className="autouser-schedule-item" key={itemKey}>
@@ -1289,13 +1341,13 @@ export function AdminWorkspace({
                   </div>
                   <div className="autouser-schedule-edit">
                     <label className="autouser-schedule-time">
-                      Time · {autouserSchedule.timezone}
+                      Nigeria input · {autouserSchedule.operator_timezone}
                       <input
                         type="time"
                         step={60}
                         value={timeValue}
                         disabled={!item.editable || savePending}
-                        aria-label={`Time in ${autouserSchedule.timezone} for ${label}`}
+                        aria-label={`Time in ${autouserSchedule.operator_timezone} for ${label}`}
                         onChange={(event) => setAutouserScheduleTimes((current) => ({
                           ...current,
                           [itemKey]: event.target.value,
@@ -1304,7 +1356,7 @@ export function AdminWorkspace({
                     </label>
                     <button
                       className="small-action"
-                      disabled={!item.editable || savePending || !timeValue || timeValue === item.local_time}
+                      disabled={!item.editable || savePending || !timeValue || timeValue === item.operator_time || !centralPreview?.staysOnScheduleDay}
                       aria-busy={savePending}
                       onClick={() => void saveAutouserScheduleTime(item, timeValue)}
                     >
@@ -1315,6 +1367,10 @@ export function AdminWorkspace({
                     </button>
                   </div>
                 </div>
+                <small className="security-feedback" role="status">
+                  Card time · {item.local_time} {autouserSchedule.timezone}
+                  {centralPreview && !centralPreview.staysOnScheduleDay && ` · This Nigeria time moves outside ${autouserScheduleDate}.`}
+                </small>
                 {autouserScheduleSaveErrors[itemKey] && (
                   <small className="security-feedback" role="alert">{autouserScheduleSaveErrors[itemKey]}</small>
                 )}
