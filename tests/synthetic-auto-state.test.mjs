@@ -25,7 +25,8 @@ test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);
   assert.match(source, /"Turn Auto off"/);
   assert.match(source, /typeof dailyGoalUsd === "number" && Number\.isFinite\(dailyGoalUsd\)/);
-  assert.match(source, /Daily Auto progress: \{money\(Number\(snapshot\.execution\?\.daily_settled_net_pnl_usd \|\| 0\)\)\} settled of \{money\(dailyGoalUsd\)\} goal/);
+  assert.match(source, /snapshot\.execution\?\.daily_outcome === "loss"[\s\S]*?loss limit/);
+  assert.match(source, /Daily Auto progress: \{money\(dailyNetUsd\)\} net.*of \{dailyTargetLabel\}\./);
   assert.doesNotMatch(source, /0\.2–0\.3%|daily-loss reference|profit ceiling/);
   assert.match(styles, /\.synthetic-auto-fields\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-fields,\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
