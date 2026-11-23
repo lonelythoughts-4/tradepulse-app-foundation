@@ -1289,7 +1289,7 @@ export function AdminWorkspace({
           autouserSchedule.items.map((item) => {
             const itemKey = `${item.source}:${item.id}`;
             const label = autouserScheduleLabel(item);
-            const timeValue = autouserScheduleTimes[itemKey] ?? item.local_time;
+            const timeValue = autouserScheduleTimes[itemKey] ?? item.operator_time;
             const savePending = Boolean(autouserScheduleSavePending[itemKey]);
             return (
               <div className="autouser-schedule-item" key={itemKey}>
@@ -1326,7 +1326,7 @@ export function AdminWorkspace({
                     </label>
                     <button
                       className="small-action"
-                      disabled={!item.editable || savePending || !timeValue || timeValue === item.local_time}
+                      disabled={!item.editable || savePending || !timeValue || timeValue === item.operator_time}
                       aria-busy={savePending}
                       onClick={() => void saveAutouserScheduleTime(item, timeValue)}
                     >
