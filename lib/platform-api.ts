@@ -13,7 +13,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
   const origin = process.env.TRADEPULSE_API_ORIGIN?.trim().replace(/\/+$/, '')
   if (!origin) {
     return NextResponse.json(
-      { error: 'TradeMemo service is not configured.', request_id: requestId },
+      { error: 'TradeMemo service is temporarily unavailable. Please retry.' },
       { status: 503, headers: { 'x-tradepulse-request-id': requestId } },
     )
   }
@@ -46,7 +46,6 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
       return NextResponse.json(
         {
           error: 'TradeMemo could not complete this request. The service returned an unexpected response.',
-          request_id: requestId,
         },
         { status, headers: { 'x-tradepulse-request-id': requestId } },
       )
@@ -64,7 +63,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
     return response
   } catch {
     return NextResponse.json(
-      { error: 'TradeMemo service is temporarily unavailable. Please retry.', request_id: requestId },
+      { error: 'TradeMemo service is temporarily unavailable. Please retry.' },
       { status: 503, headers: { 'x-tradepulse-request-id': requestId } },
     )
   }

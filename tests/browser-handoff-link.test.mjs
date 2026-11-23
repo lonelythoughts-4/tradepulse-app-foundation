@@ -49,7 +49,7 @@ test("the browser handoff keeps the web link for desktop and never forces an ins
   const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
   const handoff = shell.slice(handoffStart, handoffEnd);
   assert.doesNotMatch(handoff, /response\.text\(\)\)\.slice\(0, 240\)/);
-  assert.match(shell, /Reference: \$\{requestId\}/);
+  assert.doesNotMatch(handoff, /Reference:/);
 });
 
 test("the handoff poll remains single-flight while Telegram is open and refreshes expired links", async () => {

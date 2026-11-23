@@ -5091,7 +5091,6 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
   useEffect(() => {
     let cancelled = false;
     const prepare = async () => {
-      let requestId = "";
       try {
         const response = await fetch("/api/v1/auth/handoff/start", {
           method: "POST",
@@ -5102,7 +5101,6 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           : {
               error: `The sign-in service returned an unexpected response (HTTP ${response.status}). Please try again shortly.`,
             };
-        requestId = typeof handoff.request_id === "string" ? handoff.request_id : "";
         if (!response.ok || !handoff.token || !handoff.bot_url || !handoff.qr_svg) {
           throw new Error(
             handoff.error || "Could not prepare a secure Telegram connection.",
@@ -5150,7 +5148,7 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         const reason = error instanceof Error
           ? error.message
           : "Could not prepare a secure Telegram connection.";
-        setMessage(requestId ? `${reason} Reference: ${requestId}` : reason);
+        setMessage(reason);
       }
     };
     void prepare();

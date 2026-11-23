@@ -5,7 +5,7 @@ import test from "node:test";
 import { DeskApi, DeskApiError } from "../lib/desk-api.ts";
 import { localizeApiError } from "../lib/desk-i18n.ts";
 
-test("language-save errors retain status and request reference for rollback locale", async () => {
+test("language-save errors keep operational references out of customer notices", async () => {
   const error = new DeskApiError(
     "The request failed.",
     500,
@@ -15,11 +15,11 @@ test("language-save errors retain status and request reference for rollback loca
 
   assert.equal(
     localizeApiError("en", error.responseMessage, error.status, error.reference),
-    "The service could not save this preference. Reference: request-17",
+    "TradeMemo is temporarily unavailable. Please try again shortly.",
   );
   assert.equal(
     localizeApiError("es", error.responseMessage, error.status, error.reference),
-    localizeApiError("es", "The service could not save this preference.", 500, "request-17"),
+    localizeApiError("es", "", 500),
   );
 });
 
