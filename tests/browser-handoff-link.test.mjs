@@ -72,7 +72,7 @@ test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
 
   assert.match(
     request,
-    /if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
+    /if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
   );
   assert.match(pollErrorHandler, /setTimeout\(poll/);
   assert.match(pollErrorHandler, /current code remains visible/);

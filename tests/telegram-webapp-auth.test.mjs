@@ -86,10 +86,11 @@ test("Telegram Mini Apps recover to secure handoff only after bridge detection a
 
   assert.match(shell, /setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\)/);
   assert.match(shell, /sessionBootstrapComplete \? \(\s*<BrowserBotHandoff/);
+  assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{\s*telegramHandoffSessionRef\.current = true;\s*const loaded = await load\(\);/);
   assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
 });
 
-test("an authenticated desk keeps its projection while a lost credential enters secure recovery", async () => {
+test("an endpoint-specific 401 validates the dashboard before asking the user to sign in again", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -99,8 +100,9 @@ test("an authenticated desk keeps its projection while a lost credential enters 
     shell.indexOf("const noticeCenter"),
   );
 
-  assert.match(request, /if \(response\.status === 401\) \{\s*await recoverAuthentication\(\);\s*throw new DeskApiError/);
-  assert.doesNotMatch(request, /path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\)/);
-  assert.match(shell, /const recoverAuthentication = useCallback\(async \(\) =>/);
-  assert.match(shell, /setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);/);
+  assert.match(
+    request,
+    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}\s*throw new DeskApiError/,
+  );
+  assert.doesNotMatch(shell, /Reconnect your TradeMemo session/);
 });
