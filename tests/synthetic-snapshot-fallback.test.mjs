@@ -27,6 +27,15 @@ test("a delayed account snapshot keeps its last verified value and surfaces refr
   assert.match(source, /loadError && <p role="status">\{loadError\} Action requests are checked against the current server state\.<\/p>/);
 });
 
+test("Synthetic separates Auto available margin from locked margin and does not repeat accepted risk acknowledgement", () => {
+  assert.match(source, /Auto available/);
+  assert.match(source, /Auto locked margin/);
+  assert.match(source, /execution\?\.(auto_locked_usd)/);
+  assert.match(source, /!snapshot\.live_disclosure_accepted/);
+  assert.match(source, /response\.accepted/);
+  assert.doesNotMatch(source, /latestAuto|autoActivityTitle|autoActivityDetail/);
+});
+
 test("one-second quote updates stay separate from account controls", () => {
   assert.match(source, /useResourcePoller<Record<string, unknown>>/);
   assert.match(source, /1000, true, `synthetic-quotes:\$\{environment\}:\$\{market\}`/);
