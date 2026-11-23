@@ -164,6 +164,7 @@ export function BotsWorkspace({
   const [memecoinCadence, setMemecoinCadence] = useState(300);
   const [memecoinAutoEnabled, setMemecoinAutoEnabled] = useState(false);
   const [includeTrench, setIncludeTrench] = useState(false);
+  const [acceptedMemecoinAuthorizations, setAcceptedMemecoinAuthorizations] = useState<Record<string, boolean>>({});
   const [memecoinAssetCategories, setMemecoinAssetCategories] = useState<Record<string, string>>({
     DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap",
   });
@@ -980,6 +981,69 @@ export function BotsWorkspace({
             <strong>{money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
           </GradientPanel>
         </div>
+        {selected.product === "memecoin" && !isClosing && (
+          <GradientPanel className="compound-panel memecoin-authorization">
+            {awaitingAuthorization ? (
+              <>
+                <div className="memecoin-authorization-heading">
+                  <h3>Authorize your funded Memecoin bot</h3>
+                  <span className="status-chip paused"><i />Not active</span>
+                </div>
+                <p>Only your Memecoin allocation is at risk. Results use live market data and settle within that allocation. Trench Mode checks fresh launches only after a same-network DEX quote and liquidity review; it cannot prevent rugs, taxes, freezes, or rapid loss.</p>
+                <div className="activity-row" role="status">
+                  <div className="activity-info">
+                    <strong>Automatic entries are off by default.</strong>
+                    <small>Choose the markets and risk controls below. Turn Automatic entries on if you want the bot to open positions after authorization; otherwise, you can place manual orders separately.</small>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="eyebrow">MEMECOIN STRATEGY CONTROLS</span>
+                <p>These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review.</p>
+              </>
+            )}
+            <span className="eyebrow">STRATEGY BASKET</span>
+            <div className="segment-control" role="group" aria-label="Strategy basket">
+              {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
+                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{symbol}</span></button>
+              ))}
+            </div>
+            <button type="button" className="small-action" onClick={() => void openBasketPicker()}>
+              Browse eligible markets <ChevronRight />
+            </button>
+            <span className="eyebrow">LEVERAGE</span>
+            <div className="segment-control" role="radiogroup" aria-label="Leverage" onKeyDown={handleBotChoiceKeyDown}>
+              {[1, 3, 5, 10].filter((value) => value <= permittedLeverage).map((value) => <button type="button" role="radio" aria-checked={savedLeverage === value} tabIndex={savedLeverage === value ? 0 : -1} key={value} className={savedLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
+            </div>
+            <span className="eyebrow">DECISION CADENCE</span>
+            <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
+              {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
+            </div>
+            <div className="memecoin-authorization-actions">
+              <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
+              <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
+            </div>
+            {awaitingAuthorization && (
+              <label className="memecoin-authorization-consent">
+                <input
+                  type="checkbox"
+                  checked={Boolean(acceptedMemecoinAuthorizations[selected.id])}
+                  onChange={(event) => setAcceptedMemecoinAuthorizations((current) => ({ ...current, [selected.id]: event.target.checked }))}
+                />
+                <span>I have reviewed the funded Memecoin Bot Beta risks above and want to authorize this bot.</span>
+              </label>
+            )}
+            <button
+              className="primary-action"
+              disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0 || (awaitingAuthorization && !acceptedMemecoinAuthorizations[selected.id])}
+              aria-busy={isActionPending(`bot:${selected.id}:authorize`)}
+              onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization && Boolean(acceptedMemecoinAuthorizations[selected.id]), settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
+            >
+              {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize bot") : "Save strategy controls"} <StateIcon name="check" />
+            </button>
+          </GradientPanel>
+        )}
         {selected.product === "memecoin" && (
           <GradientPanel className="compound-panel">
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
@@ -1083,48 +1147,6 @@ export function BotsWorkspace({
                   </button>
                 ))}
               </div>
-            </GradientPanel>
-          )}
-          {selected.product === "memecoin" && !isClosing && (
-            <GradientPanel className="compound-panel">
-              <span className="eyebrow">{awaitingAuthorization ? "FUNDED MEMECOIN BOT BETA" : "MEMECOIN STRATEGY CONTROLS"}</span>
-              <p>
-                {awaitingAuthorization
-                  ? "Only your Memecoin allocation is at risk. Results use live market data and settle within that allocation. Trench Mode checks fresh launches only after a same-network DEX quote and liquidity review; it cannot prevent rugs, taxes, freezes, or rapid loss."
-                  : "These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review."}
-              </p>
-              {awaitingAuthorization && <div className="activity-row" role="status">
-                <div className="activity-info">
-                  <strong>Automatic entries cannot start yet.</strong>
-                  <small>Choose the strategy controls, turn Automatic entries on if you want it, then authorize this bot. It will review only fresh eligible market signals after authorization.</small>
-                </div>
-              </div>}
-            <span className="eyebrow">STRATEGY BASKET</span>
-            <div className="segment-control" role="group" aria-label="Strategy basket">
-              {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
-                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{symbol}</span></button>
-              ))}
-            </div>
-            <button type="button" className="small-action" onClick={() => void openBasketPicker()}>
-              Browse eligible markets <ChevronRight />
-            </button>
-            <span className="eyebrow">LEVERAGE</span>
-            <div className="segment-control" role="radiogroup" aria-label="Leverage" onKeyDown={handleBotChoiceKeyDown}>
-              {[1, 3, 5, 10].filter((value) => value <= permittedLeverage).map((value) => <button type="button" role="radio" aria-checked={savedLeverage === value} tabIndex={savedLeverage === value ? 0 : -1} key={value} className={savedLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
-            </div>
-            <span className="eyebrow">DECISION CADENCE</span>
-              <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
-                {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
-              </div>
-              <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
-              <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
-              <button
-                className="primary-action"
-                disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0}
-                onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization, settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
-              >
-                {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize Memecoin Bot Beta") : "Save strategy controls"} <StateIcon name="check" />
-              </button>
             </GradientPanel>
           )}
           <div className="detail-actions">
@@ -1379,14 +1401,15 @@ export function BotsWorkspace({
                 <span className="compound-chip">
                   {isSynthetic ? hasSettledPnl ? `${settledPnl >= 0 ? "ALL SETTLED P&L +" : "ALL SETTLED P&L −"}${money(Math.abs(settledPnl))}` : "NO SETTLED POSITIONS" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
+                {bot.state === "awaiting_authorization" && <span className="memecoin-fleet-prompt">Funded, but not active. Review setup to start the bot.</span>}
                 <button
-                  className="small-action"
+                  className={bot.state === "awaiting_authorization" ? "primary-action" : "small-action"}
                   onClick={() => {
                     setSelectedId(bot.id);
                     setView("detail");
                   }}
                 >
-                  Open detail <ChevronRight />
+                  {bot.state === "awaiting_authorization" ? "Review setup" : "Open detail"} <ChevronRight />
                 </button>
               </div>
             </GradientPanel>
