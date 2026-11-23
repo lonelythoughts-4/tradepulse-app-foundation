@@ -6961,12 +6961,6 @@ function LiveTradePulse() {
       const webApp = telegramContext ? await waitForTelegramWebApp() : undefined;
       webApp?.ready?.();
       webApp?.expand?.();
-      if (telegramContext && !telegramInitData()) {
-        setTelegramIdentityPending(false);
-        setTelegramLaunchContext(false);
-        setSessionBootstrapComplete(true);
-        return false;
-      }
       setTelegramIdentityPending(false);
       // A Telegram-authenticated first load has to assemble the complete
       // account projection. Give a healthy, signed desk enough room to finish

@@ -47,7 +47,14 @@ test("a delayed Telegram bridge is detected before the desk chooses browser hand
   assert.match(shell, /if \(openedInsideTelegram\(\)\) return true;/);
   assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(\s*openedInsideTelegram\(\)\s*\|\| \(checkingSession && await detectTelegramLaunch\(\)\)\s*\);/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
-  assert.match(shell, /if \(telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);\s*return false;/);
+  const loadStart = shell.indexOf("const load = async");
+  const dashboardRequest = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, 25_000)', loadStart);
+  assert.notEqual(dashboardRequest, -1, "initial load should validate the existing browser session");
+  assert.doesNotMatch(
+    shell.slice(loadStart, dashboardRequest),
+    /if \(telegramContext && !telegramInitData\(\)\)\s*\{/,
+    "a missing fresh initData value must not skip the secure browser-session check",
+  );
   assert.match(shell, /<BrowserBotHandoff onComplete=/);
   assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(/);
   assert.match(shell, /if \(!telegramInitData\(\)\) return;\s*setTelegramIdentityPending\(false\);\s*void load\(\);/);
