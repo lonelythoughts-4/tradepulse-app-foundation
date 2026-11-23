@@ -7373,9 +7373,6 @@ function LiveTradePulse() {
         />
       );
     }
-    if (!sessionBootstrapComplete && !telegramLaunchContext) {
-      return <DeskLoading status="Checking your saved session…" />;
-    }
     return (
       <AuthEntryPage
         theme={deskTheme}

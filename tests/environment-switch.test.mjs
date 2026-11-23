@@ -45,7 +45,7 @@ test("admin testnet selection persists across tabs while non-admin access return
   assert.match(switcher, /Promise\.all\(\[overviewRequest, dashboardRequest\]\)/);
 });
 
-test("session checks do not replace the authentication page with a full-screen desk loader", async () => {
+test("the authentication page is visible while session and Telegram launch checks run", async () => {
   const shell = await readFile(new URL("../components/tradepulse-shell.tsx", import.meta.url), "utf8");
   const unauthenticatedStart = shell.indexOf("  if (!data) {");
   const authenticatedStart = shell.indexOf("  const changeLanguage", unauthenticatedStart);
@@ -53,8 +53,9 @@ test("session checks do not replace the authentication page with a full-screen d
   assert.ok(authenticatedStart > unauthenticatedStart, "the unauthenticated view should end before authenticated controls");
 
   const unauthenticatedView = shell.slice(unauthenticatedStart, authenticatedStart);
-  assert.match(unauthenticatedView, /if \(!sessionBootstrapComplete && !telegramLaunchContext\) \{\s*return <DeskLoading status="Checking your saved session(?:\u2026|\.{3})" \/>;\s*\}/);
   assert.match(unauthenticatedView, /return \(\s*<AuthEntryPage/);
-  assert.match(unauthenticatedView, /sessionBootstrapComplete && !telegramLaunchContext/);
+  assert.doesNotMatch(unauthenticatedView, /return <DeskLoading status="Checking your saved session/);
   assert.match(unauthenticatedView, /role="status" aria-live="polite"/);
+  assert.match(unauthenticatedView, /Checking your saved session/);
+  assert.match(unauthenticatedView, /sessionBootstrapComplete \? \(\s*<BrowserBotHandoff/);
 });
