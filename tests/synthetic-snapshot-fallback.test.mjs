@@ -40,7 +40,7 @@ test("Synthetic separates Auto available margin from locked margin and does not 
 test("Synthetic Auto rejections are exposed in the admin workspace only", () => {
   assert.match(adminSource, /request\("\/v1\/admin\/synthetic-auto-rejections", \{\}, environment\)/);
   assert.match(adminSource, /Recent Auto rejections/);
-  assert.match(adminSource, /Admin-only diagnostics/);
+  assert.match(adminSource, /admin-only/);
   assert.match(adminSource, /event\.reason/);
   assert.doesNotMatch(source, /auto_rejections|auto_signal_rejected/);
 });
@@ -68,7 +68,7 @@ test("the chart retains same-market cached ticks and rejects a late market respo
   assert.match(source, /latest\?\.market && latest\.market !== market/);
   assert.match(source, /Chart history is delayed\. The latest available quote is shown\./);
   assert.match(source, /Chart history is delayed\. Showing the last verified ticks and current quote\./);
-  assert.match(source, /Position data is delayed; recent positions may be stale or unavailable\./);
+  assert.match(source, /account\.user\.is_admin && snapshot\.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable\./);
 });
 
 test("a one-tick chart keeps the current price visible across the plot", () => {
