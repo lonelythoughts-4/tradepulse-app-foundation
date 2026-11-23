@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(root, "components", "workspaces", "synt
 const botsSource = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
 const flashbackWorkspace = fs.readFileSync(path.join(root, "components", "workspaces", "flashback-workspace.tsx"), "utf8");
 const shellSource = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
+const adminSource = fs.readFileSync(path.join(root, "components", "workspaces", "admin-workspace.tsx"), "utf8");
 
 test("Bots hides disabled Demo accounts and Flashback has a separate workspace", () => {
   assert.match(botsSource, /\.filter\(\(bot\) => !bot\.demo_trial && !bot\.demo_credit_only/);
@@ -34,6 +35,14 @@ test("Synthetic separates Auto available margin from locked margin and does not 
   assert.match(source, /!snapshot\.live_disclosure_accepted/);
   assert.match(source, /response\.accepted/);
   assert.doesNotMatch(source, /latestAuto|autoActivityTitle|autoActivityDetail/);
+});
+
+test("Synthetic Auto rejections are exposed in the admin workspace only", () => {
+  assert.match(adminSource, /request\("\/v1\/admin\/synthetic-auto-rejections", \{\}, environment\)/);
+  assert.match(adminSource, /Recent Auto rejections/);
+  assert.match(adminSource, /Admin-only diagnostics/);
+  assert.match(adminSource, /event\.reason/);
+  assert.doesNotMatch(source, /auto_rejections|auto_signal_rejected/);
 });
 
 test("one-second quote updates stay separate from account controls", () => {

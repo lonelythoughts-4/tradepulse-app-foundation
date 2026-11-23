@@ -214,6 +214,13 @@ export function AdminWorkspace({
     Array<{ chain: string; asset: string; address: string }>
   >([]);
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
+  const [syntheticAutoRejections, setSyntheticAutoRejections] = useState<Array<{
+    timestamp: number;
+    user_id: number;
+    signal_id: string;
+    reason: string;
+  }>>([]);
+  const [syntheticAutoRejectionsError, setSyntheticAutoRejectionsError] = useState("");
   const [flashbackDirectionConfig, setFlashbackDirectionConfig] = useState("");
   const [flashbackDirectionHistory, setFlashbackDirectionHistory] = useState<Array<{ id: string; market: string; direction: string; state: string; allocation_usd: number; return_usd?: number; user_net_usd?: number; close_reason?: string; settled_at?: number }>>([]);
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
@@ -393,6 +400,17 @@ export function AdminWorkspace({
     request("/v1/admin/synthetic-config")
       .then((response) => setSyntheticConfig(response.settings || {}))
       .catch(() => setSyntheticConfig({}));
+    setSyntheticAutoRejections([]);
+    setSyntheticAutoRejectionsError("");
+    request("/v1/admin/synthetic-auto-rejections", {}, environment)
+      .then((response) => {
+        if (!active) return;
+        setSyntheticAutoRejections(Array.isArray(response.auto_rejections) ? response.auto_rejections : []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setSyntheticAutoRejectionsError(error instanceof Error ? error.message : "Synthetic Auto diagnostics are unavailable.");
+      });
     request("/v1/admin/memecoin-config")
       .then((response) => {
         setMemecoinConfig(response.settings || {});
@@ -2409,6 +2427,18 @@ export function AdminWorkspace({
               <input value={syntheticConfig[key] || ""} inputMode="decimal" onChange={(event) => setSyntheticConfig((current) => ({ ...current, [key]: event.target.value }))} onBlur={() => syntheticConfig[key] && saveSyntheticConfig({ [key]: syntheticConfig[key] })} aria-label={label} />
             </div>
           ))}
+          <div className="admin-row">
+            <div><strong>Recent Auto rejections</strong><small>Mainnet Auto scheduler · admin-only · last 24 hours</small></div>
+            <span className="mono">{syntheticAutoRejections.length}</span>
+          </div>
+          {syntheticAutoRejectionsError ? <p role="status">{syntheticAutoRejectionsError}</p> : syntheticAutoRejections.length ? syntheticAutoRejections.map((event) => (
+            <div className="admin-row" key={`${event.timestamp}:${event.user_id}:${event.signal_id}`}>
+              <div>
+                <strong>User {event.user_id} · {event.signal_id || "signal unavailable"}</strong>
+                <small>{new Date(event.timestamp * 1000).toLocaleString()} · {event.reason}</small>
+              </div>
+            </div>
+          )) : <p role="status">No recent Auto rejections.</p>}
         </GradientPanel>
         <GradientPanel className="admin-table">
           <span className="eyebrow">ENGINE SETTLEMENTS</span>
