@@ -5159,13 +5159,14 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
     };
   }, [attempt]);
   useEffect(() => {
-    if ((state !== "ready" && state !== "waiting") || !token) return;
+    if (!token) return;
     const deadline = Date.now() + expiresIn * 1_000;
     let inFlight = false;
     let terminal = false;
+    let disposed = false;
     let transientFailures = 0;
     const poll = async () => {
-      if (inFlight) return;
+      if (disposed || inFlight) return;
       inFlight = true;
       if (Date.now() >= deadline) {
         timer.current = null;
@@ -5184,6 +5185,20 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           `/api/v1/auth/handoff/complete?token=${encodeURIComponent(token)}`,
           { credentials: "same-origin", cache: "no-store" },
         );
+        if (disposed) return;
+        if (response.status === 410) {
+          terminal = true;
+          timer.current = null;
+          setState("preparing");
+          setMessage("This secure link expired. Preparing a fresh one…");
+          if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+          refreshTimer.current = window.setTimeout(() => {
+            if (disposed) return;
+            refreshTimer.current = null;
+            setAttempt((current) => current + 1);
+          }, 300);
+          return;
+        }
         if (response.status === 202) {
           transientFailures = 0;
           inFlight = false;
@@ -5199,26 +5214,32 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         if (!response.ok || !result.ready) {
           throw new Error(result.error || "Could not finish browser connection.");
         }
+        if (disposed) return;
         timer.current = null;
         terminal = true;
         setMessage("Telegram confirmed. Opening your desk…");
         let opened = await onCompleteRef.current();
+        if (disposed) return;
         for (let retry = 0; !opened && retry < 5; retry += 1) {
           setMessage("Telegram confirmed. Finishing the secure desk connection…");
           await new Promise((resolve) => window.setTimeout(resolve, 800 * (retry + 1)));
+          if (disposed) return;
           opened = await onCompleteRef.current();
+          if (disposed) return;
         }
         if (!opened) {
           setState("error");
           setMessage("Telegram confirmed, but the desk session is still settling. Reconnect once to reopen it.");
         }
       } catch {
+        if (disposed) return;
         if (Date.now() >= deadline) {
           terminal = true;
           timer.current = null;
           setMessage("Refreshing the secure link. Your current code remains visible.");
           if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
           refreshTimer.current = window.setTimeout(() => {
+            if (disposed) return;
             refreshTimer.current = null;
             setAttempt((current) => current + 1);
           }, 300);
@@ -5229,7 +5250,7 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         timer.current = window.setTimeout(poll, Math.min(8_000, 1_000 * 2 ** Math.min(transientFailures - 1, 3)));
       } finally {
         inFlight = false;
-        if (!terminal && timer.current === null && Date.now() < deadline) {
+        if (!disposed && !terminal && timer.current === null && Date.now() < deadline) {
           timer.current = window.setTimeout(poll, 1000);
         }
       }
@@ -5247,12 +5268,13 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
     document.addEventListener("visibilitychange", resumePoll);
     void poll();
     return () => {
+      disposed = true;
       if (timer.current) window.clearTimeout(timer.current);
       timer.current = null;
       window.removeEventListener("focus", resumePoll);
       document.removeEventListener("visibilitychange", resumePoll);
     };
-  }, [state, token, expiresIn]);
+  }, [token, expiresIn]);
   const retry = () => {
     if (timer.current) window.clearTimeout(timer.current);
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);

@@ -52,6 +52,25 @@ test("the browser handoff keeps the web link for desktop and never forces an ins
   assert.match(shell, /Reference: \$\{requestId\}/);
 });
 
+test("the handoff poll remains single-flight while Telegram is open and refreshes expired links", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const handoffStart = shell.indexOf("function BrowserBotHandoff");
+  const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
+  const handoff = shell.slice(handoffStart, handoffEnd);
+  const pollStart = handoff.indexOf('useEffect(() => {\n    if (!token) return;');
+  const pollEnd = handoff.indexOf("const retry = () =>", pollStart);
+  const poll = handoff.slice(pollStart, pollEnd);
+
+  assert.notEqual(pollStart, -1, "the handoff poll should start when its token is ready");
+  assert.match(poll, /if \(disposed \|\| inFlight\) return/);
+  assert.match(poll, /response\.status === 410/);
+  assert.match(poll, /\}, \[token, expiresIn\]\);/);
+  assert.doesNotMatch(poll, /\[state, token, expiresIn\]/);
+});
+
 test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
