@@ -6656,6 +6656,7 @@ function LiveTradePulse() {
   const [telegramIdentityPending, setTelegramIdentityPending] = useState(false);
   const [telegramLaunchContext, setTelegramLaunchContext] = useState(false);
   const [sessionBootstrapComplete, setSessionBootstrapComplete] = useState(false);
+  const [sessionHandoffRequired, setSessionHandoffRequired] = useState(false);
   useEffect(() => {
     setTelegramLaunchContext(openedInsideTelegram());
   }, []);
@@ -6910,6 +6911,7 @@ function LiveTradePulse() {
             updateDashboard(null);
             setTelegramIdentityPending(false);
             setTelegramLaunchContext(false);
+            setSessionHandoffRequired(true);
             setSessionBootstrapComplete(true);
           } else {
             sessionValidationRef.current?.(targetEnvironment);
@@ -6989,6 +6991,7 @@ function LiveTradePulse() {
       next.user.language_code = languageRef.current;
       setUiLanguage(languageRef.current);
       authenticatedUserRef.current = next.user.id;
+      setSessionHandoffRequired(false);
       updateDashboard(next);
       const resolvedEnvironment = next.user.is_admin && targetEnvironment === "testnet" && next.environment === "testnet" ? "testnet" : "mainnet";
       selectedEnvironmentRef.current = resolvedEnvironment;
@@ -7387,12 +7390,26 @@ function LiveTradePulse() {
         />
       );
     }
+    if (!sessionBootstrapComplete || loading) {
+      return <DeskLoading status="Checking your saved session…" />;
+    }
+    if (!sessionHandoffRequired) {
+      return (
+        <DeskLoading
+          status={notice || "TradeMemo could not reach your desk. Your saved session has not been cleared."}
+          onRetry={() => {
+            setNotice("");
+            void load();
+          }}
+        />
+      );
+    }
     return (
       <AuthEntryPage
         theme={deskTheme}
         onThemeChange={() => setDeskTheme((current) => nextDeskTheme(current))}
       >
-        {sessionBootstrapComplete ? (
+        {sessionHandoffRequired ? (
           <BrowserBotHandoff onComplete={async () => {
             telegramHandoffSessionRef.current = true;
             const loaded = await load();

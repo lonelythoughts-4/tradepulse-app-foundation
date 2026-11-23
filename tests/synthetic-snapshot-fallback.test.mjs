@@ -32,9 +32,16 @@ test("Synthetic separates Auto available margin from locked margin and does not 
   assert.match(source, /Auto available/);
   assert.match(source, /Auto locked margin/);
   assert.match(source, /execution\?\.(auto_locked_usd)/);
-  assert.match(source, /!snapshot\.live_disclosure_accepted/);
+  assert.match(source, /!snapshot\.partial && snapshot\.live_disclosure_accepted === false/);
   assert.match(source, /response\.accepted/);
   assert.doesNotMatch(source, /latestAuto|autoActivityTitle|autoActivityDetail/);
+});
+
+test("a dashboard outage does not send an existing browser session to sign-in", () => {
+  assert.match(shellSource, /if \(response\.status === 401\) \{\s+if \(path === "\/v1\/dashboard"\) \{[\s\S]*?setSessionHandoffRequired\(true\)/);
+  assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?Your saved session has not been cleared/);
+  assert.match(shellSource, /if \(!sessionBootstrapComplete \|\| loading\) \{\s+return <DeskLoading status="Checking your saved session…"/);
+  assert.match(shellSource, /<BrowserBotHandoff onComplete=/);
 });
 
 test("Synthetic Auto rejections are exposed in the admin workspace only", () => {
