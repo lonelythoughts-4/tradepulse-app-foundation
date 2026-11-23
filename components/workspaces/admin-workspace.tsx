@@ -10,29 +10,8 @@ import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 
 const AUTOUSER_SCHEDULE_CONFLICT_MESSAGE =
   "This item changed while you were editing it. The latest schedule is loading.";
-const AUTOUSER_DISPLAY_TIMEZONE = "America/Chicago";
+const AUTOUSER_DISPLAY_TIMEZONE = "Africa/Lagos";
 const AUTOUSER_INPUT_TIMEZONE = "Africa/Lagos";
-
-function nigeriaTimePreview(scheduleDate: string, nigeriaTime: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduleDate) || !/^\d{2}:\d{2}$/.test(nigeriaTime)) return null;
-  const instant = new Date(`${scheduleDate}T${nigeriaTime}:00+01:00`);
-  if (Number.isNaN(instant.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: AUTOUSER_DISPLAY_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(instant).reduce<Record<string, string>>((result, part) => {
-    result[part.type] = part.value;
-    return result;
-  }, {});
-  const date = `${parts.year}-${parts.month}-${parts.day}`;
-  const time = `${parts.hour}:${parts.minute}`;
-  return { date, time, staysOnScheduleDay: date === scheduleDate };
-}
 
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -914,7 +893,7 @@ export function AdminWorkspace({
       const previousTimes = new Map<string, string>();
       const forceServerTimeKeys = new Set<string>();
       for (const item of autouserScheduleRef.current?.items || []) {
-        previousTimes.set(`${item.source}:${item.id}`, item.local_time);
+        previousTimes.set(`${item.source}:${item.id}`, item.operator_time);
       }
       for (const item of response.items) {
         const itemKey = `${item.source}:${item.id}`;
@@ -931,14 +910,14 @@ export function AdminWorkspace({
           const forceServerTime = forceServerTimeKeys.has(itemKey);
           next[itemKey] = item.editable && !forceServerTime && currentTime !== undefined && currentTime !== previousTime
             ? currentTime
-            : item.local_time;
+            : item.operator_time;
         }
         return next;
       });
     } else {
       const times: Record<string, string> = {};
       for (const item of response.items) {
-        times[`${item.source}:${item.id}`] = item.local_time;
+        times[`${item.source}:${item.id}`] = item.operator_time;
       }
       setAutouserScheduleTimes(times);
     }
@@ -1243,9 +1222,6 @@ export function AdminWorkspace({
   const autouserRunLimit = Math.max(1, Number(autouserData?.run_limit || 12));
   const autouserRunCount = Number(autouserData?.run_count ?? autouserData?.runs?.length ?? 0);
   const autouserRuns = autouserData?.runs || [];
-  const autouserManualPreview = autouserScheduleDate
-    ? nigeriaTimePreview(autouserScheduleDate, autouserManualTime)
-    : null;
   const autouserMinimumValue = parseAutoUserAmount(autouserMinimum);
   const autouserMaximumValue = parseAutoUserAmount(autouserMaximum);
   const autouserInputHint = autouserMinimum && autouserMaximum
@@ -1269,10 +1245,10 @@ export function AdminWorkspace({
         <div className="autouser-schedule-header">
           <div className="autouser-schedule-title">
             <h2>Scheduled activity · {autouserScheduleDate}</h2>
-            <p>These are testnet-only entries. Cards always show U.S. Central Time. Enter or adjust a time in Nigeria time and review its Central-Time conversion before saving. Items already processing or due within one minute are locked.</p>
+            <p>These are testnet-only entries. Times use Nigeria time. Items already processing or due within one minute are locked.</p>
           </div>
           <div className="autouser-schedule-header-actions">
-            <span className="status-chip">CARDS · U.S. CENTRAL / INPUT · NIGERIA</span>
+            <span className="status-chip">TIME · NIGERIA</span>
             <button className="small-action" onClick={closeAutouserSchedule}>Close</button>
           </div>
         </div>
@@ -1294,13 +1270,8 @@ export function AdminWorkspace({
             <label className="autouser-schedule-time">Nigeria time · Africa/Lagos
               <input aria-label="Activity time in Nigeria time" type="time" step={60} value={autouserManualTime} disabled={autouserManualPending} onChange={(event) => setAutouserManualTime(event.target.value)} />
             </label>
-            <button className="small-action" disabled={autouserManualPending || !autouserManualPreview?.staysOnScheduleDay} aria-busy={autouserManualPending} onClick={() => void createManualAutouserEvent()}>{autouserManualPending ? "Adding…" : "+ Add"}</button>
+            <button className="small-action" disabled={autouserManualPending} aria-busy={autouserManualPending} onClick={() => void createManualAutouserEvent()}>{autouserManualPending ? "Adding…" : "+ Add"}</button>
           </div>
-          {autouserManualPreview && <small className="security-feedback" role="status">
-            {autouserManualPreview.staysOnScheduleDay
-              ? `Will appear on the card as ${autouserManualPreview.time} U.S. Central.`
-              : `This converts to ${autouserManualPreview.date} ${autouserManualPreview.time} U.S. Central, outside this card’s day. Open that Central-Time day instead.`}
-          </small>}
           {autouserManualError && <small className="security-feedback" role="alert">{autouserManualError}</small>}
         </div>}
         {autouserScheduleLoadPending[autouserScheduleDate] ? (
@@ -1318,8 +1289,7 @@ export function AdminWorkspace({
           autouserSchedule.items.map((item) => {
             const itemKey = `${item.source}:${item.id}`;
             const label = autouserScheduleLabel(item);
-            const timeValue = autouserScheduleTimes[itemKey] ?? item.operator_time;
-            const centralPreview = nigeriaTimePreview(item.operator_date, timeValue);
+            const timeValue = autouserScheduleTimes[itemKey] ?? item.local_time;
             const savePending = Boolean(autouserScheduleSavePending[itemKey]);
             return (
               <div className="autouser-schedule-item" key={itemKey}>
@@ -1341,13 +1311,13 @@ export function AdminWorkspace({
                   </div>
                   <div className="autouser-schedule-edit">
                     <label className="autouser-schedule-time">
-                      Nigeria input · {autouserSchedule.operator_timezone}
+                      Nigeria time · {autouserSchedule.timezone}
                       <input
                         type="time"
                         step={60}
                         value={timeValue}
                         disabled={!item.editable || savePending}
-                        aria-label={`Time in ${autouserSchedule.operator_timezone} for ${label}`}
+                        aria-label={`Time in ${autouserSchedule.timezone} for ${label}`}
                         onChange={(event) => setAutouserScheduleTimes((current) => ({
                           ...current,
                           [itemKey]: event.target.value,
@@ -1356,7 +1326,7 @@ export function AdminWorkspace({
                     </label>
                     <button
                       className="small-action"
-                      disabled={!item.editable || savePending || !timeValue || timeValue === item.operator_time || !centralPreview?.staysOnScheduleDay}
+                      disabled={!item.editable || savePending || !timeValue || timeValue === item.local_time}
                       aria-busy={savePending}
                       onClick={() => void saveAutouserScheduleTime(item, timeValue)}
                     >
@@ -1368,8 +1338,7 @@ export function AdminWorkspace({
                   </div>
                 </div>
                 <small className="security-feedback" role="status">
-                  Card time · {item.local_time} {autouserSchedule.timezone}
-                  {centralPreview && !centralPreview.staysOnScheduleDay && ` · This Nigeria time moves outside ${autouserScheduleDate}.`}
+                  Scheduled time · {item.local_time} {autouserSchedule.timezone}
                 </small>
                 {autouserScheduleSaveErrors[itemKey] && (
                   <small className="security-feedback" role="alert">{autouserScheduleSaveErrors[itemKey]}</small>
@@ -2064,7 +2033,7 @@ export function AdminWorkspace({
             <div>
               <strong>{Number(autouserData?.totals?.scheduled_events || 0).toLocaleString()} simulated deposits queued</strong>
               <small className="mono">{Number(autouserData?.totals?.completed_events || 0).toLocaleString()} simulated funding events complete / {Number(autouserData?.totals?.completed_flashback_actions || 0).toLocaleString()} Flashback steps complete / {Number(autouserData?.totals?.blocked_events || 0).toLocaleString() + Number(autouserData?.totals?.blocked_actions || 0).toLocaleString()} waiting safely / {Number(autouserData?.totals?.failed_imports || 0).toLocaleString()} import rows needing retry</small>
-              {(autouserData?.forecast || []).length > 0 && <small className="mono">UPCOMING ACTIVITY ({autouserData?.timezone || "America/Chicago"}): {autouserData?.forecast?.[0]?.date} → {autouserData?.forecast?.[Math.min((autouserData?.forecast?.length || 1) - 1, 13)]?.date} / {Math.min((autouserData?.forecast || []).length, 14)} ACTIVE DAYS SHOWN</small>}
+              {(autouserData?.forecast || []).length > 0 && <small className="mono">UPCOMING ACTIVITY ({autouserData?.timezone || "Africa/Lagos"}): {autouserData?.forecast?.[0]?.date} → {autouserData?.forecast?.[Math.min((autouserData?.forecast?.length || 1) - 1, 13)]?.date} / {Math.min((autouserData?.forecast || []).length, 14)} ACTIVE DAYS SHOWN</small>}
             </div>
           </div>
           {(autouserData?.forecast || []).slice(0, 14).map((day) => (

@@ -18,6 +18,8 @@ test("open auto-user schedules refresh state without replacing unsaved time edit
   const save = source.slice(saveStart, source.indexOf("const confirmAutouserCancel", saveStart));
 
   assert.match(apply, /autouserScheduleForceServerTimes\.current\.delete\(itemKey\)/);
+  assert.match(apply, /item\.operator_time/);
+  assert.doesNotMatch(apply, /previousTimes\.set\(`\$\{item\.source\}:\$\{item\.id\}`, item\.local_time\)/);
   assert.match(apply, /item\.editable && !forceServerTime && currentTime !== undefined && currentTime !== previousTime/);
   assert.match(refresh, /schedule\?date=\$\{encodeURIComponent\(date\)\}/);
   assert.match(refresh, /applyAutouserSchedule\(response, true\)/);
@@ -29,13 +31,11 @@ test("open auto-user schedules refresh state without replacing unsaved time edit
   assert.match(save, /void refreshAutouserSchedule\(date, refreshAfterSave\)/);
 });
 
-test("auto-user schedule takes Nigeria input but preserves Central card times", async () => {
+test("auto-user schedule uses Nigeria time while group cards stay U.S. Central", async () => {
   const source = await readFile(new URL("../components/workspaces/admin-workspace.tsx", import.meta.url), "utf8");
-  assert.match(source, /const AUTOUSER_DISPLAY_TIMEZONE = "America\/Chicago"/);
+  assert.match(source, /const AUTOUSER_DISPLAY_TIMEZONE = "Africa\/Lagos"/);
   assert.match(source, /const AUTOUSER_INPUT_TIMEZONE = "Africa\/Lagos"/);
-  assert.match(source, /function nigeriaTimePreview/);
   assert.match(source, /input_timezone: AUTOUSER_INPUT_TIMEZONE/);
-  assert.match(source, /Card time · \{item\.local_time\} \{autouserSchedule\.timezone\}/);
-  assert.match(source, /Nigeria input · \{autouserSchedule\.operator_timezone\}/);
-  assert.match(source, /Will appear on the card as \$\{autouserManualPreview\.time\} U\.S\. Central/);
+  assert.match(source, /Times use Nigeria time\./);
+  assert.doesNotMatch(source, /CARDS · U\.S\. CENTRAL/);
 });
