@@ -981,8 +981,9 @@ export function BotsWorkspace({
             <strong>{money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
           </GradientPanel>
         </div>
-        {selected.product === "memecoin" && !isClosing && (
-          <GradientPanel className="compound-panel memecoin-authorization">
+        {selected.product === "memecoin" && (
+          <GradientPanel className="compound-panel memecoin-market-panel">
+            {!isClosing && <section className="memecoin-authorization" aria-label="Memecoin bot authorization and strategy controls">
             {awaitingAuthorization ? (
               <>
                 <div className="memecoin-authorization-heading">
@@ -1042,10 +1043,7 @@ export function BotsWorkspace({
             >
               {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize bot") : "Save strategy controls"} <StateIcon name="check" />
             </button>
-          </GradientPanel>
-        )}
-        {selected.product === "memecoin" && (
-          <GradientPanel className="compound-panel">
+            </section>}
             <span className="eyebrow">LIVE MEMECOIN MARKET</span>
             <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
               {memecoinAssets.map((symbol) => (
@@ -1393,7 +1391,6 @@ export function BotsWorkspace({
                   <strong className={latestSettlement ? (latestSettlementPnl >= 0 ? "up" : "down") : hasSettledPnl && settledPnl < 0 ? "down" : "up"}>
                     {isSynthetic ? latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions" : hasSettledPnl ? `${settledPnl >= 0 ? "+" : "−"}${money(Math.abs(settledPnl))}` : "No settled positions"}
                   </strong>
-                  {!isSynthetic && <small>Up to the last 8 account engine records; quote-modeled, not exchange fills.</small>}
                   {latestSettlement && <small>{formatSettlementExitReason(settlementReason)}</small>}
                 </div>
               </div>

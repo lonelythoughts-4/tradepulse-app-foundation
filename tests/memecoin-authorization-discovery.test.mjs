@@ -7,14 +7,18 @@ const source = await readFile(
   "utf8",
 );
 
-test("funded Memecoin bots surface an authorization path from fleet and detail", () => {
+test("funded Memecoin bots link from the fleet to authorization inside the Memecoin market panel", () => {
   assert.match(source, /bot\.state === "awaiting_authorization" && <span className="memecoin-fleet-prompt">Funded, but not active\./);
   assert.match(source, /\{bot\.state === "awaiting_authorization" \? "Review setup" : "Open detail"\}/);
 
+  const marketPanel = source.indexOf('<GradientPanel className="compound-panel memecoin-market-panel">');
   const authorizationPanel = source.indexOf("Authorize your funded Memecoin bot");
   const liveMarketPanel = source.indexOf("LIVE MEMECOIN MARKET");
-  assert.ok(authorizationPanel >= 0);
-  assert.ok(liveMarketPanel > authorizationPanel, "authorization controls should appear before the chart");
+  const marketPanelEnd = source.indexOf("</GradientPanel>", marketPanel);
+  assert.ok(marketPanel >= 0);
+  assert.ok(authorizationPanel > marketPanel && authorizationPanel < liveMarketPanel);
+  assert.ok(liveMarketPanel < marketPanelEnd, "authorization controls should share the Memecoin panel with its market chart");
+  assert.equal(source.includes("Up to the last 8 account engine records; quote-modeled, not exchange fills."), false);
 });
 
 test("first authorization requires explicit risk acceptance and keeps Auto opt-in", () => {
