@@ -4901,6 +4901,7 @@ export type LiveDashboard = {
 
 type LiveTradePulseAdmin = {
   environment: string;
+  stale?: boolean;
   members: Array<{ user_id: number; first_name?: string; username?: string }>;
   engine: Array<{
     event_key: string;
@@ -7903,17 +7904,20 @@ function LiveTradePulse() {
           )}
           {tab === "Protection" && <ProtectionWorkspace data={data} />}
           {tab === "Admin" && admin && (
-            <AdminWorkspace
-              admin={admin}
-              environment={webEnvironment}
-              request={request}
-              reload={refreshAdmin}
-              onEnvironment={switchAdminEnvironment}
-              onNotice={setNotice}
-              onLiveDeskEnabledChange={(enabled) => updateDashboard((current) => current
-                ? { ...current, features: { ...current.features, live_desk_enabled: enabled } }
-                : current)}
-            />
+            <>
+              {admin.stale && <p role="status">Last verified operations data is shown while the refresh is unavailable.</p>}
+              <AdminWorkspace
+                admin={admin}
+                environment={webEnvironment}
+                request={request}
+                reload={refreshAdmin}
+                onEnvironment={switchAdminEnvironment}
+                onNotice={setNotice}
+                onLiveDeskEnabledChange={(enabled) => updateDashboard((current) => current
+                  ? { ...current, features: { ...current.features, live_desk_enabled: enabled } }
+                  : current)}
+              />
+            </>
           )}
           {tab === "Admin" && !admin && (
             <div className="empty-state">

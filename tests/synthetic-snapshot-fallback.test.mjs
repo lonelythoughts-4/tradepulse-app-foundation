@@ -31,6 +31,8 @@ test("one-second quote updates stay separate from account controls", () => {
   assert.match(source, /useResourcePoller<Record<string, unknown>>/);
   assert.match(source, /1000, true, `synthetic-quotes:\$\{environment\}:\$\{market\}`/);
   assert.match(source, /store\.applyResource\("syntheticQuotes",/);
+  assert.match(source, /\/v1\/synthetic\/stream\?market=" \+ market \+ "&include_history=1/);
+  assert.match(source, /history_stale: stream\.history_stale === true/);
   assert.match(source, /const quotes = useDeskSelector\(store, selectQuotes\);/);
   assert.match(source, /const current = allSnapshots\[resourceKey\] \?\? null;/);
   assert.match(source, /const MemoizedSyntheticMarketData = memo\(SyntheticMarketData\);/);
@@ -47,6 +49,8 @@ test("the chart retains same-market cached ticks and rejects a late market respo
   assert.match(source, /if \(market !== marketRef\.current\) return;\s+const latest = stream\.latest as Snapshot\["latest"\];/);
   assert.match(source, /latest\?\.market && latest\.market !== market/);
   assert.match(source, /Chart history is delayed\. The latest available quote is shown\./);
+  assert.match(source, /Chart history is delayed\. Showing the last verified ticks and current quote\./);
+  assert.match(source, /Position data is delayed; recent positions may be stale or unavailable\./);
 });
 
 test("a one-tick chart keeps the current price visible across the plot", () => {
@@ -58,4 +62,9 @@ test("the dashboard chart uses the lightweight market stream", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
   assert.match(shell, /request\("\/v1\/synthetic\/stream\?market=SYN-25&include_history=1"\)/);
   assert.match(shell, /snapshot\.ticks\?\.length \? snapshot\.ticks : snapshot\.latest \? \[snapshot\.latest\] : \[\]/);
+});
+
+test("the operations desk identifies a cached overview while the API recovers", () => {
+  const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
+  assert.match(shell, /admin\.stale && <p role="status">Last verified operations data is shown/);
 });
