@@ -324,11 +324,7 @@ export function BotsWorkspace({
     3_000,
     shouldPollFlashbackStatus(view === "flashback", flashbackSessions),
     `flashback:${flashbackSessionIds}`,
-    (error) => onNotice(
-      error instanceof Error
-        ? `Flashback status refresh failed: ${error.message}`
-        : "Flashback status refresh failed. Check your connection and try again.",
-    ),
+    () => onNotice(""),
   );
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
@@ -463,11 +459,7 @@ export function BotsWorkspace({
     5_000,
     Boolean(selected && selected.product === "memecoin"),
     `memecoin:${selected?.id || ""}:${memecoinMarket}`,
-    (error) => onNotice(
-      error instanceof Error
-        ? `Memecoin market refresh failed: ${error.message}`
-        : "Memecoin market refresh failed. Check your connection and try again.",
-    ),
+    () => onNotice(""),
   );
   useEffect(() => {
     if (!selected || selected.product !== "memecoin" || !memecoinAssets.length) return;
@@ -524,25 +516,15 @@ export function BotsWorkspace({
       // quiet follow-up read: it is the durable source of truth if a proxy or
       // an earlier desk snapshot arrives out of order.
       if (durableAction || !hasAuthoritativeResult) {
-        void reload().catch((error) => onNotice(
-          error instanceof Error
-            ? `Your changes were saved, but the latest bot state could not be refreshed: ${error.message}`
-            : "Your changes were saved, but the latest bot state could not be refreshed.",
-        ));
+        void reload().catch(() => onNotice(""));
       }
       return true;
     } catch (error) {
-      const message = path === "/v1/bots" && error instanceof DOMException && error.name === "AbortError"
-        ? "TradeMemo is still confirming this allocation. Check your fleet before trying again."
-        : error instanceof Error ? error.message : "TradeMemo could not complete this action. Review your choices and try again.";
+      const message = error instanceof Error ? error.message : "";
       setReviewError(message);
       onNotice(message);
       if (path === "/v1/bots") {
-        void reload().catch((refreshError) => onNotice(
-          refreshError instanceof Error
-            ? `TradeMemo could not confirm whether the bot was created: ${refreshError.message}`
-            : "TradeMemo could not confirm whether the bot was created. Refresh the fleet before retrying.",
-        ));
+        void reload().catch(() => onNotice(""));
       }
       return false;
     } finally {

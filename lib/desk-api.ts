@@ -13,7 +13,7 @@ export class DeskApiError extends Error {
     responseMessage = message,
     responseBody?: unknown,
   ) {
-    super(message);
+    super("");
     this.name = "DeskApiError";
     this.status = status;
     this.reference = reference;
@@ -62,11 +62,18 @@ export class DeskApi {
   }
 
   private async request<T>(resource: string, init: RequestInit): Promise<T> {
-    const response = await fetch(`${this.basePath}${resource}`, {
-      ...init,
-      cache: "no-store",
-      credentials: "same-origin",
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.basePath}${resource}`, {
+        ...init,
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+    } catch {
+      if (init.signal?.aborted) throw new DOMException("", "AbortError");
+      console.error("TradeMemo API transport failed", { resource });
+      throw new Error("");
+    }
     const contentType = response.headers.get("content-type") ?? "";
     const payload = contentType.includes("application/json")
       ? await response.json().catch(() => ({}))
@@ -76,11 +83,15 @@ export class DeskApi {
       const responseMessage = typeof payload === "object" && payload && "error" in payload
         ? String(payload.error)
         : "";
-      const message = responseMessage || "The requested action could not be completed.";
       const reference = typeof payload === "object" && payload && "request_id" in payload
         ? String(payload.request_id)
         : response.headers.get("x-tradepulse-request-id") || undefined;
-      throw new DeskApiError(message, response.status, reference, responseMessage);
+      console.error("TradeMemo API request failed", {
+        resource,
+        status: response.status,
+        requestId: reference,
+      });
+      throw new DeskApiError("", response.status, reference, responseMessage);
     }
 
     return payload as T;

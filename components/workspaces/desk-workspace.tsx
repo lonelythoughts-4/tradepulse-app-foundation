@@ -106,11 +106,7 @@ export function DeskWorkspace({
     if (marketLabelRefreshKey.current === key) return;
     marketLabelRefreshKey.current = key;
     const timer = window.setTimeout(() => {
-      void reload().catch((error) => onNotice(
-        error instanceof Error
-          ? `Market labels could not be refreshed: ${error.message}`
-          : "Market labels could not be refreshed. Try again.",
-      ));
+      void reload().catch(() => onNotice(""));
     }, 1_200);
     return () => window.clearTimeout(timer);
   }, [data.environment, data.memecoin?.market_labels, data.user.id, reload, selection]);

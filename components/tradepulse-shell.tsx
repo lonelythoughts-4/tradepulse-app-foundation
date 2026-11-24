@@ -38,7 +38,7 @@ import {
 } from "../lib/telegram-webapp-auth.js";
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
-import { localizeApiError, translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
+import { translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
 import { DeskApiError } from "../lib/desk-api";
 import { DeskLanguageProvider, DeskLocalized, useDeskLanguage } from "./desk-language";
 import {
@@ -4577,20 +4577,15 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
     const previousLanguage = language;
     setLanguage(next);
     setLanguageError("");
-    void onLanguageChange(next).catch((error) => {
+    void onLanguageChange(next).catch(() => {
       setLanguage(previousLanguage);
-      const message = error instanceof DeskApiError
-        ? localizeApiError(previousLanguage, error.responseMessage, error.status, error.reference)
-        : error instanceof Error
-          ? error.message
-          : localizeApiError(previousLanguage, "", 500);
-      setLanguageError(message);
-      onNotice(message);
+      setLanguageError("");
+      onNotice("");
     });
   };
-  const advance = async (next: number) => { setStep(next); try { await request("/v1/onboarding/step", { method: "POST", body: JSON.stringify({ step: Math.min(next, 4) }) }); } catch (error) { onNotice(error instanceof Error ? error.message : translateDesk(language, "error.request")); } };
+  const advance = async (next: number) => { setStep(next); try { await request("/v1/onboarding/step", { method: "POST", body: JSON.stringify({ step: Math.min(next, 4) }) }); } catch { onNotice(""); } };
   const copy = activationCopy[language];
-  const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable");   } catch (error) { setState("unavailable"); onNotice(error instanceof Error ? error.message : localizeApiError(language, "", 500)); } finally { setChecking(false); } };
+  const verify = async () => { setChecking(true); try { const result = await request("/v1/onboarding/channel/check", { method: "POST", body: "{}" }); setState(result.state || "unavailable");   } catch { setState(""); onNotice(""); } finally { setChecking(false); } };
   const verified = Boolean(channel?.verified || state === "verified");
   const channelUrl = channel?.url || "https://t.me/TradememoLab";
   const accept = async () => {
@@ -4600,8 +4595,8 @@ function ActivationJourney({ data, request, onAccepted, onComplete, onNotice, on
       await request("/v1/onboarding/accept", { method: "POST", body: "{}" });
       onAccepted();
       void onComplete();
-    } catch (error) {
-      onNotice(error instanceof Error ? error.message : translateDesk(language, "activation.acceptError"));
+    } catch {
+      onNotice("");
     } finally { setAccepting(false); }
   };
   if (!verified) {
@@ -5069,7 +5064,7 @@ async function waitForTelegramWebApp() {
   return undefined;
 }
 function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> }) {
-  const [state, setState] = useState<"preparing" | "ready" | "waiting" | "error">("preparing");
+  const [state, setState] = useState<"preparing" | "ready" | "waiting">("preparing");
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
   const [botUrl, setBotUrl] = useState("");
@@ -5123,11 +5118,11 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           setMessage("Refreshing the secure link. Your current code remains visible.");
           setAttempt((current) => current + 1);
         }, handoffRefreshDelayMs(validExpiry));
-      } catch (error) {
+      } catch {
         if (cancelled) return;
         if (hasActiveLink.current) {
           const retryDelay = Math.min(15_000, 1_000 * 2 ** Math.min(attempt, 4));
-          setMessage("The secure link could not be refreshed yet. Your current code remains visible; retrying automatically.");
+          setMessage("Refreshing your secure link…");
           if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
           refreshTimer.current = window.setTimeout(() => {
             if (cancelled) return;
@@ -5136,19 +5131,12 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           }, retryDelay);
           return;
         }
-        if (attempt < 1) {
-          setState("preparing");
-          setMessage("The sign-in service did not respond. Retrying once…");
-          timer.current = window.setTimeout(() => {
-            if (!cancelled) setAttempt((current) => current + 1);
-          }, 1_000);
-          return;
-        }
-        setState("error");
-        const reason = error instanceof Error
-          ? error.message
-          : "Could not prepare a secure Telegram connection.";
-        setMessage(reason);
+        setState("preparing");
+        setMessage("Preparing a secure connection…");
+        const retryDelay = Math.min(15_000, 1_000 * 2 ** Math.min(attempt, 4));
+        timer.current = window.setTimeout(() => {
+          if (!cancelled) setAttempt((current) => current + 1);
+        }, retryDelay);
       }
     };
     void prepare();
@@ -5188,7 +5176,7 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           terminal = true;
           timer.current = null;
           setState("preparing");
-          setMessage("This secure link expired. Preparing a fresh one…");
+          setMessage("Preparing a fresh secure link…");
           if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
           refreshTimer.current = window.setTimeout(() => {
             if (disposed) return;
@@ -5226,8 +5214,11 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           if (disposed) return;
         }
         if (!opened) {
-          setState("error");
-          setMessage("Telegram confirmed, but the desk session is still settling. Reconnect once to reopen it.");
+          terminal = false;
+          setState("waiting");
+          setMessage("Finishing your secure connection…");
+          timer.current = window.setTimeout(poll, 2_000);
+          return;
         }
       } catch {
         if (disposed) return;
@@ -5244,7 +5235,7 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           return;
         }
         transientFailures += 1;
-        setMessage("Connection interrupted. Your current code remains visible; checking again automatically.");
+        setMessage("Checking your secure connection…");
         timer.current = window.setTimeout(poll, Math.min(8_000, 1_000 * 2 ** Math.min(transientFailures - 1, 3)));
       } finally {
         inFlight = false;
@@ -5273,19 +5264,6 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
       document.removeEventListener("visibilitychange", resumePoll);
     };
   }, [token, expiresIn]);
-  const retry = () => {
-    if (timer.current) window.clearTimeout(timer.current);
-    if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-    timer.current = null;
-    refreshTimer.current = null;
-    hasActiveLink.current = false;
-    setToken("");
-    setBotUrl("");
-    setQrSvg("");
-    setMessage("");
-    setState("preparing");
-    setAttempt((current) => current + 1);
-  };
   const openTelegram = (event: ReactMouseEvent<HTMLAnchorElement>) => {
     if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
     refreshTimer.current = null;
@@ -5304,7 +5282,7 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
     const appTab = window.open("about:blank", "_blank");
     if (!appTab) {
       setState("ready");
-      setMessage("Your browser blocked Telegram. Allow pop-ups, or scan the QR code instead.");
+      setMessage("Continue with the code shown here.");
       return;
     }
     appTab.opener = null;
@@ -5334,10 +5312,6 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         >
           Continue with Telegram
         </a>
-      ) : state === "error" ? (
-        <button className="primary-action" type="button" onClick={retry}>
-          Try again
-        </button>
       ) : (
         <button className="primary-action" type="button" disabled aria-busy="true">
           {state === "waiting" ? "Waiting for Telegram…" : "Preparing secure link…"}
@@ -6720,7 +6694,7 @@ function LiveTradePulse() {
       updateDashboard((current) => current ? { ...current, user: { ...current.user, avatar_id: next, identity: { ...(current.user.identity || {}), reveal: response.reveal || `${next}-seal` } }, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet } : current);
       return true;
     } catch {
-      setNotice("Your identity could not be sealed. Check your available wallet balance and try again.");
+      setNotice("");
       return false;
     }
   }
@@ -6878,9 +6852,9 @@ function LiveTradePulse() {
       timedOut = true;
       controller.abort();
     }, timeoutMs);
+    const requestId = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
       const requestHeaders = { ...headers(targetEnvironment), ...(options.headers || {}) } as Record<string, string>;
-      const requestId = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       requestHeaders["X-TradePulse-Request-Id"] = requestId;
       if (!(options.body instanceof FormData) && !Object.keys(requestHeaders).some((name) => name.toLowerCase() === "content-type")) {
         requestHeaders["Content-Type"] = "application/json";
@@ -6896,16 +6870,15 @@ function LiveTradePulse() {
         const reference = typeof body.request_id === "string"
           ? body.request_id
           : response.headers.get("x-tradepulse-request-id") || undefined;
-        const message = localizeApiError(
-          languageRef.current,
-          responseMessage,
-          response.status,
-          reference || undefined,
-        );
         const responseBody =
           path === "/v1/deposits/routes" && response.status === 409
             ? body
             : undefined;
+        console.error("TradeMemo API request failed", {
+            path,
+            status: response.status,
+            requestId: reference || requestId,
+        });
         if (response.status === 401) {
           if (path === "/v1/dashboard") {
             updateDashboard(null);
@@ -6916,20 +6889,27 @@ function LiveTradePulse() {
           } else {
             sessionValidationRef.current?.(targetEnvironment);
           }
-          throw new DeskApiError(message, response.status, reference, responseMessage, responseBody);
+          throw new DeskApiError("", response.status, reference, responseMessage, responseBody);
         }
-        throw new DeskApiError(message, response.status, reference, responseMessage, responseBody);
+        throw new DeskApiError("", response.status, reference, responseMessage, responseBody);
       }
       return body;
     } catch (error) {
       if (timedOut) {
-        throw new Error(translateDesk(languageRef.current, "error.timeout"));
+        console.error("TradeMemo API request timed out", { path, requestId });
+        throw new Error("");
       }
-      if (callerSignal?.aborted) throw error;
+      if (callerSignal?.aborted) throw new DOMException("", "AbortError");
       if (error instanceof TypeError) {
-        throw new Error(translateDesk(languageRef.current, "error.network"));
+        console.error("TradeMemo API transport failed", { path, requestId });
+        throw new Error("");
       }
-      throw error;
+      console.error("TradeMemo API processing failed", {
+        path,
+        requestId,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      throw new Error("");
     } finally {
       window.clearTimeout(timeout);
       callerSignal?.removeEventListener("abort", abortFromCaller);
@@ -6997,14 +6977,8 @@ function LiveTradePulse() {
       selectedEnvironmentRef.current = resolvedEnvironment;
       setWebEnvironment(resolvedEnvironment);
       return true;
-    } catch (error) {
-      setNotice(
-        error instanceof DOMException && error.name === "AbortError"
-          ? translateDesk(languageRef.current, "error.timeout")
-          : error instanceof Error
-            ? error.message
-            : translateDesk(languageRef.current, "error.request"),
-      );
+    } catch {
+      setNotice("");
       return false;
     } finally {
       if (checkingSession) {
@@ -7117,11 +7091,10 @@ function LiveTradePulse() {
       .then((overview) => {
         if (active && shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
       })
-      .catch((error) => {
+      .catch(() => {
         if (!active || !shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) return;
-        const message = error instanceof Error ? error.message : "The operations overview could not be loaded.";
-        setAdminLoadError(message);
-        setNotice(message);
+        setAdminLoadError("");
+        setNotice("");
       });
     return () => {
       active = false;
@@ -7157,9 +7130,9 @@ function LiveTradePulse() {
                 },
               };
             })
-            .catch((error) => ({
+            .catch(() => ({
               product,
-              error: error instanceof Error ? error.message : "Memecoin market data is unavailable. The dashboard will retry.",
+              error: "",
             })),
         ),
         // Synthetic prices are shared market data, so the live graph must not
@@ -7345,12 +7318,9 @@ function LiveTradePulse() {
       applyActionResult(path, payload, response);
       setNotice(response.message || "Saved successfully.");
       return true;
-    } catch (error) {
-      const message = error instanceof DOMException && error.name === "AbortError"
-        ? "Confirmation timed out. The request may have reached the server. Check your positions before submitting another order."
-        : error instanceof Error ? error.message : "TradeMemo could not complete this action. Review your choices and try again.";
-      setNotice(message);
-      onError?.(message);
+    } catch {
+      setNotice("");
+      onError?.("");
       return false;
     } finally {
       setPendingActions((current) => {
@@ -7365,7 +7335,7 @@ function LiveTradePulse() {
       if (telegramIdentityPending) {
         return (
           <DeskLoading
-            status={translateDesk(uiLanguage, "telegram.bridgeFallback")}
+            status="Opening your desk…"
             onRetry={() => {
               setNotice("");
               void load();
@@ -7382,7 +7352,7 @@ function LiveTradePulse() {
       }
       return (
         <DeskLoading
-          status={notice || "Telegram sign-in could not be completed."}
+          status="Opening your desk…"
           onRetry={() => {
             setNotice("");
             void load();
@@ -7396,7 +7366,7 @@ function LiveTradePulse() {
     if (!sessionHandoffRequired) {
       return (
         <DeskLoading
-          status={notice || "TradeMemo could not reach your desk. Your saved session has not been cleared."}
+          status="Opening your desk…"
           onRetry={() => {
             setNotice("");
             void load();
@@ -7441,7 +7411,7 @@ function LiveTradePulse() {
     languageSaveQueueRef.current = save.then(() => undefined, () => undefined);
     return save.then(() => {
       persistedLanguageRef.current = next;
-    }, (error) => {
+    }, () => {
       if (languageRevisionRef.current !== revision) return;
       languageRef.current = persistedLanguageRef.current;
       setUiLanguage(persistedLanguageRef.current);
@@ -7449,18 +7419,7 @@ function LiveTradePulse() {
       updateDashboard((current) => current
         ? { ...current, user: { ...current.user, language_code: persistedLanguageRef.current } }
         : current);
-      setNotice(
-        error instanceof DeskApiError
-          ? localizeApiError(
-              persistedLanguageRef.current,
-              error.responseMessage,
-              error.status,
-              error.reference,
-            )
-          : error instanceof Error
-            ? error.message
-            : localizeApiError(persistedLanguageRef.current, "", 500),
-      );
+      setNotice("");
       throw error;
     });
   };
@@ -7558,12 +7517,28 @@ function LiveTradePulse() {
     const priorEnvironment = selectedEnvironmentRef.current;
     if (nextEnvironment === priorEnvironment) return;
     const revision = ++environmentSwitchRevisionRef.current;
-    // Invalidate old responses before the persistence request completes. This
-    // keeps a slow mainnet read from being rendered under a testnet label.
+    const previousAdmin = admin;
+    const previousDashboard = deskStore.getState().resources.dashboard as LiveDashboard | null;
+    const previousSynthetic = deskStore.getState().resources.synthetic;
+    // Invalidate old responses during the transition so stale projections
+    // cannot be applied under the new environment label.
     selectedEnvironmentRef.current = nextEnvironment;
     setAdminLoadError("");
     setAdmin(null);
     try {
+      deskStore.applyResource("synthetic", null, Date.now());
+      const overviewRequest = request("/v1/admin/overview", {}, nextEnvironment, 45_000);
+      const dashboardRequest = load(nextEnvironment);
+      const [overview, dashboardLoaded] = await Promise.all([overviewRequest, dashboardRequest]);
+      if (!dashboardLoaded) throw new Error("Dashboard projection unavailable");
+      const loadedDashboard = deskStore.getState().resources.dashboard as LiveDashboard | null;
+      if (loadedDashboard?.environment !== nextEnvironment) {
+        throw new Error("Dashboard projection did not match the selected environment");
+      }
+      if (
+        revision !== environmentSwitchRevisionRef.current ||
+        !shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)
+      ) return;
       const save = environmentSaveQueueRef.current.then(() =>
         request("/v1/admin/environment", {
           method: "POST",
@@ -7571,23 +7546,17 @@ function LiveTradePulse() {
         }, "mainnet"),
       );
       environmentSaveQueueRef.current = save.then(() => undefined, () => undefined);
-      await save;
+      try {
+        await save;
+      } catch (saveError) {
+        const persisted = await request("/v1/admin/environment", {}, "mainnet");
+        if (persisted.environment !== nextEnvironment) throw saveError;
+      }
       if (
         revision !== environmentSwitchRevisionRef.current ||
         !shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)
       ) return;
-      deskStore.applyResource("synthetic", null, Date.now());
-      const overviewRequest = request("/v1/admin/overview", {}, nextEnvironment, 45_000);
-      const dashboardRequest = load(nextEnvironment);
-      const [overview] = await Promise.all([overviewRequest, dashboardRequest]);
-      const loadedDashboard = deskStore.getState().resources.dashboard as LiveDashboard | null;
-      if (loadedDashboard?.environment !== nextEnvironment) {
-        throw new Error("The selected environment could not be loaded.");
-      }
-      if (
-        revision === environmentSwitchRevisionRef.current &&
-        shouldApplyEnvironmentProjection(nextEnvironment, selectedEnvironmentRef.current)
-      ) setAdmin(overview);
+      setAdmin(overview);
       setNotice(
         translateDesk(languageRef.current, "admin.environmentChanged")
           .replace("{environment}", nextEnvironment),
@@ -7597,19 +7566,20 @@ function LiveTradePulse() {
         revision === environmentSwitchRevisionRef.current &&
         selectedEnvironmentRef.current === nextEnvironment
       ) {
-        const loadedDashboard = deskStore.getState().resources.dashboard as LiveDashboard | null;
-        if (loadedDashboard?.environment !== nextEnvironment) {
-          selectedEnvironmentRef.current = priorEnvironment;
-          setWebEnvironment(priorEnvironment);
-        }
+        selectedEnvironmentRef.current = priorEnvironment;
+        setWebEnvironment(priorEnvironment);
+        updateDashboard(previousDashboard);
+        deskStore.applyResource("synthetic", previousSynthetic, Date.now());
+        setAdmin(previousAdmin);
       }
       if (revision !== environmentSwitchRevisionRef.current) return;
-      setAdminLoadError(error instanceof Error ? error.message : "The operations overview could not be loaded.");
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : translateDesk(languageRef.current, "admin.environmentError"),
-      );
+      setAdminLoadError("");
+      setNotice("");
+      console.error("Admin workspace transition was not applied", {
+        status: error instanceof DeskApiError ? error.status : undefined,
+        reference: error instanceof DeskApiError ? error.reference : undefined,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
     }
   };
   const refreshAdmin = async () => {
@@ -7625,9 +7595,9 @@ function LiveTradePulse() {
     try {
       const overview = await request("/v1/admin/overview", {}, selectedAtRequest, 45_000);
       if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) setAdmin(overview);
-    } catch (error) {
+    } catch {
       if (shouldApplyEnvironmentProjection(selectedAtRequest, selectedEnvironmentRef.current)) {
-        setAdminLoadError(error instanceof Error ? error.message : "The operations overview could not be loaded.");
+        setAdminLoadError("");
       }
     } finally {
       setAdminRetryPending(false);
@@ -7706,11 +7676,7 @@ function LiveTradePulse() {
             <DashboardWorkspace
               store={deskStore}
               poll={(signal) => request("/v1/dashboard", { signal })}
-              onPollError={(error) => setNotice(
-                error instanceof Error
-                  ? `Dashboard refresh failed: ${error.message}`
-                  : "Dashboard refresh failed. Check your connection and try again.",
-              )}
+              onPollError={() => setNotice("")}
               bots={visualBots}
               model={visualModel}
               onManage={() => {

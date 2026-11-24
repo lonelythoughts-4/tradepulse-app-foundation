@@ -16,7 +16,7 @@ export function DeskLoading({
           <path className={styles.trace} pathLength="100" d="M3 21h7l3-9 6 18 5-14 3 5h10" />
         </svg>
         <h1 className={styles.name}>Trade<span>Memo</span></h1>
-        <p className={styles.status} role={onRetry ? "alert" : "status"}>{status}</p>
+        <p className={styles.status} role="status">{status}</p>
         {onRetry && (
           <button className={styles.retry} type="button" onClick={onRetry}>
             Try again

@@ -301,12 +301,8 @@ export function AdminWorkspace({
         adminReconcileQueued.current = false;
         try {
           await reload();
-        } catch (error) {
-          onNotice(
-            error instanceof Error
-              ? `The admin action completed, but its overview could not refresh: ${error.message}`
-              : "The admin action completed, but its overview could not refresh.",
-          );
+        } catch {
+          onNotice("");
         }
       } while (adminReconcileQueued.current);
       adminReconcileRunning.current = false;
@@ -605,13 +601,9 @@ export function AdminWorkspace({
           messages: Array.isArray(response.messages) ? response.messages : [],
         });
       }
-    } catch (error) {
+    } catch {
       if (requestId === adminTicketRequest.current && adminTicket?.id === ticketId) {
-        onNotice(
-          error instanceof Error
-            ? `Reply sent, but the conversation could not refresh: ${error.message}`
-            : "Reply sent, but the conversation could not refresh.",
-        );
+        onNotice("");
       }
     }
   };

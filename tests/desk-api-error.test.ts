@@ -3,9 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { DeskApi, DeskApiError } from "../lib/desk-api.ts";
-import { localizeApiError } from "../lib/desk-i18n.ts";
 
-test("language-save errors keep operational references out of customer notices", async () => {
+test("API errors retain diagnostics without exposing customer-facing error copy", async () => {
   const error = new DeskApiError(
     "The request failed.",
     500,
@@ -13,14 +12,9 @@ test("language-save errors keep operational references out of customer notices",
     "The service could not save this preference.",
   );
 
-  assert.equal(
-    localizeApiError("en", error.responseMessage, error.status, error.reference),
-    "TradeMemo is temporarily unavailable. Please try again shortly.",
-  );
-  assert.equal(
-    localizeApiError("es", error.responseMessage, error.status, error.reference),
-    localizeApiError("es", "", 500),
-  );
+  assert.equal(error.message, "");
+  assert.equal(error.responseMessage, "The service could not save this preference.");
+  assert.equal(error.reference, "request-17");
 });
 
 test("DeskApi attaches a server request reference to API errors", async () => {
@@ -41,6 +35,7 @@ test("DeskApi attaches a server request reference to API errors", async () => {
         assert.equal(error.status, 500);
         assert.equal(error.reference, "request-42");
         assert.equal(error.responseMessage, "The service failed.");
+        assert.equal(error.message, "");
         return true;
       },
     );
@@ -49,21 +44,37 @@ test("DeskApi attaches a server request reference to API errors", async () => {
   }
 });
 
-test("the language rollback notice uses the saved locale and actual API error", async () => {
-  const shell = await readFile(
-    new URL("../components/tradepulse-shell.tsx", import.meta.url),
-    "utf8",
-  );
+test("DeskApi hides transport error details from callers", async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError("fetch failed: internal endpoint details");
+  };
 
-  assert.match(shell, /throw new DeskApiError\(message, response\.status, reference, responseMessage, responseBody\)/);
-  assert.match(
-    shell,
-    /localizeApiError\(\s*persistedLanguageRef\.current,\s*error\.responseMessage,\s*error\.status,\s*error\.reference/s,
-  );
-  assert.doesNotMatch(shell, /setNotice\(localizeApiError\(persistedLanguageRef\.current, "", 500\)\)/);
+  try {
+    await assert.rejects(
+      new DeskApi().getResource("/v1/dashboard"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, "");
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
-test("activation language rollback preserves the API failure in the previous locale", async () => {
+test("the language rollback preserves locale without exposing API error copy", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(shell, /throw new DeskApiError\("", response\.status, reference, responseMessage, responseBody\)/);
+  assert.match(shell, /setNotice\(""\);\s*throw error;/);
+});
+
+test("activation language rollback does not expose API error copy", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -71,6 +82,6 @@ test("activation language rollback preserves the API failure in the previous loc
 
   assert.match(
     shell,
-    /onLanguageChange\(next\)\.catch\(\(error\) => \{\s*setLanguage\(previousLanguage\);\s*const message = error instanceof DeskApiError\s*\?\s*localizeApiError\(previousLanguage, error\.responseMessage, error\.status, error\.reference\)/s,
+    /onLanguageChange\(next\)\.catch\(\(\) => \{\s*setLanguage\(previousLanguage\);\s*setLanguageError\(""\);\s*onNotice\(""\);/s,
   );
 });

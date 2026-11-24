@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
-import { localizeApiError, translateDesk, translateDeskPhrase, type LanguageCode } from "../../lib/desk-i18n";
+import { translateDesk, translateDeskPhrase, type LanguageCode } from "../../lib/desk-i18n";
 import { DeskLocalized, useDeskLanguage } from "../desk-language";
 import {
   avatarOptions,
@@ -121,11 +121,10 @@ export function AccountWorkspace({
       });
       setModalFeedback({ message, error: false });
       onNotice(message);
-    } catch (error) {
+    } catch {
       setNotificationState((current) => ({ ...current, [key]: enabled }));
-      const message = error instanceof Error ? error.message : localizeApiError(language, "", 500);
-      setModalFeedback({ message, error: true });
-      onNotice(message);
+      setModalFeedback(null);
+      onNotice("");
     } finally {
       notificationRequestPending.current.delete(key);
       setNotificationPending((current) => {
@@ -138,9 +137,8 @@ export function AccountWorkspace({
   const chooseLanguage = (next: LanguageCode) => {
     if (next === language) return;
     void onLanguageChange(next).catch(() => {
-      const message = localizeApiError(language, "", 500);
-      setModalFeedback({ message, error: true });
-      onNotice(message);
+      setModalFeedback(null);
+      onNotice("");
     });
   };
   const initials = (data.user.first_name || data.user.username || "U")
@@ -165,10 +163,9 @@ export function AccountWorkspace({
       // the next interaction.
       if (closeModal) setModal("");
       return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : localizeApiError(language, "", 500);
-      setModalFeedback({ message, error: true });
-      onNotice(message);
+    } catch {
+      setModalFeedback(null);
+      onNotice("");
       return false;
     } finally {
       setAccountPending(false);
@@ -598,10 +595,9 @@ export function AccountWorkspace({
                     setModalFeedback(null);
                     try {
                       await onLogout();
-                    } catch (error) {
-                      const message = error instanceof Error ? error.message : localizeApiError(language, "", 500);
-                      setModalFeedback({ message, error: true });
-                      onNotice(message);
+                    } catch {
+                      setModalFeedback(null);
+                      onNotice("");
                       setAccountPending(false);
                     }
                   }}

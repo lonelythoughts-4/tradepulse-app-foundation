@@ -135,11 +135,7 @@ export function WalletWorkspace({
     15_000,
     true,
     `wallet-dashboard:${environment}`,
-    (error) => onNotice(
-      error instanceof Error
-        ? `Wallet refresh failed: ${error.message}`
-        : "Wallet refresh failed. Check your connection and try again.",
-    ),
+    () => onNotice(""),
   );
   if (!data) return null;
   return (
