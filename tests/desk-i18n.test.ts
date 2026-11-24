@@ -43,6 +43,27 @@ test("dynamic phrases are translated without changing their values", () => {
   assert.equal(translateDeskPhrase("es", "Confirming deposit"), "Confirmando el depósito");
   assert.equal(translateDeskPhrase("es", "Processing deposit"), "Depósito en proceso");
   assert.equal(translateDeskPhrase("ja", "Under review"), "確認中");
+  assert.equal(translateDeskPhrase("es", "Retry QR code"), "Reintentar código QR");
+  assert.equal(
+    translateDeskPhrase("es", "Could not copy the deposit address. Select it to copy manually."),
+    "No se pudo copiar la dirección de depósito. Selecciónala para copiarla manualmente.",
+  );
+  assert.equal(
+    translateDeskPhrase("es", "Could not start deposit monitoring. The address is unchanged. Please try again."),
+    "No se pudo iniciar la supervisión del depósito. La dirección no ha cambiado. Vuelve a intentarlo.",
+  );
+  assert.equal(
+    translateDeskPhrase("es", "The {network} watcher is starting for this address. It will check automatically; your balance updates after confirmation and sweep completion.", {
+      network: "Ethereum",
+    }),
+    "Se inicia el monitor de Ethereum para esta dirección. La comprobará automáticamente; el saldo se actualizará tras la confirmación y el procesamiento.",
+  );
+  assert.equal(
+    translateDeskPhrase("es", "The {network} watcher is already active for this address. It will keep checking automatically; your balance updates after confirmation and sweep completion.", {
+      network: "Ethereum",
+    }),
+    "El monitor de Ethereum ya está activo para esta dirección. Seguirá comprobándola automáticamente; tu saldo se actualizará tras la confirmación y el procesamiento.",
+  );
 });
 
 test("bot onboarding, demo, and notification copy follows the selected language", () => {

@@ -53,6 +53,7 @@ const depositStatusLabel = (
     processing: "Processing deposit",
     failed_manual_review: "Under review",
     under_review: "Under review",
+    quarantined: "Under review",
     credited_and_closed: "Credited",
     failed: "Failed",
     expired: "Expired",
@@ -90,9 +91,28 @@ const terminalDepositStatuses = new Set([
   "credited_and_closed",
   "quarantined",
   "failed_manual_review",
+  "under_review",
   "failed",
   "expired",
 ]);
+const depositProcessingStatuses = new Set([
+  "confirmed_pending_sweep",
+  "sweeping",
+  "sweep_confirming",
+  "processing",
+]);
+const watchableDepositStatuses = new Set([
+  "watching",
+  "confirming",
+  "pending_dust",
+]);
+
+const depositStatusTone = (status: string) => {
+  const normalized = status.toLowerCase();
+  return terminalDepositStatuses.has(normalized) && normalized !== "credited_and_closed"
+    ? "review"
+    : "complete";
+};
 
 export function WalletWorkspace({
   store,
@@ -192,7 +212,12 @@ function WalletWorkspaceBody({
   const [depositRoutesError, setDepositRoutesError] = useState("");
   const depositRoutesController = useRef<AbortController | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [qrData, setQrData] = useState<{ intentId: string; dataUrl: string } | null>(null);
+  const [qrState, setQrState] = useState<{
+    intentId: string;
+    status: "loading" | "error";
+  } | null>(null);
+  const [qrRetryKey, setQrRetryKey] = useState(0);
   const [intent, setIntent] = useState<
     LiveDashboard["deposits"][number] | null
   >(null);
@@ -201,6 +226,11 @@ function WalletWorkspaceBody({
   >(null);
   const [routeCreatePending, setRouteCreatePending] = useState(false);
   const [depositCheckPending, setDepositCheckPending] = useState(false);
+  const [depositActionFeedback, setDepositActionFeedback] = useState<{
+    intentId: string;
+    kind: "status" | "error";
+    message: string;
+  } | null>(null);
   const [withdrawAsset, setWithdrawAsset] = useState("USDT");
   const [withdrawChain, setWithdrawChain] = useState("ERC20");
   const [withdrawAddress, setWithdrawAddress] = useState("");
@@ -223,23 +253,55 @@ function WalletWorkspaceBody({
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
+  const depositStatus = intent?.status.toLowerCase() || "";
+  const depositClosed = Boolean(intent && !watchableDepositStatuses.has(depositStatus));
+  const depositTerminalMessage = depositProcessingStatuses.has(depositStatus)
+    ? t("Your transfer was detected and is being processed. Do not send more funds to this address. Your balance updates after processing is complete.")
+    : depositStatus === "expired"
+      ? t("This deposit address expired. Create a new deposit address before sending funds.")
+      : depositStatus === "failed"
+        ? t("Deposit processing failed. Contact support before sending funds or creating another route.")
+        : t("This address is closed to new transfers. Your deposit has not been credited while review is pending. Do not send more funds to this address.");
+  const depositTerminalTitle = depositProcessingStatuses.has(depositStatus)
+    ? t("Processing deposit")
+    : depositStatus === "expired"
+      ? t("Deposit address expired")
+      : depositStatus === "failed"
+        ? t("Deposit processing failed")
+        : t("Deposit under review");
   useEffect(() => {
-    if (!intent || terminalDepositStatuses.has(intent.status.toLowerCase())) {
-      setQrDataUrl("");
+    if (!intent || depositClosed) {
+      setQrData(null);
+      setQrState(null);
       return;
     }
     let cancelled = false;
-    void request(`/v1/deposits/${intent.id}/qr`, {}, environment)
+    const controller = new AbortController();
+    const intentId = intent.id;
+    setQrData(null);
+    setQrState({ intentId, status: "loading" });
+    void request(`/v1/deposits/${intentId}/qr`, { signal: controller.signal }, environment)
       .then((result) => {
-        if (!cancelled) setQrDataUrl(String(result.data_url || ""));
+        const dataUrl = typeof result?.data_url === "string" ? result.data_url : "";
+        if (!dataUrl.startsWith("data:image/png;base64,")) {
+          throw new Error("Deposit QR response did not contain a PNG image.");
+        }
+        if (!cancelled) {
+          setQrData({ intentId, dataUrl });
+          setQrState(null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setQrDataUrl("");
+      .catch((error) => {
+        if (cancelled || (error instanceof DOMException && error.name === "AbortError")) return;
+        logDeskFailure("wallet.deposit-qr", error);
+        setQrData(null);
+        setQrState({ intentId, status: "error" });
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [environment, intent?.id, request]);
+  }, [depositClosed, environment, intent?.id, qrRetryKey, request]);
   useEffect(() => {
     if (!intent) return;
     const latestIntent = data.deposits.find((row) => row.id === intent.id);
@@ -334,9 +396,8 @@ function WalletWorkspaceBody({
   ];
   const depositNetworks = depositRoutes.filter((route) => route.asset === asset);
   const activeDeposits = data.deposits.filter(
-    (route) => !terminalDepositStatuses.has(route.status.toLowerCase()),
+    (route) => route.status.toLowerCase() !== "credited_and_closed",
   );
-  const depositClosed = intent?.status.toLowerCase() === "credited_and_closed";
   const depositNetworkName = (network: string) => {
     const name =
       depositRoutes.find((route) => route.chain === network)?.network ||
@@ -671,6 +732,14 @@ function WalletWorkspaceBody({
                   <small>{t("Your verified transfer is now in your available wallet balance.")}</small>
                 </div>
               )}
+              {depositClosed && depositStatus !== "credited_and_closed" && (
+                <div className="below-minimum-card" role={depositStatus === "failed" ? "alert" : "status"}>
+                  <div>
+                    <strong>{depositTerminalTitle}</strong>
+                    <small>{depositTerminalMessage}</small>
+                  </div>
+                </div>
+              )}
               {!depositClosed && (
                 <>
               {intent.status.toLowerCase() === "pending_dust" && (
@@ -688,15 +757,32 @@ function WalletWorkspaceBody({
                 </div>
               )}
               <div className="qr-placeholder">
-                {qrDataUrl ? (
+                {qrData?.intentId === intent.id ? (
                   <img
-                    src={qrDataUrl}
+                    src={qrData.dataUrl}
                     alt={`Scan ${intent.asset} deposit address`}
                     width={128}
                     height={128}
+                    onError={() => {
+                      setQrData(null);
+                      setQrState({ intentId: intent.id, status: "error" });
+                    }}
                   />
+                ) : qrState?.intentId === intent.id && qrState.status === "loading" ? (
+                  <span role="status">{t("Loading deposit QR code…")}</span>
+                ) : qrState?.intentId === intent.id && qrState.status === "error" ? (
+                  <div role="alert">
+                    <small>{t("QR code could not be loaded. Copy the address below or try again.")}</small>
+                    <button
+                      type="button"
+                      className="small-action"
+                      onClick={() => setQrRetryKey((current) => current + 1)}
+                    >
+                      {t("Retry QR code")}
+                    </button>
+                  </div>
                 ) : (
-                  <div className="qr-grid" />
+                  <span role="status">{t("Loading deposit QR code…")}</span>
                 )}
                 <small>
                   {t("SCAN TO DEPOSIT {asset} ON {network}", {
@@ -708,11 +794,21 @@ function WalletWorkspaceBody({
               <div className="copy-field">
                 <code>{intent.address}</code>
                 <button
+                  type="button"
                   aria-label={t("Copy deposit address")}
                   onClick={async () => {
-                    await navigator.clipboard?.writeText(intent.address);
-                    setCopiedAddress(true);
-                    window.setTimeout(() => setCopiedAddress(false), 1200);
+                    setCopiedAddress(false);
+                    try {
+                      if (!navigator.clipboard?.writeText) {
+                        throw new Error("Clipboard access is unavailable.");
+                      }
+                      await navigator.clipboard.writeText(intent.address);
+                      setCopiedAddress(true);
+                      window.setTimeout(() => setCopiedAddress(false), 1200);
+                    } catch (error) {
+                      logDeskFailure("wallet.deposit-address-copy", error);
+                      onNotice(t("Could not copy the deposit address. Select it to copy manually."));
+                    }
                   }}
                 >
                   <StateSwapIcon
@@ -741,6 +837,7 @@ function WalletWorkspaceBody({
                 onClick={async () => {
                   if (depositCheckInFlight.current) return;
                   depositCheckInFlight.current = true;
+                  setDepositActionFeedback(null);
                   setDepositCheckPending(true);
                   try {
                     const result = await request(
@@ -748,34 +845,72 @@ function WalletWorkspaceBody({
                       { method: "POST", body: "{}" },
                       environment,
                     );
-                    setIntent((current) =>
-                      current
-                        ? {
-                            ...current,
-                            status: String(result.status || current.status),
-                            watch_enabled: Boolean(result.watch_enabled),
-                          }
-                        : current,
-                    );
-                    if (result.status === "pending_dust") {
-                      onNotice(
-                        t("Deposit detected below the minimum. Send the remaining amount to this same address on the same network."),
-                      );
-                    } else if (result.checked_now && result.status !== "watching") {
-                      onNotice(
-                        t("Deposit detected. Confirmation is in progress; credit follows after the required on-chain confirmations."),
-                      );
-                    } else if (result.checked_now) {
-                      onNotice(
-                        t("No transfer was detected yet. Monitoring remains active for this same address."),
-                      );
+                    const resultStatus = String(result.status || intent.status).toLowerCase();
+                    const updatedIntent = {
+                      ...intent,
+                      status: resultStatus,
+                      watch_enabled: Boolean(result.watch_enabled),
+                    };
+                    setIntent(updatedIntent);
+                    onWalletUpdate({
+                      deposits: [
+                        ...data.deposits.filter((route) => route.id !== intent.id),
+                        updatedIntent,
+                      ],
+                    });
+                    if (resultStatus === "pending_dust") {
+                      setDepositActionFeedback({
+                        intentId: intent.id,
+                        kind: "status",
+                        message: t("Deposit found below the minimum. Send the remaining amount to this same address on the same network."),
+                      });
+                    } else if ([
+                      "confirming",
+                      "processing",
+                      "confirmed_pending_sweep",
+                      "sweeping",
+                      "sweep_confirming",
+                    ].includes(resultStatus)) {
+                      setDepositActionFeedback({
+                        intentId: intent.id,
+                        kind: "status",
+                        message: t("Deposit detected. On-chain confirmation and processing are in progress; your balance updates after completion."),
+                      });
+                    } else if ([
+                      "under_review",
+                      "expired",
+                      "failed",
+                      "credited_and_closed",
+                    ].includes(resultStatus)) {
+                      setDepositActionFeedback({
+                        intentId: intent.id,
+                        kind: "status",
+                        message: t("The deposit route state changed. Review the status shown below; no further monitoring action is needed."),
+                      });
+                    } else if (result.scan_scheduled) {
+                      setDepositActionFeedback({
+                        intentId: intent.id,
+                        kind: "status",
+                        message: t("The {network} watcher is starting for this address. It will check automatically; your balance updates after confirmation and sweep completion.", {
+                          network: depositNetworkName(intent.chain),
+                        }),
+                      });
                     } else {
-                      onNotice(
-                        t("Monitoring remains active. The network check will continue automatically for this same address."),
-                      );
+                      setDepositActionFeedback({
+                        intentId: intent.id,
+                        kind: "status",
+                        message: t("The {network} watcher is already active for this address. It will keep checking automatically; your balance updates after confirmation and sweep completion.", {
+                          network: depositNetworkName(intent.chain),
+                        }),
+                      });
                     }
                   } catch (error) {
                     logDeskFailure("wallet.deposit-monitor", error);
+                    setDepositActionFeedback({
+                      intentId: intent.id,
+                      kind: "error",
+                      message: t("Could not start deposit monitoring. The address is unchanged. Please try again."),
+                    });
                     void reconcileDashboard("wallet.deposit-monitor-reconcile");
                   } finally {
                     depositCheckInFlight.current = false;
@@ -789,6 +924,15 @@ function WalletWorkspaceBody({
                     ? t("Check deposit now")
                     : t("I made this deposit")} <ChevronRight />
               </button>
+              {depositActionFeedback?.intentId === intent.id && (
+                <div
+                  className="below-minimum-card"
+                  role={depositActionFeedback.kind === "error" ? "alert" : "status"}
+                  aria-live={depositActionFeedback.kind === "error" ? "assertive" : "polite"}
+                >
+                  <div><small>{depositActionFeedback.message}</small></div>
+                </div>
+              )}
               <div className="timeline">
                 <span className="eyebrow">{t("DEPOSIT STATUS")}</span>
                 {["Detected", "Verified", "Credited"].map((label, index) => {
@@ -913,7 +1057,7 @@ function WalletWorkspaceBody({
                   </small>
                 </div>
                 <span
-                  className={`activity-status ${route.status.includes("fail") ? "review" : "complete"}`}
+                  className={`activity-status ${depositStatusTone(route.status)}`}
                 >
                   {depositStatusLabel(t, route.status)}
                 </span>
