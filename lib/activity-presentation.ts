@@ -1,4 +1,4 @@
-import { formatSettlementExitReason } from "./settlement-label";
+import { formatSettlementExitReason } from "./settlement-label.ts";
 
 export type ActivityRecord = {
   kind: string;
