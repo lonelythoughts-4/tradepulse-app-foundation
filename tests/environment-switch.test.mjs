@@ -52,7 +52,7 @@ test("admin testnet selection persists across tabs while non-admin access return
   assert.match(switcher, /revision !== environmentSwitchRevisionRef\.current \|\|/);
 });
 
-test("the authentication page is visible while session and Telegram launch checks run", async () => {
+test("session checks stay neutral and retryable until a secure handoff is needed", async () => {
   const shell = await readFile(new URL("../components/tradepulse-shell.tsx", import.meta.url), "utf8");
   const unauthenticatedStart = shell.indexOf("  if (!data) {");
   const authenticatedStart = shell.indexOf("  const changeLanguage", unauthenticatedStart);
@@ -60,10 +60,10 @@ test("the authentication page is visible while session and Telegram launch check
   assert.ok(authenticatedStart > unauthenticatedStart, "the unauthenticated view should end before authenticated controls");
 
   const unauthenticatedView = shell.slice(unauthenticatedStart, authenticatedStart);
-  assert.match(unauthenticatedView, /return \(\s*<AuthEntryPage/);
-  assert.doesNotMatch(unauthenticatedView, /return <DeskLoading status="Checking your saved session/);
-  assert.match(unauthenticatedView, /role="status" aria-live="polite"/);
+  assert.match(unauthenticatedView, /if \(!sessionBootstrapComplete \|\| loading\) \{\s*return <DeskLoading status="Checking your saved session/);
+  assert.match(unauthenticatedView, /if \(!sessionHandoffRequired\) \{\s*return \(\s*<DeskLoading/);
+  assert.match(unauthenticatedView, /<AuthEntryPage/);
   assert.match(unauthenticatedView, /Checking your saved session/);
-  assert.match(unauthenticatedView, /sessionBootstrapComplete \? \(\s*<BrowserBotHandoff/);
+  assert.match(unauthenticatedView, /sessionHandoffRequired \? \(\s*<BrowserBotHandoff/);
   assert.doesNotMatch(unauthenticatedView, /could not reach your desk|sign-in could not be completed/i);
 });

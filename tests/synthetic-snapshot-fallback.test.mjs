@@ -19,13 +19,13 @@ test("Bots hides disabled Demo accounts and Flashback has a separate workspace",
   assert.match(shellSource, /<FlashbackWorkspace/);
 });
 
-test("a delayed account snapshot keeps its last verified value and surfaces refresh errors", () => {
+test("a delayed account snapshot keeps its last verified value and logs refresh failures privately", () => {
   assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
-  assert.match(source, /setLoadError\(error instanceof Error \? error\.message : "Market data is temporarily unavailable\."\);\s+return undefined;/);
+  assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);\s*return undefined;/);
   assert.match(source, /useResourcePoller<Snapshot>/);
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
-  assert.match(source, /loadError && <p role="status">\{loadError\} Action requests are checked against the current server state\.<\/p>/);
+  assert.doesNotMatch(source, /loadError|Market data is temporarily unavailable/);
 });
 
 test("Synthetic separates Auto available margin from locked margin and does not repeat accepted risk acknowledgement", () => {
@@ -38,10 +38,15 @@ test("Synthetic separates Auto available margin from locked margin and does not 
 });
 
 test("a dashboard outage does not send an existing browser session to sign-in", () => {
-  assert.match(shellSource, /if \(response\.status === 401\) \{\s+if \(path === "\/v1\/dashboard"\) \{[\s\S]*?setSessionHandoffRequired\(true\)/);
-  assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?Your saved session has not been cleared/);
+  const request = shellSource.slice(shellSource.indexOf("const request = useCallback"), shellSource.indexOf("const noticeCenter"));
+  const load = shellSource.slice(shellSource.indexOf("const load = async"), shellSource.indexOf("const reloadDashboard"));
+  assert.match(request, /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{[\s\S]*?setSessionHandoffRequired\(true\)/);
+  assert.match(load, /catch \{\s+setNotice\(""\);\s+return false;/);
+  assert.doesNotMatch(load, /setSessionHandoffRequired\(true\)/);
+  assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?void load\(\);/);
   assert.match(shellSource, /if \(!sessionBootstrapComplete \|\| loading\) \{\s+return <DeskLoading status="Checking your saved session…"/);
   assert.match(shellSource, /<BrowserBotHandoff onComplete=/);
+  assert.doesNotMatch(shellSource, /Your saved session has not been cleared/);
 });
 
 test("Synthetic Auto rejections are exposed in the admin workspace only", () => {
@@ -91,5 +96,5 @@ test("the dashboard chart uses the lightweight market stream", () => {
 
 test("the operations desk identifies a cached overview while the API recovers", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
-  assert.match(shell, /admin\.stale && <p role="status">Last verified operations data is shown/);
+  assert.match(shell, /admin\.stale && <p role="status">Showing the last verified operations data while the next refresh is checked\.<\/p>/);
 });

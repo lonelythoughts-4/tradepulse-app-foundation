@@ -9,6 +9,7 @@ const help = fs.readFileSync(path.join(root, "components", "workspaces", "help-w
 const desk = fs.readFileSync(path.join(root, "components", "workspaces", "desk-workspace.tsx"), "utf8");
 const admin = fs.readFileSync(path.join(root, "components", "workspaces", "admin-workspace.tsx"), "utf8");
 const wallet = fs.readFileSync(path.join(root, "components", "workspaces", "wallet-workspace.tsx"), "utf8");
+const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
 
 test("support ticket mutations update the visible thread before background reconciliation", () => {
   const createStart = help.indexOf('const result = await request("/v1/support/tickets"');
@@ -44,13 +45,25 @@ test("alert actions have independent pending keys and reconcile returned state",
   assert.match(desk, /setAlerts\(\(current\) => current\.filter\(\(item\) => item\.id !== alert\.id\)\)/);
 });
 
-test("admin support actions are scoped to one ticket and report reconciliation failures", () => {
+test("admin support actions are scoped to one ticket and reconcile failures privately", () => {
   assert.doesNotMatch(admin, /adminTicketPending/);
   assert.match(admin, /const openKey = `support:\$\{ticket\.id\}:open`/);
   assert.match(admin, /disabled=\{isAdminActionPending\(openKey\)\}/);
   assert.match(admin, /const actionKey = `support:\$\{ticket\.id\}:\$\{action\}`/);
-  assert.match(admin, /The admin action completed, but its overview could not refresh/);
+  assert.match(admin, /logDeskFailure\("admin\.support-ticket-status", error\)/);
+  assert.match(admin, /scheduleReconcile\(\)/);
+  assert.doesNotMatch(admin, /The admin action completed, but its overview could not refresh/);
   assert.doesNotMatch(admin, /void reload\(\)\.catch\(\(\) => undefined\)/);
+});
+
+test("admin overview outages keep a neutral retry path without exposing error detail", () => {
+  const retryStart = shell.indexOf("const retryAdminOverview = async");
+  const retryEnd = shell.indexOf("const walletEnvironment", retryStart);
+  const retryAction = shell.slice(retryStart, retryEnd);
+  assert.match(shell, /setAdminLoadError\("unavailable"\)/);
+  assert.match(shell, /adminLoadError \? \([\s\S]*?Checking operations data…[\s\S]*?Check operations data/);
+  assert.match(retryAction, /catch \{\s*if \(shouldApplyEnvironmentProjection[\s\S]*?setAdminLoadError\("unavailable"\);/);
+  assert.doesNotMatch(retryAction, /error\.message|setNotice\(/);
 });
 
 test("admin ticket status writes are serialized and ignore stale action responses", () => {

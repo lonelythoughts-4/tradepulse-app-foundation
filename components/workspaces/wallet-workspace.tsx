@@ -189,6 +189,7 @@ function WalletWorkspaceBody({
   const [depositRoutes, setDepositRoutes] = useState<DepositRouteOption[]>([]);
   const [depositRoutesLoading, setDepositRoutesLoading] = useState(false);
   const [depositRoutesError, setDepositRoutesError] = useState("");
+  const depositRoutesController = useRef<AbortController | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [intent, setIntent] = useState<
@@ -262,12 +263,21 @@ function WalletWorkspaceBody({
     }
   }, [environment, onWalletUpdate, request]);
   const loadDepositRoutes = useCallback(async () => {
+    depositRoutesController.current?.abort();
+    const controller = new AbortController();
+    const targetEnvironment = environment;
+    depositRoutesController.current = controller;
     setDepositRoutesLoading(true);
     setDepositRoutesError("");
     try {
-      const result = await request("/v1/deposits/routes", {}, environment);
+      const result = await request(
+        "/v1/deposits/routes",
+        { signal: controller.signal },
+        targetEnvironment,
+      );
+      if (depositRoutesController.current !== controller) return;
       if (
-        result.environment !== environment ||
+        result.environment !== targetEnvironment ||
         !Array.isArray(result.routes) ||
         result.routes.some(
           (route: DepositRouteOption) =>
@@ -279,26 +289,38 @@ function WalletWorkspaceBody({
             typeof route.available !== "boolean",
         )
       ) {
-        throw new Error(t("Deposit network options did not match {environment}. Try again.", { environment }));
+        throw new Error(t("Deposit network options did not match {environment}. Try again.", { environment: targetEnvironment }));
       }
       setDepositRoutes(result.routes);
     } catch (error) {
+      if (depositRoutesController.current !== controller) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       setDepositRoutes([]);
       logDeskFailure("wallet.deposit-routes", error);
       setDepositRoutesError("unavailable");
     } finally {
-      setDepositRoutesLoading(false);
+      if (depositRoutesController.current === controller) {
+        depositRoutesController.current = null;
+        setDepositRoutesLoading(false);
+      }
     }
   }, [environment, request, t]);
   useEffect(() => {
     if (view !== "deposit") return;
     setAsset("");
     setChain("");
+    setDepositRoutes([]);
+    setDepositRoutesError("");
     setExpectedAmount("");
     setIntent(null);
     setRouteConflict(null);
     setStep(0);
     void loadDepositRoutes();
+    return () => {
+      const controller = depositRoutesController.current;
+      depositRoutesController.current = null;
+      controller?.abort();
+    };
   }, [environment, loadDepositRoutes, view]);
   const listedDepositAssets = [...new Set(depositRoutes.map((route) => route.asset))];
   const preferredDepositAssets =

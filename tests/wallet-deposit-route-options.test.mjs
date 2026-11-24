@@ -12,7 +12,10 @@ test("the wallet loads deposit asset/network pairs from the selected environment
     "utf8",
   );
 
-  assert.match(wallet, /request\("\/v1\/deposits\/routes", \{\}, environment\)/);
+  assert.match(wallet, /request\(\s*"\/v1\/deposits\/routes",\s*\{ signal: controller\.signal \},\s*targetEnvironment,\s*\)/);
+  assert.match(wallet, /depositRoutesController\.current\?\.abort\(\)/);
+  assert.match(wallet, /if \(depositRoutesController\.current !== controller\) return/);
+  assert.match(wallet, /error\.name === "AbortError"/);
   assert.match(wallet, /const depositNetworks = depositRoutes\.filter\(\(route\) => route\.asset === asset\)/);
   assert.match(wallet, /depositNetworks\.map\(\(route\) =>/);
   assert.match(wallet, /disabled=\{!route\.available\}/);
@@ -21,7 +24,6 @@ test("the wallet loads deposit asset/network pairs from the selected environment
   assert.match(wallet, /ETH: "Ether"/);
   assert.match(wallet, /SOL_DEVNET: "Solana Devnet"/);
   assert.match(wallet, /depositNetworkName\(intent\.chain\)/);
-  assert.match(wallet, /error\.name === "AbortError"/);
   assert.match(shell, /Monitoring started\. The background watcher will check this address/);
   assert.match(shell, /const walletEnvironment = data\.user\.is_admin \? webEnvironment : "mainnet"/);
   assert.match(shell, /<WalletWorkspace[\s\S]*?environment=\{walletEnvironment\}/);

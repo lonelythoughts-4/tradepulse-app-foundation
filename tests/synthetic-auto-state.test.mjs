@@ -52,8 +52,10 @@ test("the mobile brand keeps its wordmark without the marked SVG", () => {
   assert.doesNotMatch(mobileBrand, /PulseMark/);
 });
 
-test("Auto activity explains when a risk circuit breaker blocks new entries", () => {
-  assert.match(source, /A protective loss-streak check is blocking new entries/);
-  assert.doesNotMatch(source, /The 1% daily-loss reference was reached/);
-  assert.match(source, /"Auto entries paused"/);
+test("Auto reports server-confirmed daily stop states without presenting them as errors", () => {
+  assert.match(source, /snapshot\.execution\?\.daily_loss_target_reached/);
+  assert.match(source, /Auto entries are paused for today because the protective daily loss limit was reached\./);
+  assert.match(source, /Today's Auto goal is reached\. New entries are paused until the next session\./);
+  assert.match(source, /confirmedAuto && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">/);
+  assert.doesNotMatch(source, /A protective loss-streak check is blocking new entries/);
 });

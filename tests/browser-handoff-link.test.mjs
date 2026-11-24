@@ -42,12 +42,17 @@ test("the browser handoff keeps the web link for desktop and never forces an ins
   assert.doesNotMatch(shell, /window\.location\.replace\("\/"\)/);
   assert.match(shell, /onCompleteRef\.current\(\)/);
   assert.match(shell, /Your current code remains visible/);
-  assert.match(shell, /state === "error" \? \(\s*<button className="primary-action" type="button" onClick=\{retry\}>/);
-  assert.match(shell, /The sign-in service did not respond\. Retrying once…/);
-  assert.match(shell, /The sign-in service returned an unexpected response \(HTTP \$\{response\.status\}\)\. Please try again shortly\./);
   const handoffStart = shell.indexOf("function BrowserBotHandoff");
   const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
   const handoff = shell.slice(handoffStart, handoffEnd);
+  const renderStart = handoff.indexOf('return (\n    <div className="browser-handoff"');
+  const renderedHandoff = handoff.slice(renderStart);
+  assert.notEqual(renderStart, -1);
+  assert.match(handoff, /setMessage\("Refreshing the secure link\. Your current code remains visible\."\)/);
+  assert.match(handoff, /setMessage\("Checking your secure connection…"\)/);
+  assert.match(renderedHandoff, /message && <small role="status"/);
+  assert.doesNotMatch(renderedHandoff, /error|failed|please try/i);
+  assert.doesNotMatch(handoff, /state === "error"/);
   assert.doesNotMatch(handoff, /response\.text\(\)\)\.slice\(0, 240\)/);
   assert.doesNotMatch(handoff, /Reference:/);
 });
@@ -91,7 +96,7 @@ test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
 
   assert.match(
     request,
-    /if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
+    /if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
   );
   assert.match(pollErrorHandler, /setTimeout\(poll/);
   assert.match(pollErrorHandler, /current code remains visible/);

@@ -336,6 +336,11 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const dailyTargetLabel = snapshot.execution?.daily_outcome === "loss"
     ? `${money(-Number(snapshot.execution?.daily_loss_target_usd || 0))} loss limit`
     : `${money(Number(dailyGoalUsd || 0))} goal`;
+  const dailyExecutionPause = !snapshot.partial && snapshot.execution?.daily_loss_target_reached
+    ? "Auto entries are paused for today because the protective daily loss limit was reached."
+    : !snapshot.partial && snapshot.execution?.daily_goal_reached
+      ? "Today's Auto goal is reached. New entries are paused until the next session."
+      : "";
   return <DeskLocalized><div className="desk-screen"><div className="gradient-panel synthetic-pilot">
     <div className="synthetic-market-header">
       <div><h2>Market</h2><MemoizedQuoteStatus environment={environment} error={quoteError} market={market} store={store} /></div>
@@ -364,6 +369,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           {confirmedAuto && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">
             Daily Auto progress: {money(dailyNetUsd)} net ({money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} settled + {money(Number(snapshot.execution?.daily_open_net_pnl_usd || 0))} live) of {dailyTargetLabel}.
           </p>}
+          {confirmedAuto && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">{dailyExecutionPause}</p>}
           <div className="synthetic-auto-actions">
             <button className="primary-action" disabled={pendingFor(autoKey) || Boolean(executionTransition) || Number(autoAmount) < 20 || Number(autoAllocation) < Number(autoAmount)} onClick={() => openReview()}>{executionTransition === "AUTO" ? "Enabling Auto…" : confirmedAuto ? "Review Auto changes" : "Review & enable Auto"}</button>
             {(confirmedAuto || snapshot.partial) && <button className="small-action" disabled={pendingFor(manualKey) || Boolean(executionTransition)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" }).catch(() => undefined)}>{executionTransition === "MANUAL" ? "Turning Auto off…" : pendingFor(manualKey) ? "Saving…" : "Turn Auto off"}</button>}

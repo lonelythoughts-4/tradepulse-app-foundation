@@ -81,7 +81,7 @@ test("desk tab synchronization preserves Telegram launch data in the URL fragmen
   );
 });
 
-test("Telegram Mini Apps recover to secure handoff only after bridge detection and timeout", async () => {
+test("Telegram Mini Apps recover to secure handoff after bridge detection or session rejection", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -90,10 +90,19 @@ test("Telegram Mini Apps recover to secure handoff only after bridge detection a
     new URL("../components/desk-loading.tsx", import.meta.url),
     "utf8",
   );
+  const handoffStart = shell.indexOf("function BrowserBotHandoff");
+  const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
+  const handoff = shell.slice(handoffStart, handoffEnd);
+  const loadStart = shell.indexOf("const load = async");
+  const loadEnd = shell.indexOf("const reloadDashboard", loadStart);
+  const load = shell.slice(loadStart, loadEnd);
 
-  assert.match(shell, /setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\)/);
-  assert.match(shell, /sessionBootstrapComplete \? \(\s*<BrowserBotHandoff/);
+  assert.match(shell, /setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\)/);
+  assert.match(shell, /sessionHandoffRequired \? \(\s*<BrowserBotHandoff/);
   assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{\s*telegramHandoffSessionRef\.current = true;\s*const loaded = await load\(\);/);
+  assert.doesNotMatch(handoff, /state === "error"/);
+  assert.match(load, /if \(checkingSession && telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*return false;\s*\}/);
+  assert.ok(load.indexOf("if (checkingSession && telegramContext && !telegramInitData())") < load.indexOf('request("/v1/dashboard"'));
   assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
 });
 
@@ -109,7 +118,7 @@ test("an endpoint-specific 401 validates the dashboard before asking the user to
 
   assert.match(
     request,
-    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}\s*throw new DeskApiError/,
+    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}\s*throw new DeskApiError/,
   );
   assert.doesNotMatch(shell, /Reconnect your TradeMemo session/);
 });
