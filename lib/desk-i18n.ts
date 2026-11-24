@@ -821,15 +821,10 @@ export function translateDeskPhrase(
 }
 
 export function localizeApiError(
-  language: LanguageCode,
-  message: string,
-  status: number,
+  _language: LanguageCode,
+  _message: string,
+  _status: number,
   _reference?: string,
 ): string {
-  const translated = language === "en"
-    ? status >= 500 ? translateDesk("en", "error.500") : message || translateDesk("en", "error.request")
-    : translateDesk(language, status === 401 ? "error.401" : status === 400 ? "error.400" :
-      status === 403 ? "error.403" : status === 404 ? "error.404" : status === 409 ? "error.409" :
-        status === 429 ? "error.429" : status >= 500 ? "error.500" : "error.request");
-  return translated;
+  return "";
 }
