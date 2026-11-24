@@ -537,8 +537,8 @@ export function AdminWorkspace({
       void refreshGasVaults(true);
     } catch (error) {
       logDeskFailure("admin.signer-unlock", error);
-      setSignerStatus("unavailable");
-      setSignerError("");
+      setSignerStatus("locked");
+      setSignerError(error instanceof Error ? error.message : "The signer could not be unlocked. Review its status before trying again.");
     } finally {
       signerSubmitting.current = false;
       setSignerPending(false);

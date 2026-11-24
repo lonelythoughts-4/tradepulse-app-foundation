@@ -23,5 +23,6 @@ test("the admin workspace exposes the protected signer state and explicit lock c
   assert.match(source, /disabled=\{gasVaultsPending\}/);
   assert.match(source, /Copy address/);
   assert.match(source, /gasVaultCopyPending\[vault\.chain\]/);
+  assert.match(source, /setSignerStatus\("locked"\);\s*setSignerError\(error instanceof Error \? error\.message/);
   assert.doesNotMatch(source, /localStorage.*signer|sessionStorage.*signer/);
 });
