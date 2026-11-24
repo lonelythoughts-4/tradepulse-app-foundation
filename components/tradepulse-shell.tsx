@@ -7418,7 +7418,7 @@ function LiveTradePulse() {
     languageSaveQueueRef.current = save.then(() => undefined, () => undefined);
     return save.then(() => {
       persistedLanguageRef.current = next;
-    }, () => {
+    }, (error) => {
       if (languageRevisionRef.current !== revision) return;
       languageRef.current = persistedLanguageRef.current;
       setUiLanguage(persistedLanguageRef.current);
