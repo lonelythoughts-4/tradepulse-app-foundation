@@ -446,6 +446,11 @@ export function BotsWorkspace({
       setMemecoinSnapshot((current) => {
         const sameMarket = current.symbol === snapshot.symbol;
         const sameOwnerScope = current.bot_id === snapshot.bot_id && current.environment === snapshot.environment;
+        const responseMatchesSelection =
+          String(snapshot.bot_id) === String(selected?.id) && snapshot.environment === data.environment;
+        const canApplyOwnerData = sameOwnerScope || responseMatchesSelection;
+        const positions = Array.isArray(snapshot.positions) ? snapshot.positions : current.positions;
+        const events = Array.isArray(snapshot.events) ? snapshot.events : current.events;
         return {
           ...current,
           bot_id: snapshot.bot_id,
@@ -454,8 +459,8 @@ export function BotsWorkspace({
           points: sameMarket && current.points?.length ? current.points : snapshot.points || [],
           candles: sameMarket && current.candles?.length ? current.candles : snapshot.candles || [],
           latest: sameMarket && current.latest ? current.latest : snapshot.latest,
-          positions: sameOwnerScope ? current.positions : [],
-          events: sameOwnerScope ? current.events : [],
+          positions: canApplyOwnerData ? positions : [],
+          events: canApplyOwnerData ? events : [],
         };
       });
     },

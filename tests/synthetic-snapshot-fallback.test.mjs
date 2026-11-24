@@ -89,6 +89,17 @@ test("the chart retains same-market cached ticks and rejects a late market respo
   assert.match(source, /account\.user\.is_admin && snapshot\.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable\./);
 });
 
+test("a partial Memecoin refresh merges cached owner-scoped positions and events", () => {
+  const snapshotPoller = botsSource.slice(
+    botsSource.indexOf("useResourcePoller(\n    async (_token, signal) => request(\n      `/v1/memecoin/snapshot"),
+    botsSource.indexOf("Boolean(selected && selected.product === \"memecoin\")"),
+  );
+  assert.match(snapshotPoller, /Array\.isArray\(snapshot\.positions\) \? snapshot\.positions : current\.positions/);
+  assert.match(snapshotPoller, /Array\.isArray\(snapshot\.events\) \? snapshot\.events : current\.events/);
+  assert.match(snapshotPoller, /sameOwnerScope \|\| responseMatchesSelection/);
+  assert.match(snapshotPoller, /snapshot\.environment === data\.environment/);
+});
+
 test("a one-tick chart keeps the current price visible across the plot", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
   assert.match(shell, /candles\.length === 1 && <path d=\{`M0 \$\{y\(candles\[0\]\.close\)\}H\$\{chartWidth\}`\}/);
