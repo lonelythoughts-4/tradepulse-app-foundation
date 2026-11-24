@@ -10,7 +10,11 @@ test("customer wallet statuses do not expose internal sweep stages", async () =>
 
   assert.match(wallet, /sweep_confirming:\s*"Processing deposit"/);
   assert.match(wallet, /sweeping:\s*"Processing deposit"/);
+  assert.match(wallet, /failed_manual_review:\s*"Processing deposit"/);
   assert.match(wallet, /under_review:\s*"Under review"/);
+  const terminalStatuses =
+    wallet.match(/const terminalDepositStatuses = new Set\(\[([\s\S]*?)\]\);/)?.[1] || "";
+  assert.doesNotMatch(terminalStatuses, /failed_manual_review/);
   assert.doesNotMatch(wallet, /sweep_confirming:\s*"Confirming sweep"/);
 });
 

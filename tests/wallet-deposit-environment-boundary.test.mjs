@@ -13,7 +13,7 @@ test("all deposit follow-up calls stay bound to the selected environment", async
   );
 
   assert.match(wallet, /request\(`\/v1\/deposits\/\$\{intentId\}\/qr`\s*,\s*\{ signal: controller\.signal \}\s*,\s*environment\)/);
-  assert.match(wallet, /`\/v1\/deposits\/\$\{intent\.id\}\/watch`\s*,\s*\{ method: "POST", body: "\{\}" \}\s*,\s*environment/);
+  assert.match(wallet, /requestDepositWatch\(\s*request,\s*intent\.id,\s*environment,\s*\)/);
   assert.match(shell, /const walletEnvironment = data\.user\.is_admin \? webEnvironment : "mainnet"/);
   assert.match(shell, /poll=\{\(signal\) => request\("\/v1\/dashboard", \{ signal \}, walletEnvironment\)\}/);
   assert.match(shell, /environment=\{walletEnvironment\}/);

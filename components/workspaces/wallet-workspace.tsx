@@ -51,7 +51,7 @@ const depositStatusLabel = (
     sweeping: "Processing deposit",
     sweep_confirming: "Processing deposit",
     processing: "Processing deposit",
-    failed_manual_review: "Under review",
+    failed_manual_review: "Processing deposit",
     under_review: "Under review",
     quarantined: "Under review",
     credited_and_closed: "Credited",
@@ -90,7 +90,6 @@ const depositNetworkNames: Record<string, string> = {
 const terminalDepositStatuses = new Set([
   "credited_and_closed",
   "quarantined",
-  "failed_manual_review",
   "under_review",
   "failed",
   "expired",
@@ -100,6 +99,7 @@ const depositProcessingStatuses = new Set([
   "sweeping",
   "sweep_confirming",
   "processing",
+  "failed_manual_review",
 ]);
 const watchableDepositStatuses = new Set([
   "watching",
