@@ -70,7 +70,9 @@ test("the handoff poll remains single-flight while Telegram is open and refreshe
   const poll = handoff.slice(pollStart, pollEnd);
 
   assert.notEqual(pollStart, -1, "the handoff poll should start when its token is ready");
-  assert.match(poll, /if \(disposed \|\| inFlight\) return/);
+  assert.match(poll, /if \(disposed \|\| inFlight \|\| document\.visibilityState !== "visible"\) return/);
+  assert.match(poll, /signal: controller\.signal/);
+  assert.match(poll, /activeController\?\.abort\(\)/);
   assert.match(poll, /response\.status === 410/);
   assert.match(poll, /\}, \[token, expiresIn\]\);/);
   assert.doesNotMatch(poll, /\[state, token, expiresIn\]/);

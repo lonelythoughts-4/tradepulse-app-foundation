@@ -110,7 +110,7 @@ test("a one-tick chart keeps the current price visible across the plot", () => {
 
 test("the dashboard chart uses the lightweight market stream", () => {
   const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
-  assert.match(shell, /request\("\/v1\/synthetic\/stream\?market=SYN-25&include_history=1"\)/);
+  assert.match(shell, /request\("\/v1\/synthetic\/stream\?market=SYN-25&include_history=1", \{ signal: controller\.signal \}\)/);
   assert.match(shell, /snapshot\.ticks\?\.length \? snapshot\.ticks : snapshot\.latest \? \[snapshot\.latest\] : \[\]/);
 });
 
