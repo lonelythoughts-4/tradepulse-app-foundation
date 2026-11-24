@@ -409,7 +409,7 @@ export function AdminWorkspace({
     setGasVaultsPending(true);
     gasVaultsSubmitting.current = true;
       const requestId = ++gasVaultsRequestId.current;
-    request("/v1/admin/gas-vaults", {}, environment)
+    request("/v1/admin/gas-vaults", {}, environment, 60_000)
       .then((response) => {
           if (!active || requestId !== gasVaultsRequestId.current) return;
         setGasVaults(Array.isArray(response.vaults) ? response.vaults : []);
@@ -478,7 +478,7 @@ export function AdminWorkspace({
     setGasVaultsError("");
     const requestId = ++gasVaultsRequestId.current;
     try {
-      const response = await request("/v1/admin/gas-vaults", {}, environment);
+      const response = await request("/v1/admin/gas-vaults", {}, environment, 60_000);
       if (requestId !== gasVaultsRequestId.current) return;
       setGasVaults(Array.isArray(response.vaults) ? response.vaults : []);
     } catch (error) {
