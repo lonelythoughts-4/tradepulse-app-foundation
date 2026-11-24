@@ -294,10 +294,12 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   };
   const manualKey = "execution:manual";
   const autoKey = "execution:auto";
-  const confirmedAuto = snapshot.execution_mode === "AUTO";
-  const snapshotPending = snapshot.partial && snapshotCheckedKey !== resourceKey;
-  const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : confirmedAuto ? "Auto on" : "Auto off";
-  const executionLabel = executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "TURNING AUTO OFF" : snapshotPending ? "CHECKING" : snapshot.partial ? "UNAVAILABLE" : confirmedAuto ? "AUTO" : "AUTO OFF";
+  const confirmedAuto = !snapshot.partial && snapshot.execution_mode === "AUTO";
+  const confirmedManual = !snapshot.partial && snapshot.execution_mode === "MANUAL";
+  const executionModeKnown = confirmedAuto || confirmedManual;
+  const snapshotPending = !executionModeKnown && snapshotCheckedKey !== resourceKey;
+  const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : snapshotPending ? "Checking" : !executionModeKnown ? "Unavailable" : confirmedAuto ? "Auto on" : "Auto off";
+  const executionLabel = executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "TURNING AUTO OFF" : snapshotPending ? "CHECKING" : !executionModeKnown ? "UNAVAILABLE" : confirmedAuto ? "AUTO" : "AUTO OFF";
   const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
   const dailyNetUsd = Number(snapshot.execution?.daily_net_pnl_usd || 0);
   const dailyTargetLabel = snapshot.execution?.daily_outcome === "loss"
@@ -331,7 +333,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           </p>}
           {confirmedAuto && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">{dailyExecutionPause}</p>}
           <div className="synthetic-auto-actions">
-            <button className={confirmedAuto ? "small-action" : "primary-action"} disabled={pendingFor(confirmedAuto ? manualKey : autoKey) || Boolean(executionTransition) || (!confirmedAuto && Number(account.bots.find((bot) => bot.product === "synthetic")?.capital_usd || 0) < 20)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: confirmedAuto ? "MANUAL" : "AUTO" }).catch(() => onNotice(confirmedAuto ? "Auto could not be turned off. Refresh and retry." : "Auto could not be enabled. Check the allocation and try again."))}>{executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : confirmedAuto ? pendingFor(manualKey) ? "Saving…" : "Turn Auto off" : pendingFor(autoKey) ? "Saving…" : "Enable Auto"}</button>
+            <button className={confirmedAuto ? "small-action" : "primary-action"} disabled={!executionModeKnown || pendingFor(confirmedAuto ? manualKey : autoKey) || Boolean(executionTransition) || (confirmedManual && Number(account.bots.find((bot) => bot.product === "synthetic")?.capital_usd || 0) < 20)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: confirmedAuto ? "MANUAL" : "AUTO" }).catch(() => onNotice(confirmedAuto ? "Auto could not be turned off. Refresh and retry." : "Auto could not be enabled. Check the allocation and try again."))}>{executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : confirmedAuto ? pendingFor(manualKey) ? "Saving…" : "Turn Auto off" : confirmedManual ? pendingFor(autoKey) ? "Saving…" : "Enable Auto" : snapshotPending ? "Checking…" : "Unavailable"}</button>
           </div>
         </section>
         <SyntheticSignalList signals={signals} />

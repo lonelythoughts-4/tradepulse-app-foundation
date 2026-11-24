@@ -18,6 +18,14 @@ test("Auto changes show a distinct pending state until the server confirms the m
   assert.doesNotMatch(source, /Review Auto changes|auto_margin_usd:|auto_allocation_usd:/);
 });
 
+test("partial or unconfirmed snapshots cannot offer an Auto mode change", () => {
+  assert.match(source, /const confirmedAuto = !snapshot\.partial && snapshot\.execution_mode === "AUTO"/);
+  assert.match(source, /const confirmedManual = !snapshot\.partial && snapshot\.execution_mode === "MANUAL"/);
+  assert.match(source, /const executionModeKnown = confirmedAuto \|\| confirmedManual/);
+  assert.match(source, /disabled=\{!executionModeKnown \|\|/);
+  assert.match(source, /confirmedManual \? pendingFor\(autoKey\) \? "Saving…" : "Enable Auto" : snapshotPending \? "Checking…" : "Unavailable"/);
+});
+
 test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);
