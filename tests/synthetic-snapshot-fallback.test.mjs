@@ -22,7 +22,7 @@ test("Bots hides disabled Demo accounts and Flashback has a separate workspace",
 test("a delayed account snapshot keeps its last verified value and logs refresh failures privately", () => {
   assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
   assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);\s*return undefined;/);
-  assert.match(source, /useResourcePoller<Snapshot>/);
+  assert.match(source, /useResourcePoller<\{ snapshot: Snapshot; requestRevision: number \}>/);
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
   assert.doesNotMatch(source, /loadError|Market data is temporarily unavailable/);
@@ -40,9 +40,15 @@ test("Synthetic separates Auto available margin from locked margin and does not 
 test("a dashboard outage does not send an existing browser session to sign-in", () => {
   const request = shellSource.slice(shellSource.indexOf("const request = useCallback"), shellSource.indexOf("const noticeCenter"));
   const load = shellSource.slice(shellSource.indexOf("const load = async"), shellSource.indexOf("const reloadDashboard"));
+  const dashboardRequest = load.indexOf('request("/v1/dashboard"');
+  const catchStart = load.indexOf("} catch {", dashboardRequest);
+  const catchEnd = load.indexOf("} finally", catchStart);
+  const loadCatch = load.slice(catchStart, catchEnd);
   assert.match(request, /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{[\s\S]*?setSessionHandoffRequired\(true\)/);
-  assert.match(load, /catch \{\s+setNotice\(""\);\s+return false;/);
-  assert.doesNotMatch(load, /setSessionHandoffRequired\(true\)/);
+  assert.ok(dashboardRequest >= 0);
+  assert.ok(catchStart >= 0);
+  assert.match(loadCatch, /catch \{\s+setNotice\(""\);\s+return false;/);
+  assert.doesNotMatch(loadCatch, /setSessionHandoffRequired\(true\)/);
   assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?void load\(\);/);
   assert.match(shellSource, /if \(!sessionBootstrapComplete \|\| loading\) \{\s+return <DeskLoading status="Checking your saved session…"/);
   assert.match(shellSource, /<BrowserBotHandoff onComplete=/);
