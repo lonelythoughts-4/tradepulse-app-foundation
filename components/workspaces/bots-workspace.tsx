@@ -1326,7 +1326,11 @@ export function BotsWorkspace({
             const status = bot.state.replace(/_/g, " ");
             const statusTone = bot.state === "running" ? "running" : "paused";
             const isSynthetic = bot.product === "synthetic";
-            const syntheticExecution = data.synthetic?.execution_mode || "MANUAL";
+            const syntheticExecution = bot.state === "paused"
+              ? "Paused"
+              : bot.state === "running" && Number(bot.capital_usd || 0) > 0
+                ? "Auto on"
+                : "Waiting for funding";
             const autoPosition = isSynthetic
               ? data.synthetic?.open_positions?.find((position) => position.mode === "auto")
               : undefined;
@@ -1385,7 +1389,7 @@ export function BotsWorkspace({
               <div className="fleet-metrics">
                 <div>
                   <span>{isSynthetic ? "EXECUTION" : "COMPOUND"}</span>
-                  <strong>{isSynthetic ? `Auto ${syntheticExecution === "AUTO" ? "on" : "off"}` : `${bot.compound_percent}%`}</strong>
+                  <strong>{isSynthetic ? syntheticExecution : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
                   <span>{isSynthetic ? "ACTIVE AUTO ORDER" : "LATEST SETTLEMENT"}</span>

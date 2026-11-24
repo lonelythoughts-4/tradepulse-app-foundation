@@ -16,8 +16,8 @@ test("describes a settled market outcome with the actual market and exit", () =>
   });
 
   assert.deepEqual(activity, {
-    title: "Memecoin trade profit",
-    summary: "WIF · LONG · Take profit",
+    title: "WIF",
+    summary: "Take profit",
     status: "Settled",
   });
 });
@@ -40,8 +40,10 @@ test("normalizes legacy game exits from the signed customer P&L", () => {
     },
   });
 
-  assert.equal(profit.summary, "WIF · LONG · Take profit");
-  assert.equal(loss.summary, "WIF · LONG · Stop loss");
+  assert.equal(profit.title, "WIF");
+  assert.equal(profit.summary, "Take profit");
+  assert.equal(loss.title, "WIF");
+  assert.equal(loss.summary, "Stop loss");
 });
 
 test("keeps other activity exit labels humanized", () => {
@@ -54,7 +56,22 @@ test("keeps other activity exit labels humanized", () => {
     },
   });
 
-  assert.equal(activity.summary, "SYN-25 · Liquidation");
+  assert.equal(activity.title, "SYN-25");
+  assert.equal(activity.summary, "Liquidation");
+});
+
+test("describes Synthetic activity with its market and settlement outcome", () => {
+  const activity = describeActivity({
+    kind: "synthetic_settlement",
+    status: "settled",
+    trade_detail: {
+      bot_name: "Synthetic",
+      position: { symbol: "SYN-25", direction: "long", close_reason: "game_scheduled", user_net_pnl_usd: 8.54 },
+    },
+  });
+
+  assert.equal(activity.title, "SYN-25");
+  assert.equal(activity.summary, "Take profit");
 });
 
 test("describes a withdrawal hold with its customer consequence", () => {

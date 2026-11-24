@@ -6,33 +6,33 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "components", "workspaces", "synthetic-workspace.tsx"), "utf8");
+const botsSource = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
 const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
 
-test("Auto changes show a distinct pending state until the server confirms the mode", () => {
-  assert.match(source, /setExecutionTransition\(payload\.execution_mode === "AUTO" \? "AUTO" : "MANUAL"\)/);
-  assert.match(source, /executionTransition === "AUTO" \? "Enabling Auto…" : executionTransition === "MANUAL" \? "Turning Auto off…"/);
-  assert.match(source, /execution_mode: response\.execution_mode, execution: \{ \.\.\.current\.execution, \.\.\.response \}/);
-  assert.match(source, /execution_mode: confirmedAuto \? "MANUAL" : "AUTO"/);
-  assert.match(source, /"Enable Auto"/);
-  assert.match(source, /"Turn Auto off"/);
-  assert.doesNotMatch(source, /Review Auto changes|auto_margin_usd:|auto_allocation_usd:/);
+test("funded Synthetic is Auto-managed without a Manual mode switch", () => {
+  assert.match(source, /const syntheticAutoOn = syntheticBot\?\.state === "running" && Number\(syntheticBot\.capital_usd \|\| 0\) > 0/);
+  assert.match(source, /const executionStatus = syntheticBot\?\.state === "paused" \? "Paused" : syntheticAutoOn \? "Auto on" : "Waiting for funding"/);
+  assert.match(botsSource, /bot\.state === "running" && Number\(bot\.capital_usd \|\| 0\) > 0\s+\? "Auto on"/);
+  assert.doesNotMatch(source, /execution-mode|MANUAL|Enable Auto|Turn Auto off|executionModeKnown/);
+  assert.doesNotMatch(botsSource, /data\.synthetic\?\.execution_mode \|\| "MANUAL"|Auto off/);
 });
 
-test("partial or unconfirmed snapshots cannot offer an Auto mode change", () => {
-  assert.match(source, /const confirmedAuto = !snapshot\.partial && snapshot\.execution_mode === "AUTO"/);
-  assert.match(source, /const confirmedManual = !snapshot\.partial && snapshot\.execution_mode === "MANUAL"/);
-  assert.match(source, /const executionModeKnown = confirmedAuto \|\| confirmedManual/);
-  assert.match(source, /disabled=\{!executionModeKnown \|\|/);
-  assert.match(source, /confirmedManual \? pendingFor\(autoKey\) \? "Saving…" : "Enable Auto" : snapshotPending \? "Checking…" : "Unavailable"/);
+test("the fleet keeps Auto order, latest settlement, and Memecoin customer-net summaries", () => {
+  assert.match(botsSource, /data\.synthetic\?\.open_positions\?\.find\(\(position\) => position\.mode === "auto"\)/);
+  assert.match(botsSource, /data\.synthetic\?\.recent_settlements\?\.\[0\]/);
+  assert.match(botsSource, /data\.memecoin\?\.recent_settlements\?\.find/);
+  assert.match(botsSource, /"ACTIVE AUTO ORDER"/);
+  assert.match(botsSource, /"LATEST SETTLEMENT"/);
+  assert.match(botsSource, /"RECENT CUSTOMER NET"/);
 });
 
 test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);
-  assert.match(source, /"Turn Auto off"/);
   assert.match(source, /typeof dailyGoalUsd === "number" && Number\.isFinite\(dailyGoalUsd\)/);
   assert.match(source, /snapshot\.execution\?\.daily_outcome === "loss"[\s\S]*?loss limit/);
   assert.match(source, /Daily Auto progress: \{money\(dailyNetUsd\)\} net.*of \{dailyTargetLabel\}\./);
+  assert.match(source, /syntheticAutoOn && dailyExecutionPause/);
   assert.doesNotMatch(source, /0\.2–0\.3%|daily-loss reference|profit ceiling/);
   assert.match(source, /Auto evaluates shared signals using 100% of your funded Synthetic allocation/);
   assert.match(source, /aria-label="Automatic allocation and available margin"/);
@@ -63,6 +63,6 @@ test("Auto reports server-confirmed daily stop states without presenting them as
   assert.match(source, /snapshot\.execution\?\.daily_loss_target_reached/);
   assert.match(source, /Auto entries are paused for today because the protective daily loss limit was reached\./);
   assert.match(source, /Today's Auto goal is reached\. New entries are paused until the next session\./);
-  assert.match(source, /confirmedAuto && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">/);
+  assert.match(source, /syntheticAutoOn && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">/);
   assert.doesNotMatch(source, /A protective loss-streak check is blocking new entries/);
 });

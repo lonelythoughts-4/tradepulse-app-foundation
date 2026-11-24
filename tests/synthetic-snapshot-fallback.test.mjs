@@ -22,12 +22,14 @@ test("Bots hides disabled Demo accounts and Flashback has a separate workspace",
 test("a delayed account snapshot keeps its last verified value and logs refresh failures privately", () => {
   assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
   assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);[\s\S]*?return undefined;/);
-  assert.match(source, /useResourcePoller<\{ snapshot: Snapshot; requestRevision: number \}>/);
+  assert.match(source, /useResourcePoller<Snapshot>/);
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
   assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotCheckedKey\(resourceKey\);/);
-  assert.match(source, /snapshotPending \? "Checking" : snapshot\.partial \? "Unavailable"/);
-  assert.match(source, /finally \{ if \(changesExecutionMode\) \{ setExecutionTransition\(null\);/);
+  assert.match(source, /const capacityValue = \(value: number \| undefined, pending: boolean, fallback\?: number\)/);
+  assert.match(source, /snapshot\.execution\?\.auto_allocation_usd, snapshotPending, Number\(syntheticBot\?\.capital_usd\)/);
+  assert.doesNotMatch(source, /snapshot\.partial \? "Unavailable"/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
+  assert.doesNotMatch(source, /execution-mode|MANUAL|Enable Auto|Turn Auto off/);
   assert.doesNotMatch(source, /loadError|Market data is temporarily unavailable/);
 });
 

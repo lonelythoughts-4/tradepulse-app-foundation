@@ -168,17 +168,16 @@ export function describeActivity(entry: ActivityRecord): ActivityPresentation {
   if (kind === "autouser_event_bot_started") {
     return { title: "Testnet bot started", summary: "The test strategy is active in your separate testnet workspace", status };
   }
-  if (["trading_profit", "profit", "trading_loss", "loss", "trading_settlement"].includes(kind)) {
+  if (["trading_profit", "profit", "trading_loss", "loss", "trading_settlement", "synthetic_settlement"].includes(kind)) {
     const outcome = kind.includes("profit") ? "profit" : kind.includes("loss") ? "loss" : "settlement";
     const title = `${strategyName} trade ${outcome}`;
     if (position?.symbol) {
-      const direction = position.direction ? ` · ${position.direction.toUpperCase()}` : "";
       return {
-        title,
-        summary: `${position.symbol}${direction} · ${formatActivityExitReason(
+        title: position.symbol,
+        summary: formatActivityExitReason(
           position.close_reason,
           position.user_net_pnl_usd ?? position.realized_pnl,
-        )}`,
+        ),
         status,
       };
     }
