@@ -49,8 +49,8 @@ test("dynamic phrases are translated without changing their values", () => {
     "No se pudo copiar la dirección de depósito. Selecciónala para copiarla manualmente.",
   );
   assert.equal(
-    translateDeskPhrase("es", "Could not start deposit monitoring. The address is unchanged. Please try again."),
-    "No se pudo iniciar la supervisión del depósito. La dirección no ha cambiado. Vuelve a intentarlo.",
+    translateDeskPhrase("es", "We couldn't confirm monitoring is active yet. Your address is unchanged. If you already sent funds, don't send them again; please try again shortly."),
+    "Aún no pudimos confirmar que la supervisión esté activa. Tu dirección no ha cambiado. Si ya enviaste fondos, no los envíes de nuevo; vuelve a intentarlo en breve.",
   );
   assert.equal(
     translateDeskPhrase("es", "The {network} watcher is starting for this address. It will check automatically; your balance updates after confirmation and sweep completion.", {

@@ -25,7 +25,10 @@ test("deposit checking shows a persistent result for detected deposits and monit
   assert.match(wallet, /The \{network\} watcher is starting for this address/);
   assert.match(wallet, /The \{network\} watcher is already active for this address/);
   assert.match(wallet, /network: depositNetworkName\(intent\.chain\)/);
-  assert.match(wallet, /Could not start deposit monitoring/);
+  assert.match(wallet, /async function requestDepositWatch/);
+  assert.match(wallet, /retryableDepositWatchStatuses\.has\(error\.status\)/);
+  assert.match(wallet, /We couldn't confirm monitoring is active yet/);
+  assert.doesNotMatch(wallet, /Could not start deposit monitoring/);
   assert.match(wallet, /The deposit route state changed/);
   assert.match(wallet, /role=\{depositActionFeedback\.kind === "error" \? "alert" : "status"\}/);
   assert.match(wallet, /onWalletUpdate\(\{\s*deposits:/);

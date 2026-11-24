@@ -106,6 +106,34 @@ const watchableDepositStatuses = new Set([
   "confirming",
   "pending_dust",
 ]);
+const retryableDepositWatchStatuses = new Set([408, 429, 500, 502, 503, 504]);
+
+async function requestDepositWatch(
+  request: (
+    path: string,
+    options?: RequestInit,
+    environment?: "mainnet" | "testnet",
+  ) => Promise<any>,
+  intentId: string,
+  environment: "mainnet" | "testnet",
+) {
+  const path = `/v1/deposits/${intentId}/watch`;
+  const options = { method: "POST", body: "{}" };
+  try {
+    return await request(path, options, environment);
+  } catch (error) {
+    if (
+      (error instanceof DeskApiError &&
+        !retryableDepositWatchStatuses.has(error.status)) ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
+      throw error;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 750));
+    return request(path, options, environment);
+  }
+}
 
 const depositStatusTone = (status: string) => {
   const normalized = status.toLowerCase();
@@ -840,9 +868,9 @@ function WalletWorkspaceBody({
                   setDepositActionFeedback(null);
                   setDepositCheckPending(true);
                   try {
-                    const result = await request(
-                      `/v1/deposits/${intent.id}/watch`,
-                      { method: "POST", body: "{}" },
+                    const result = await requestDepositWatch(
+                      request,
+                      intent.id,
                       environment,
                     );
                     const resultStatus = String(result.status || intent.status).toLowerCase();
@@ -909,7 +937,7 @@ function WalletWorkspaceBody({
                     setDepositActionFeedback({
                       intentId: intent.id,
                       kind: "error",
-                      message: t("Could not start deposit monitoring. The address is unchanged. Please try again."),
+                      message: t("We couldn't confirm monitoring is active yet. Your address is unchanged. If you already sent funds, don't send them again; please try again shortly."),
                     });
                     void reconcileDashboard("wallet.deposit-monitor-reconcile");
                   } finally {
