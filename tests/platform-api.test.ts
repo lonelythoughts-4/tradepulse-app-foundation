@@ -66,6 +66,39 @@ test("forwards the platform logout cookie deletion to the browser", async () => 
   }
 });
 
+test("allows admin sweep requests to wait within the Vercel route limit", async () => {
+  const previousOrigin = process.env.TRADEPULSE_API_ORIGIN;
+  const previousFetch = globalThis.fetch;
+  const previousTimeout = AbortSignal.timeout;
+  let timeoutMs: number | undefined;
+  process.env.TRADEPULSE_API_ORIGIN = "https://api.example.test";
+  AbortSignal.timeout = (milliseconds: number) => {
+    timeoutMs = milliseconds;
+    return previousTimeout.call(AbortSignal, milliseconds);
+  };
+  globalThis.fetch = async () => new Response(JSON.stringify({ ok: true }), {
+    headers: { "content-type": "application/json" },
+  });
+
+  try {
+    const request = new NextRequest("https://web.example.test/api/v1/admin/sweeps/intent-123", {
+      method: "POST",
+      body: JSON.stringify({ action: "retry" }),
+    });
+    const response = await proxyPlatformRequest(request, "/v1/admin/sweeps/intent-123");
+    assert.equal(response.status, 200);
+    assert.equal(timeoutMs, 55_000);
+  } finally {
+    AbortSignal.timeout = previousTimeout;
+    globalThis.fetch = previousFetch;
+    if (previousOrigin === undefined) {
+      delete process.env.TRADEPULSE_API_ORIGIN;
+    } else {
+      process.env.TRADEPULSE_API_ORIGIN = previousOrigin;
+    }
+  }
+});
+
 test("forwards a Mini App session cookie from an ordinary platform response", async () => {
   const previousOrigin = process.env.TRADEPULSE_API_ORIGIN;
   const previousFetch = globalThis.fetch;

@@ -18,6 +18,7 @@ test("the admin workspace exposes the protected signer state and explicit lock c
   assert.match(source, /Unlock signer/);
   assert.match(source, /Lock signer/);
   assert.match(source, /request\("\/v1\/admin\/gas-vaults", \{\}, environment, 60_000\)/);
+  assert.match(source, /actionKey\.startsWith\("sweep:"\) \? 58_000 : 15_000/);
   assert.match(source, /Network gas reserves/);
   assert.match(source, /transfers\s+only the needed amount\. EVM transfers\s+include a dynamic fee margin; there is no fixed\s+top-up/);
   assert.match(source, /disabled=\{gasVaultsPending\}/);

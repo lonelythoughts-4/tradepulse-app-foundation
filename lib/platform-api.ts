@@ -31,6 +31,10 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
   headers.set('x-tradepulse-request-id', requestId)
 
   const hasBody = !['GET', 'HEAD'].includes(request.method)
+  const timeoutMs = upstreamPath === '/v1/admin/autousers/runs'
+    || /^\/v1\/admin\/sweeps\/[^/]+$/.test(upstreamPath)
+    ? 55_000
+    : 30_000
   try {
     const upstream = await fetch(url, {
       method: request.method,
@@ -38,7 +42,7 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: 'no-store',
       redirect: 'manual',
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(upstreamPath === '/v1/admin/autousers/runs' ? 55_000 : 30_000)]),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]),
     })
     const contentType = upstream.headers.get('content-type') || ''
     if (!contentType.includes('application/json')) {

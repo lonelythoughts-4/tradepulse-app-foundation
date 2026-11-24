@@ -624,7 +624,8 @@ export function AdminWorkspace({
     if (isAdminActionPending(actionKey)) return false;
     setPendingAdminActions((current) => ({ ...current, [actionKey]: true }));
     try {
-      const response = await request(path, { method: "POST", body: JSON.stringify(body) });
+      const timeoutMs = actionKey.startsWith("sweep:") ? 58_000 : 15_000;
+      const response = await request(path, { method: "POST", body: JSON.stringify(body) }, environment, timeoutMs);
       onSuccess?.(response);
       scheduleReconcile();
       onNotice(
