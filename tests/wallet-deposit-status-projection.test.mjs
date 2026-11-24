@@ -20,7 +20,7 @@ test("deposit checking shows a persistent result for detected deposits and monit
     "utf8",
   );
 
-  assert.match(wallet, /result\.status === "pending_dust"/);
+  assert.match(wallet, /resultStatus === "pending_dust"/);
   assert.match(wallet, /Deposit found below the minimum/);
   assert.match(wallet, /The \{network\} watcher is starting for this address/);
   assert.match(wallet, /The \{network\} watcher is already active for this address/);
