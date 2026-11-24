@@ -11,6 +11,6 @@ test("Synthetic creation requires risk acknowledgement and starts full-allocatio
   assert.match(source, /product === "synthetic" && data\.environment === "mainnet" && <label className="toggle-row"/);
   assert.match(source, /checked=\{syntheticRiskAcknowledged\}/);
   assert.match(source, /live_risk_acknowledged: syntheticRiskAcknowledged/);
-  assert.match(source, /product === "synthetic" && <span>AUTO EXECUTION <b>ON AFTER CREATION<\/b><\/span>/);
+  assert.match(source, /product === "synthetic" && <span>AUTO EXECUTION <b>\{data\.environment === "mainnet" \? "ON AFTER CREATION" : "NOT AVAILABLE IN TESTNET"\}<\/b><\/span>/);
   assert.match(source, /Future Synthetic top-ups are also available to Auto/);
 });
