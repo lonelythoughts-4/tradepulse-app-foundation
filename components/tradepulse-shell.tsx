@@ -941,6 +941,7 @@ type VisualDeskModel = {
         entry_price?: number;
         exit_price?: number;
         realized_pnl?: number;
+        user_net_pnl_usd?: number;
         close_reason?: string;
         closed_at?: number;
       };
@@ -1255,8 +1256,8 @@ function Activity({
   );
 }
 
-function activityExitLabel(reason?: string) {
-  return formatActivityExitReason(reason);
+function activityExitLabel(reason?: string, netPnl?: number) {
+  return formatActivityExitReason(reason, netPnl);
 }
 
 export function isNonFinancialActivity(kind: string) {
@@ -1287,7 +1288,7 @@ function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledg
       {position?.symbol && <span>MARKET <b>{position.symbol}{position.direction ? ` · ${position.direction.toUpperCase()}` : ""}</b></span>}
       {position?.entry_price !== undefined && <span>ENTRY <b>{formatMarketPrice(Number(position.entry_price))}</b></span>}
       {position?.exit_price !== undefined && <span>EXIT <b>{formatMarketPrice(Number(position.exit_price))}</b></span>}
-      {position?.close_reason && <span>EXIT TYPE <b>{activityExitLabel(position.close_reason)}</b></span>}
+      {position?.close_reason && <span>EXIT TYPE <b>{activityExitLabel(position.close_reason, position.user_net_pnl_usd ?? position.realized_pnl)}</b></span>}
       {detail && !isFee && <span>TRADING COSTS <b>{money(detail.exchange_fees + detail.slippage)}</b></span>}
       {detail && isFee && <span>RELATED NET RESULT <b className={detail.net_realized >= 0 ? "up" : "down"}>{detail.net_realized >= 0 ? "+" : ""}{money(detail.net_realized)}</b></span>}
     </div>

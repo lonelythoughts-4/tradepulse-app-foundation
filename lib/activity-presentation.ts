@@ -1,3 +1,5 @@
+import { formatSettlementExitReason } from "./settlement-label";
+
 export type ActivityRecord = {
   kind: string;
   status?: string;
@@ -9,6 +11,8 @@ export type ActivityRecord = {
       symbol?: string;
       direction?: string;
       close_reason?: string;
+      realized_pnl?: number;
+      user_net_pnl_usd?: number;
     };
   };
 };
@@ -59,13 +63,24 @@ export function formatActivityStatus(status = ""): string {
   return statusNames[normalized] || titleWords(normalized || "recorded");
 }
 
-export function formatActivityExitReason(reason?: string): string {
-  const labels: Record<string, string> = {
-    take_profit: "Take profit",
-    stop_loss: "Stop loss",
-    user_close: "Closed by you",
-  };
-  return reason ? labels[reason.toLowerCase()] || titleWords(reason) : "Closed at the recorded settlement price";
+export function formatActivityExitReason(reason?: string, netPnl?: number): string {
+  if (!reason) return "Closed at the recorded settlement price";
+  const value = reason.trim();
+  if (!value) return "Closed at the recorded settlement price";
+  const normalized = value.toLowerCase();
+  if (
+    normalized === "take_profit"
+    || normalized === "stop_loss"
+    || normalized === "user_close"
+    || normalized === "fixed_expiry"
+    || normalized === "contract_expiry"
+    || normalized.startsWith("game_")
+    || normalized === "auto_daily_goal"
+    || normalized === "auto_daily_loss_limit"
+  ) {
+    return formatSettlementExitReason(value, netPnl);
+  }
+  return titleWords(value);
 }
 
 const network = (chain?: string) => chain ? networkNames[chain] || titleWords(chain) : "";
@@ -158,7 +173,14 @@ export function describeActivity(entry: ActivityRecord): ActivityPresentation {
     const title = `${strategyName} trade ${outcome}`;
     if (position?.symbol) {
       const direction = position.direction ? ` · ${position.direction.toUpperCase()}` : "";
-      return { title, summary: `${position.symbol}${direction} · ${formatActivityExitReason(position.close_reason)}`, status };
+      return {
+        title,
+        summary: `${position.symbol}${direction} · ${formatActivityExitReason(
+          position.close_reason,
+          position.user_net_pnl_usd ?? position.realized_pnl,
+        )}`,
+        status,
+      };
     }
     return { title, summary: `${strategyName} result posted to your wallet balance`, status };
   }

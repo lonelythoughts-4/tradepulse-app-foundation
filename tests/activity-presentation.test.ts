@@ -22,6 +22,41 @@ test("describes a settled market outcome with the actual market and exit", () =>
   });
 });
 
+test("normalizes legacy game exits from the signed customer P&L", () => {
+  const profit = describeActivity({
+    kind: "trading_profit",
+    status: "settled",
+    trade_detail: {
+      bot_name: "Memecoin",
+      position: { symbol: "WIF", direction: "long", close_reason: "game_scheduled", realized_pnl: 8.54 },
+    },
+  });
+  const loss = describeActivity({
+    kind: "trading_loss",
+    status: "settled",
+    trade_detail: {
+      bot_name: "Memecoin",
+      position: { symbol: "WIF", direction: "long", close_reason: "auto_daily_loss_limit", realized_pnl: -1.02 },
+    },
+  });
+
+  assert.equal(profit.summary, "WIF · LONG · Take profit");
+  assert.equal(loss.summary, "WIF · LONG · Stop loss");
+});
+
+test("keeps other activity exit labels humanized", () => {
+  const activity = describeActivity({
+    kind: "trading_loss",
+    status: "settled",
+    trade_detail: {
+      bot_name: "Synthetic",
+      position: { symbol: "SYN-25", close_reason: "liquidation", realized_pnl: -1 },
+    },
+  });
+
+  assert.equal(activity.summary, "SYN-25 · Liquidation");
+});
+
 test("describes a withdrawal hold with its customer consequence", () => {
   const activity = describeActivity({
     kind: "withdraw",
