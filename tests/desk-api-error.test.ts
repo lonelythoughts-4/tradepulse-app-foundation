@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { DeskApi, DeskApiError } from "../lib/desk-api.ts";
+import { DeskApi, DeskApiError, logDeskFailure } from "../lib/desk-api.ts";
 
 test("API errors retain diagnostics without exposing customer-facing error copy", async () => {
   const error = new DeskApiError(
@@ -35,6 +35,10 @@ test("DeskApi attaches a server request reference to API errors", async () => {
         assert.equal(error.status, 500);
         assert.equal(error.reference, "request-42");
         assert.equal(error.responseMessage, "The service failed.");
+        assert.deepEqual(error.responseBody, {
+          error: "The service failed.",
+          request_id: "request-42",
+        });
         assert.equal(error.message, "");
         return true;
       },
@@ -62,6 +66,55 @@ test("DeskApi hides transport error details from callers", async () => {
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test("DeskApi rejects malformed JSON without a success-shaped fallback", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousError = console.error;
+  globalThis.fetch = async () => new Response("{", {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  console.error = () => undefined;
+
+  try {
+    await assert.rejects(
+      new DeskApi().getResource("/v1/dashboard"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, "");
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    console.error = previousError;
+  }
+});
+
+test("operation diagnostics omit error text and retain a safe reference", () => {
+  const previousError = console.error;
+  const logged: unknown[][] = [];
+  console.error = (...args: unknown[]) => logged.push(args);
+
+  try {
+    logDeskFailure(
+      "wallet.withdrawal",
+      new DeskApiError("private detail", 503, "request-21", "private response"),
+    );
+  } finally {
+    console.error = previousError;
+  }
+
+  assert.deepEqual(logged, [[
+    "TradeMemo operation failed",
+    {
+      operation: "wallet.withdrawal",
+      status: 503,
+      reference: "request-21",
+      errorType: "DeskApiError",
+    },
+  ]]);
 });
 
 test("the language rollback preserves locale without exposing API error copy", async () => {

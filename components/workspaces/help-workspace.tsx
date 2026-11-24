@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { DeskLocalized } from "../desk-language";
+import { logDeskFailure } from "../../lib/desk-api";
 import {
   ChevronRight,
   GradientPanel,
@@ -98,7 +99,7 @@ export function HelpWorkspace({
     ticketReplyPendingRef.current = next;
     setTicketReplyPendingIds(next);
   };
-  const openTicket = async (ticket: { id: string; topic?: string; status: string }, managePending = true, resetReply = true, quiet = false) => {
+  const openTicket = async (ticket: { id: string; topic?: string; status: string }, managePending = true, resetReply = true) => {
     const requestId = ++ticketThreadRequestRef.current;
     if (managePending) {
       if (!beginTicketOpen(ticket.id)) return;
@@ -120,14 +121,14 @@ export function HelpWorkspace({
         if (resetReply) setTicketReply("");
       }
     } catch (error) {
-      if (!quiet) onNotice(error instanceof Error ? error.message : "Could not load this support request.");
+      logDeskFailure("support.ticket-open", error);
     } finally {
       if (managePending) endTicketOpen(ticket.id);
     }
   };
   useEffect(() => {
     loadTickets()
-      .catch((error) => onNotice(error instanceof Error ? error.message : "Could not load support tickets."));
+      .catch((error) => logDeskFailure("support.ticket-list", error));
   }, []);
   useEffect(() => {
     setRecoveryCases(data.recovery_cases || []);
@@ -139,7 +140,7 @@ export function HelpWorkspace({
     const refreshThread = () => {
       if (cancelled || refreshInFlight) return;
       refreshInFlight = true;
-      void openTicket(activeTicket, false, false, true).finally(() => {
+      void openTicket(activeTicket, false, false).finally(() => {
         refreshInFlight = false;
       });
     };
@@ -278,11 +279,12 @@ export function HelpWorkspace({
               }
               onNotice("Recovery case submitted for review.");
             } catch (error) {
-              onNotice(
-                error instanceof Error
-                  ? error.message
-                  : "Could not submit recovery case.",
-              );
+              logDeskFailure("support.recovery-create", error);
+              void request("/v1/dashboard")
+                .then((latest) => {
+                  if (Array.isArray(latest?.recovery_cases)) setRecoveryCases(latest.recovery_cases);
+                })
+                .catch((refreshError) => logDeskFailure("support.recovery-reconcile", refreshError));
             } finally {
               setRecoveryPending(false);
             }
@@ -377,15 +379,11 @@ export function HelpWorkspace({
                 ...current.filter((item) => item.id !== ticket.id),
               ]);
               onNotice(`Support ticket #${result.ticket_id} opened.`);
-              void loadTickets().catch((error) => onNotice(error instanceof Error ? error.message : "The ticket opened, but its list could not be refreshed."));
+              void loadTickets().catch((error) => logDeskFailure("support.ticket-list", error));
               void openTicket(ticket, false, false);
             } catch (error) {
-              onNotice(
-                error instanceof Error
-                  ? error.message
-                  : "Could not open a support ticket.",
-              );
-              void loadTickets().catch((refreshError) => onNotice(refreshError instanceof Error ? refreshError.message : "Could not refresh support tickets."));
+              logDeskFailure("support.ticket-create", error);
+              void loadTickets().catch((refreshError) => logDeskFailure("support.ticket-list", refreshError));
             } finally {
               ticketCreatePendingRef.current = false;
               setTicketCreatePending(false);
@@ -448,11 +446,11 @@ export function HelpWorkspace({
                     ? { ...item, message_count: (item.message_count || 1) + 1 }
                     : item));
                   onNotice("Reply sent to support.");
-                  void loadTickets().catch((error) => onNotice(error instanceof Error ? error.message : "Your reply was sent, but the ticket list could not be refreshed."));
+                  void loadTickets().catch((error) => logDeskFailure("support.ticket-list", error));
                   void openTicket(ticket, false, false);
                 } catch (error) {
-                  onNotice(error instanceof Error ? error.message : "Could not send the support reply.");
-                  void loadTickets().catch((refreshError) => onNotice(refreshError instanceof Error ? refreshError.message : "Could not refresh support tickets."));
+                  logDeskFailure("support.ticket-reply", error);
+                  void loadTickets().catch((refreshError) => logDeskFailure("support.ticket-list", refreshError));
                   void openTicket(ticket, false, false);
                 } finally { endTicketReply(ticket.id); }
               }}>{ticketReplyPendingIds.has(activeTicket.id) ? "Sending…" : "Send reply"} <Send /></button>

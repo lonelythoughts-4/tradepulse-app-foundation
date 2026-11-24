@@ -11,6 +11,7 @@ import { reconcileSyntheticTicks } from "../../lib/synthetic-ticks";
 import { contractReasonLabel, contractTypeLabel, normaliseManualContractType } from "../../lib/synthetic-contract-terms";
 import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
 import { syntheticQuoteStatus } from "../../lib/synthetic-quote-status";
+import { logDeskFailure } from "../../lib/desk-api";
 import { useResourcePoller } from "./use-resource-poller";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
@@ -93,9 +94,8 @@ function SyntheticMarketData({ account, environment, executionLabel, market, mar
 
 const MemoizedSyntheticMarketData = memo(SyntheticMarketData);
 
-function SyntheticSignalList({ signals, signalError }: {
+function SyntheticSignalList({ signals }: {
   signals: Signal[];
-  signalError: string;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -106,7 +106,7 @@ function SyntheticSignalList({ signals, signalError }: {
   const currentSignals = signals.filter((signal) => signal.expires_at * 1000 > now).slice(0, 3);
   return <>
     {currentSignals.map((signal) => <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} shared signal</strong><small>Auto evaluates eligible signals; no order is guaranteed. Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - now) / 1000))}s</small></div></div>)}
-    {signalError ? <p role="status">{signalError}</p> : !currentSignals.length && <p role="status">No current signals. Waiting for the next update.</p>}
+    {!currentSignals.length && <p role="status">No current signals. Waiting for the next update.</p>}
   </>;
 }
 
@@ -143,8 +143,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [autoAmount, setAutoAmount] = useState("");
   const [autoAllocation, setAutoAllocation] = useState("");
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [signalError, setSignalError] = useState("");
-  const [loadError, setLoadError] = useState("");
   const [quoteError, setQuoteError] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [review, setReview] = useState<Review | null>(null);
@@ -155,6 +153,8 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const [executionCapacityRefreshing, setExecutionCapacityRefreshing] = useState(false);
   const executionSubmitting = useRef(false);
   const executionRevision = useRef(0);
+  const executionReconcilePending = useRef(false);
+  const executionReconcileRevision = useRef(0);
   const confirmedMode = useRef<{ revision: number; mode: "MANUAL" | "AUTO" } | null>(null);
   const pending = useDeskSelector(store, (state) => state.actions);
   const pendingFor = (key: string) => Boolean(pending[key as ActionKey]?.pending);
@@ -170,23 +170,33 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   }, [fallbackSnapshot, resourceKey, store]);
   useEffect(() => { setReview(null); setReviewError(""); setQuoteError(false); }, [environment, market]);
   useEffect(() => { if (snapshot && !snapshot.partial) { setAutoAmount((current) => current || String(Number(snapshot.execution?.auto_margin_usd || 20))); setAutoAllocation((current) => current || String(Number(snapshot.execution?.auto_allocation_usd || 0))); } }, [snapshot]);
-  useResourcePoller<Snapshot>(async (_token, signal) => {
-    try { return await request("/v1/synthetic/" + market + "?view=trading", { signal }, environment) as Snapshot; }
+  useResourcePoller<{ snapshot: Snapshot; requestRevision: number }>(async (_token, signal) => {
+    try {
+      const requestRevision = executionRevision.current;
+      const snapshot = await request("/v1/synthetic/" + market + "?view=trading", { signal }, environment) as Snapshot;
+      return { snapshot, requestRevision };
+    }
     catch (error) {
       if (signal.aborted) throw error;
-      setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
+      logDeskFailure("synthetic.snapshot", error);
       return undefined;
     }
-  }, (next) => {
+  }, ({ snapshot: next, requestRevision }) => {
     if (next.market !== marketRef.current) return;
     const confirmed = confirmedMode.current;
     const mode = confirmed && confirmed.revision >= executionRevision.current ? confirmed.mode : undefined;
-    setLoadError("");
+    if (
+      executionReconcilePending.current
+      && requestRevision >= executionReconcileRevision.current
+      && !next.partial
+      && (next.execution_mode === "AUTO" || next.execution_mode === "MANUAL")
+    ) {
+      executionReconcilePending.current = false;
+      setExecutionTransition(null);
+    }
     if (environment === "mainnet" && !next.partial && next.execution_mode === "MANUAL" && executionCapacityRefreshing) setExecutionCapacityRefreshing(false);
     update({ ...next, ...(mode && executionSubmitting.current ? { execution_mode: mode } : {}) });
-  }, 5000, true, `synthetic:${environment}:${market}`, (error) => {
-    setLoadError(error instanceof Error ? error.message : "Market data is temporarily unavailable.");
-  });
+  }, 5000, true, `synthetic:${environment}:${market}`, (error) => logDeskFailure("synthetic.snapshot", error));
   useResourcePoller<Signal[]>(async (_token, signal) => {
     const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10", { signal });
     return (result.signals || []) as Signal[];
@@ -197,10 +207,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       return signal.id === updated.id && signal.market === updated.market && signal.direction === updated.direction
         && signal.reference_price === updated.reference_price && signal.expires_at === updated.expires_at;
     }) ? current : next);
-    setSignalError("");
-  }, 2000, true, `synthetic-signals:${environment}:${market}`, () => {
-    setSignalError("Signal updates are delayed. Reconnecting…");
-  });
+  }, 2000, true, `synthetic-signals:${environment}:${market}`, (error) => logDeskFailure("synthetic.signals", error));
   useResourcePoller<Record<string, unknown>>(async (_token, signal) => {
     return await request("/v1/synthetic/stream?market=" + market + "&include_history=1", { signal }, environment);
   }, (stream) => {
@@ -225,7 +232,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         server_updated_at: Number(stream.updated_at),
       } satisfies SyntheticQuote,
     });
-  }, 1000, true, `synthetic-quotes:${environment}:${market}`, () => setQuoteError(true));
+  }, 1000, true, `synthetic-quotes:${environment}:${market}`, (error) => {
+    logDeskFailure("synthetic.quotes", error);
+    setQuoteError(true);
+  });
   const actionKey = (path: string, payload: Record<string, unknown>) => {
     const position = path.match(/^\/v1\/synthetic\/positions\/([^/]+)\/close$/); const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (path === "/v1/synthetic/actions") return ("synthetic-testnet:" + String(payload.action || "action")) as ActionKey;
@@ -265,7 +275,36 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
       if (bot && payload.action === "topup") onDashboardPatch((current) => current ? { ...current, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet, bots: current.bots.map((item) => item.id === bot[1] ? { ...item, ...(response.bot || {}) } : item) } : current);
       onNotice(response.message || "Your changes were saved."); return true;
-    } catch (error) { if (changesExecutionMode) setExecutionTransition(null);     const message = error instanceof Error ? error.message : "TradeMemo could not complete this action. Review your choices and try again."; onNotice(message); throw error; }
+    } catch (error) {
+      if (changesExecutionMode) {
+        executionReconcilePending.current = true;
+        executionReconcileRevision.current = executionRevision.current;
+        try {
+          const current = await request(
+            "/v1/synthetic/" + market + "?view=trading",
+            {},
+            environment,
+          ) as Snapshot;
+          if (
+            current.market === market
+            && !current.partial
+            && (current.execution_mode === "AUTO" || current.execution_mode === "MANUAL")
+          ) {
+            confirmedMode.current = {
+              revision: executionRevision.current,
+              mode: current.execution_mode,
+            };
+            update(current);
+            executionReconcilePending.current = false;
+            setExecutionTransition(null);
+          }
+        } catch (reconcileError) {
+          logDeskFailure("synthetic.execution-reconcile", reconcileError);
+        }
+      }
+      logDeskFailure("synthetic.action", error);
+      throw error;
+    }
     finally { if (changesExecutionMode) { executionSubmitting.current = false; executionRevision.current += 1; } }
   };
   const openReview = () => {
@@ -285,7 +324,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     if (reviewSubmitting.current === key || pendingFor(key)) return;
     if (!autoAcknowledged) { setReviewError("Review and acknowledge the Auto allocation before continuing."); return; }
     reviewSubmitting.current = key; setReviewError("");
-    try { const submitted = await act(submission.path, submission.payload); if (submitted) setReview(null); } catch (error) { const message = error instanceof Error ? error.message : "TradeMemo could not submit this request. Review it and try again."; setReviewError(message); } finally { if (reviewSubmitting.current === key) reviewSubmitting.current = null; }
+    try { const submitted = await act(submission.path, submission.payload); if (submitted) setReview(null); } catch { setReviewError(""); } finally { if (reviewSubmitting.current === key) reviewSubmitting.current = null; }
   };
   const manualKey = "execution:manual";
   const autoKey = "execution:auto";
@@ -308,7 +347,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     {environment === "testnet" && account.user.is_admin && <p className="synthetic-environment-note">Admin test environment · Virtual funds only.</p>}
     <div id="synthetic-market-snapshot" aria-label={market + " market snapshot"}>
       <MemoizedSyntheticMarketData account={account} environment={environment} executionLabel={executionLabel} market={market} marketChart={MarketChart} snapshot={snapshot} store={store} />
-      {loadError && <p role="status">{loadError} Action requests are checked against the current server state.</p>}
       {!snapshot.partial && snapshot.live_disclosure_accepted === false && environment === "mainnet" && <section className="announcements synthetic-risk-notice" aria-labelledby="synthetic-risk-title"><div className="synthetic-risk-copy"><span className="eyebrow">LIVE-RISK ACKNOWLEDGEMENT</span><strong id="synthetic-risk-title">Required before wallet-funded Synthetic trading or Auto.</strong><p>Orders reserve wallet funds at 1:1 margin. Price movement can lose the full reserved amount; spread and tier fees apply. Auto may place wallet-funded orders up to the amount you approve.</p></div><button className="primary-action" disabled={pendingFor("disclosure:accept")} onClick={() => void act("/v1/synthetic/disclosure", {}).catch(() => undefined)}>{pendingFor("disclosure:accept") ? "Saving…" : "Review & accept"}</button></section>}
       {environment === "mainnet" ? <>
         <section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title" aria-busy={Boolean(executionTransition)}>
@@ -331,7 +369,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
             {(confirmedAuto || snapshot.partial) && <button className="small-action" disabled={pendingFor(manualKey) || Boolean(executionTransition)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" }).catch(() => undefined)}>{executionTransition === "MANUAL" ? "Turning Auto off…" : pendingFor(manualKey) ? "Saving…" : "Turn Auto off"}</button>}
           </div>
         </section>
-        <SyntheticSignalList signals={signals} signalError={signalError} />
+        <SyntheticSignalList signals={signals} />
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       <SyntheticPositionList positions={snapshot.positions} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
       {account.user.is_admin && snapshot.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable. Open and close requests are checked against the current server state.</p>}

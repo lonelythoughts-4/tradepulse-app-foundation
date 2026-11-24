@@ -4,12 +4,10 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { DeskLocalized } from "../desk-language";
 import { GradientPanel, Send, ShieldCheck, X } from "./shared-ui";
-import { DeskApiError } from "../../lib/desk-api";
+import { DeskApiError, logDeskFailure } from "../../lib/desk-api";
 import { fundingFeedback, type FundingOutcome } from "../../lib/admin-funding-feedback";
 import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 
-const AUTOUSER_SCHEDULE_CONFLICT_MESSAGE =
-  "This item changed while you were editing it. The latest schedule is loading.";
 const AUTOUSER_DISPLAY_TIMEZONE = "Africa/Lagos";
 const AUTOUSER_INPUT_TIMEZONE = "Africa/Lagos";
 
@@ -220,7 +218,8 @@ export function AdminWorkspace({
     signal_id: string;
     reason: string;
   }>>([]);
-  const [syntheticAutoRejectionsError, setSyntheticAutoRejectionsError] = useState("");
+  const [syntheticAutoRejectionsLoaded, setSyntheticAutoRejectionsLoaded] = useState(false);
+  const [syntheticAutoRejectionsPending, setSyntheticAutoRejectionsPending] = useState(false);
   const [flashbackDirectionConfig, setFlashbackDirectionConfig] = useState("");
   const [flashbackDirectionHistory, setFlashbackDirectionHistory] = useState<Array<{ id: string; market: string; direction: string; state: string; allocation_usd: number; return_usd?: number; user_net_usd?: number; close_reason?: string; settled_at?: number }>>([]);
   const [memecoinConfig, setMemecoinConfig] = useState<Record<string, string>>({});
@@ -250,10 +249,8 @@ export function AdminWorkspace({
   const [autouserSchedule, setAutouserSchedule] = useState<AutouserSchedule | null>(null);
   const [autouserScheduleLoadPending, setAutouserScheduleLoadPending] = useState<Record<string, boolean>>({});
   const [autouserScheduleLoadError, setAutouserScheduleLoadError] = useState("");
-  const [autouserScheduleRefreshError, setAutouserScheduleRefreshError] = useState("");
   const [autouserScheduleTimes, setAutouserScheduleTimes] = useState<Record<string, string>>({});
   const [autouserScheduleSavePending, setAutouserScheduleSavePending] = useState<Record<string, boolean>>({});
-  const [autouserScheduleSaveErrors, setAutouserScheduleSaveErrors] = useState<Record<string, string>>({});
   const [autouserManualKind, setAutouserManualKind] = useState<"deposit" | "withdrawal" | "topup">("deposit");
   const [autouserManualAmount, setAutouserManualAmount] = useState("");
   const [autouserManualTime, setAutouserManualTime] = useState("12:00");
@@ -356,7 +353,9 @@ export function AdminWorkspace({
       setWithdrawalReview(null);
       scheduleReconcile();
     } catch (error) {
-      setWithdrawalError(error instanceof Error ? error.message : "Withdrawal action failed. Review the current status before trying again.");
+      logDeskFailure("admin.withdrawal-review", error);
+      setWithdrawalError("");
+      scheduleReconcile();
     } finally {
       withdrawalSubmitting.current = false;
       setWithdrawalPending(false);
@@ -381,49 +380,57 @@ export function AdminWorkspace({
       })
       .catch((error) => {
         if (!active) return;
+        logDeskFailure("admin.signer-status", error);
         setSignerStatus("unavailable");
-        setSignerError(
-          error instanceof Error
-            ? error.message
-            : "Protected signer status is unavailable.",
-        );
+        setSignerError("");
       });
     request("/v1/admin/vaults")
-      .then((response) =>
-        setVaults(Array.isArray(response.vaults) ? response.vaults : []),
-      )
-      .catch(() => setVaults([]));
+      .then((response) => {
+        if (active) setVaults(Array.isArray(response.vaults) ? response.vaults : []);
+      })
+      .catch((error) => {
+        if (active) logDeskFailure("admin.vaults", error);
+      });
     request("/v1/admin/synthetic-config")
-      .then((response) => setSyntheticConfig(response.settings || {}))
-      .catch(() => setSyntheticConfig({}));
+      .then((response) => {
+        if (active) setSyntheticConfig(response.settings || {});
+      })
+      .catch((error) => {
+        if (active) logDeskFailure("admin.synthetic-config", error);
+      });
     setSyntheticAutoRejections([]);
-    setSyntheticAutoRejectionsError("");
+    setSyntheticAutoRejectionsLoaded(false);
+    setSyntheticAutoRejectionsPending(true);
     request("/v1/admin/synthetic-auto-rejections", {}, environment)
       .then((response) => {
         if (!active) return;
         setSyntheticAutoRejections(Array.isArray(response.auto_rejections) ? response.auto_rejections : []);
+        setSyntheticAutoRejectionsLoaded(true);
       })
       .catch((error) => {
         if (!active) return;
-        setSyntheticAutoRejectionsError(error instanceof Error ? error.message : "Synthetic Auto diagnostics are unavailable.");
+        logDeskFailure("admin.synthetic-rejections", error);
+      })
+      .finally(() => {
+        if (active) setSyntheticAutoRejectionsPending(false);
       });
     request("/v1/admin/memecoin-config")
       .then((response) => {
+        if (!active) return;
         setMemecoinConfig(response.settings || {});
         setMemecoinMetrics(response.metrics || {});
       })
-      .catch(() => {
-        setMemecoinConfig({});
-        setMemecoinMetrics({});
+      .catch((error) => {
+        if (active) logDeskFailure("admin.memecoin-config", error);
       });
     request("/v1/admin/flashback-direction-config")
       .then((response) => {
+        if (!active) return;
         setFlashbackDirectionConfig(JSON.stringify(response.config || {}, null, 2));
         setFlashbackDirectionHistory(Array.isArray(response.sessions) ? response.sessions : []);
       })
-      .catch(() => {
-        setFlashbackDirectionConfig("");
-        setFlashbackDirectionHistory([]);
+      .catch((error) => {
+        if (active) logDeskFailure("admin.flashback-direction-config", error);
       });
     return () => { active = false; };
   }, [environment]);
@@ -451,11 +458,9 @@ export function AdminWorkspace({
       setSignerStatus("unlocked");
       onNotice("Protected signer unlocked. Signer-backed operations can proceed.");
     } catch (error) {
-      setSignerError(
-        error instanceof Error
-          ? error.message
-          : "Could not unlock the protected signer.",
-      );
+      logDeskFailure("admin.signer-unlock", error);
+      setSignerStatus("unavailable");
+      setSignerError("");
     } finally {
       signerSubmitting.current = false;
       setSignerPending(false);
@@ -483,9 +488,9 @@ export function AdminWorkspace({
       setSignerStatus("locked");
       onNotice("Protected signer locked.");
     } catch (error) {
-      setSignerError(
-        error instanceof Error ? error.message : "Could not lock the protected signer.",
-      );
+      logDeskFailure("admin.signer-lock", error);
+      setSignerStatus("unavailable");
+      setSignerError("");
     } finally {
       signerSubmitting.current = false;
       setSignerPending(false);
@@ -504,12 +509,9 @@ export function AdminWorkspace({
       }
       setSignerStatus(response.status);
     } catch (error) {
+      logDeskFailure("admin.signer-status", error);
       setSignerStatus("unavailable");
-      setSignerError(
-        error instanceof Error
-          ? error.message
-          : "Protected signer status is unavailable.",
-      );
+      setSignerError("");
     } finally {
       signerStatusRefreshSubmitting.current = false;
       setSignerStatusRefreshPending(false);
@@ -554,7 +556,7 @@ export function AdminWorkspace({
       );
       return true;
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Admin action failed.");
+      logDeskFailure("admin.action", error);
       return false;
     } finally {
       setPendingAdminActions((current) => {
@@ -582,7 +584,7 @@ export function AdminWorkspace({
     } catch (error) {
       if (requestId === adminTicketRequest.current) {
         setAdminTicket(null);
-        onNotice(error instanceof Error ? error.message : "Could not load the support conversation.");
+        logDeskFailure("admin.support-ticket", error);
       }
     } finally {
       setPendingAdminActions((current) => {
@@ -601,9 +603,9 @@ export function AdminWorkspace({
           messages: Array.isArray(response.messages) ? response.messages : [],
         });
       }
-    } catch {
+    } catch (error) {
       if (requestId === adminTicketRequest.current && adminTicket?.id === ticketId) {
-        onNotice("");
+        logDeskFailure("admin.support-ticket-refresh", error);
       }
     }
   };
@@ -646,6 +648,7 @@ export function AdminWorkspace({
         scheduleReconcile();
         onNotice(message);
       } catch (error) {
+        logDeskFailure("admin.support-ticket-status", error);
         if (ticketStatusVersions.current.get(ticket.id) === version) {
           setTicketStatusOverrides((current) => {
             const next = { ...current };
@@ -656,7 +659,6 @@ export function AdminWorkspace({
             ? { ...current, status: ticket.status }
             : current);
         }
-        onNotice(error instanceof Error ? error.message : "Ticket status update failed.");
         scheduleReconcile();
       } finally {
         ticketStatusPending.current.delete(actionKey);
@@ -724,7 +726,9 @@ export function AdminWorkspace({
       scheduleReconcile();
       onNotice(response.message || (outcome === "applied" ? "Funding applied." : "An equivalent funding action was already recorded."));
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Funding could not be recorded.");
+      logDeskFailure("admin.funding", error);
+      onNotice("");
+      scheduleReconcile();
     } finally {
       accountActionSubmitting.current.fund = false;
       setPendingAccountActions((current) => ({ ...current, fund: false }));
@@ -742,7 +746,7 @@ export function AdminWorkspace({
       setSyntheticConfig((current) => ({ ...current, ...(response.settings || settings) }));
       onNotice("Synthetic configuration saved and audit logged.");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not save synthetic configuration.");
+      logDeskFailure("admin.synthetic-config", error);
     } finally {
       setPendingAdminActions((current) => {
         const next = { ...current };
@@ -764,7 +768,7 @@ export function AdminWorkspace({
       setFlashbackDirectionHistory(Array.isArray(response.sessions) ? response.sessions : []);
       onNotice("Direction catalog saved. Existing contracts keep their recorded terms.");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not save the Direction catalog.");
+      logDeskFailure("admin.direction-config", error);
     } finally {
       setPendingAdminActions((current) => {
         const next = { ...current };
@@ -832,9 +836,9 @@ export function AdminWorkspace({
       onNotice(result.message || "Auto-user testnet deposit run scheduled.");
       scheduleReconcile();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Auto-user run could not be scheduled.";
-      setAutouserError(message);
-      onNotice(message);
+      logDeskFailure("admin.autouser-run-create", error);
+      setAutouserError("");
+      scheduleReconcile();
     } finally {
       setAutouserPending(false);
     }
@@ -849,7 +853,8 @@ export function AdminWorkspace({
       scheduleReconcile();
       return true;
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Auto-user run could not be updated.");
+      logDeskFailure("admin.autouser-run-update", error);
+      scheduleReconcile();
       return false;
     } finally {
       setAutouserRunPending((current) => {
@@ -871,7 +876,8 @@ export function AdminWorkspace({
       onNotice(result.message || "Auto-user issue queued for retry.");
       scheduleReconcile();
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Auto-user issue could not be retried.");
+      logDeskFailure("admin.autouser-retry", error);
+      scheduleReconcile();
     } finally {
       setAutouserRunPending((current) => {
         const next = { ...current };
@@ -889,7 +895,7 @@ export function AdminWorkspace({
       const page = await request(`/v1/admin/autousers/runs?limit=${limit}&offset=${Math.max(0, offset)}`, {}, "testnet");
       setAutouserPage(page);
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Auto-user run history could not be loaded.");
+      logDeskFailure("admin.autouser-run-history", error);
     } finally {
       setAutouserPagePending((current) => {
         const next = { ...current };
@@ -951,7 +957,6 @@ export function AdminWorkspace({
     setAutouserScheduleDate(null);
     setAutouserSchedule(null);
     setAutouserScheduleLoadError("");
-    setAutouserScheduleRefreshError("");
   };
   const openAutouserSchedule = async (date: string) => {
     if (autouserScheduleLoads.current.has(date)) return;
@@ -963,9 +968,7 @@ export function AdminWorkspace({
     autouserScheduleRef.current = null;
     setAutouserSchedule(null);
     setAutouserScheduleLoadError("");
-    setAutouserScheduleRefreshError("");
     setAutouserScheduleTimes({});
-    setAutouserScheduleSaveErrors({});
     setAutouserScheduleLoadPending((current) => ({ ...current, [date]: true }));
     try {
       const response = await request(
@@ -985,9 +988,8 @@ export function AdminWorkspace({
       applyAutouserSchedule(response, false);
     } catch (error) {
       if (requestId === autouserScheduleRequest.current) {
-        setAutouserScheduleLoadError(
-          error instanceof Error ? error.message : "The exact schedule could not be loaded.",
-        );
+        logDeskFailure("admin.autouser-schedule-load", error);
+        setAutouserScheduleLoadError("unavailable");
       }
     } finally {
       if (autouserScheduleLoads.current.get(date) === requestId) {
@@ -1034,19 +1036,10 @@ export function AdminWorkspace({
         return;
       }
       applyAutouserSchedule(response, true);
-      setAutouserScheduleRefreshError("");
-      setAutouserScheduleSaveErrors((current) => {
-        const next = { ...current };
-        for (const [itemKey, message] of Object.entries(next)) {
-          if (message === AUTOUSER_SCHEDULE_CONFLICT_MESSAGE) delete next[itemKey];
-        }
-        return next;
-      });
     } catch (error) {
       if (requestId === autouserScheduleRequest.current && autouserScheduleDate === date) {
-        setAutouserScheduleRefreshError(
-          error instanceof Error ? error.message : "The schedule state could not be refreshed.",
-        );
+        logDeskFailure("admin.autouser-schedule-refresh", error);
+        setAutouserScheduleLoadError("unavailable");
       }
     } finally {
       if (autouserScheduleLoads.current.get(date) === requestId) {
@@ -1075,11 +1068,6 @@ export function AdminWorkspace({
     let refreshAfterSave = false;
     const requestId = autouserScheduleRequest.current;
     setAutouserScheduleSavePending((current) => ({ ...current, [itemKey]: true }));
-    setAutouserScheduleSaveErrors((current) => {
-      const next = { ...current };
-      delete next[itemKey];
-      return next;
-    });
     try {
       await request(
         `/v1/admin/autousers/schedule/${item.source}/${encodeURIComponent(item.id)}/time`,
@@ -1113,24 +1101,13 @@ export function AdminWorkspace({
       scheduleReconcile();
       onNotice("Scheduled time updated.");
     } catch (error) {
+      logDeskFailure("admin.autouser-schedule-save", error);
       const conflict = error instanceof DeskApiError && error.status === 409;
-      refreshAfterSave = conflict;
+      refreshAfterSave = true;
       if (conflict) {
         autouserScheduleForceServerTimes.current.add(itemKey);
-        setAutouserScheduleTimes((current) => {
-          const next = { ...current };
-          delete next[itemKey];
-          return next;
-        });
       }
-      setAutouserScheduleSaveErrors((current) => ({
-        ...current,
-        [itemKey]: conflict
-          ? AUTOUSER_SCHEDULE_CONFLICT_MESSAGE
-          : error instanceof Error
-            ? error.message
-            : "The scheduled time could not be updated.",
-      }));
+      setAutouserScheduleTimes((current) => ({ ...current, [itemKey]: item.operator_time }));
     } finally {
       autouserScheduleSaving.current.delete(itemKey);
       setAutouserScheduleSavePending((current) => {
@@ -1169,7 +1146,9 @@ export function AdminWorkspace({
       scheduleReconcile();
       void refreshAutouserSchedule(date, true);
     } catch (error) {
-      setAutouserManualError(error instanceof Error ? error.message : "The schedule item could not be created.");
+      logDeskFailure("admin.autouser-schedule-create", error);
+      setAutouserManualError("");
+      if (date) void refreshAutouserSchedule(date, true);
     } finally {
       setAutouserManualPending(false);
     }
@@ -1189,7 +1168,8 @@ export function AdminWorkspace({
       scheduleReconcile();
       void refreshAutouserSchedule(date, true);
     } catch (error) {
-      setAutouserScheduleSaveErrors((current) => ({ ...current, [itemKey]: error instanceof Error ? error.message : "The scheduled item could not be removed." }));
+      logDeskFailure("admin.autouser-schedule-delete", error);
+      if (date) void refreshAutouserSchedule(date, true);
     } finally {
       autouserScheduleSaving.current.delete(itemKey);
       setAutouserScheduleSavePending((current) => {
@@ -1222,7 +1202,9 @@ export function AdminWorkspace({
       onNotice(result.message || "Broadcast queued for delivery.");
       scheduleReconcile();
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Broadcast could not be queued.");
+      logDeskFailure("admin.broadcast", error);
+      onNotice("");
+      scheduleReconcile();
     } finally {
       setBroadcastPending(false);
     }
@@ -1262,11 +1244,6 @@ export function AdminWorkspace({
             <button className="small-action" onClick={closeAutouserSchedule}>Close</button>
           </div>
         </div>
-        {autouserScheduleRefreshError && autouserSchedule && (
-          <p className="security-feedback" role="status" aria-live="polite">
-            Schedule state could not refresh. Showing the last loaded state; another refresh will retry automatically. {autouserScheduleRefreshError}
-          </p>
-        )}
         {autouserSchedule && <div className="admin-row">
           <div>
             <strong>Add planned activity</strong>
@@ -1287,12 +1264,13 @@ export function AdminWorkspace({
         {autouserScheduleLoadPending[autouserScheduleDate] ? (
           <p role="status" aria-live="polite">Loading exact schedule…</p>
         ) : autouserScheduleLoadError ? (
-          <div>
-            <p className="security-feedback" role="alert">{autouserScheduleLoadError}</p>
-            <button className="small-action" onClick={() => void openAutouserSchedule(autouserScheduleDate)}>Retry loading times</button>
+          <div role="status">
+            <button className="small-action" onClick={() => void openAutouserSchedule(autouserScheduleDate)}>Reload schedule</button>
           </div>
         ) : !autouserSchedule ? (
-          <p role="alert">The schedule response was empty. Close this window and reopen the day to try again.</p>
+          <div role="status">
+            <button className="small-action" onClick={() => void openAutouserSchedule(autouserScheduleDate)}>Load schedule</button>
+          </div>
         ) : autouserSchedule.items.length === 0 ? (
           <p role="status">No pending testnet activity remains on this day.</p>
         ) : (
@@ -1350,9 +1328,6 @@ export function AdminWorkspace({
                 <small className="security-feedback" role="status">
                   Scheduled time · {item.local_time} {autouserSchedule.timezone}
                 </small>
-                {autouserScheduleSaveErrors[itemKey] && (
-                  <small className="security-feedback" role="alert">{autouserScheduleSaveErrors[itemKey]}</small>
-                )}
               </div>
             );
           })
@@ -1432,7 +1407,9 @@ export function AdminWorkspace({
               scheduleReconcile();
               void refreshAdminTicket(ticketId, requestId);
             } catch (error) {
-              onNotice(error instanceof Error ? error.message : "Could not send the support reply.");
+              logDeskFailure("admin.support-reply", error);
+              scheduleReconcile();
+              void refreshAdminTicket(ticketId, requestId);
             } finally {
               setPendingAdminActions((current) => {
                 const next = { ...current };
@@ -1544,9 +1521,6 @@ export function AdminWorkspace({
         )}
         {signerStatus === "unavailable" && (
           <div className="signer-control-unavailable">
-            <p className="signer-control-note" role="alert">
-              {signerError || "The signer service is unavailable. Check the server service before retrying."}
-            </p>
             <button
               className="text-action"
               type="button"
@@ -1559,7 +1533,7 @@ export function AdminWorkspace({
           </div>
         )}
         {signerError && signerStatus !== "unavailable" && (
-          <p className="signer-control-note" role="alert">{signerError}</p>
+          <p className="signer-control-note" role="status">{signerError}</p>
         )}
       </section>
       {withdrawalReview && (
@@ -1578,7 +1552,7 @@ export function AdminWorkspace({
             <span>DESTINATION</span><code>{withdrawalReview.row.address || "Destination unavailable — approval is blocked."}</code>
             <span>REFERENCE</span><code>{withdrawalReview.row.id}</code>
           </div>
-          {!withdrawalReviewCurrent && <p role="alert">This request changed. Go back and refresh the queue before reviewing it again.</p>}
+          {!withdrawalReviewCurrent && <p role="status">Checking the latest withdrawal queue before confirming this request.</p>}
           {withdrawalError && <p role="alert">{withdrawalError}</p>}
           <button className={withdrawalReview.action === "approve" ? "primary-action" : "danger-action"}
             disabled={withdrawalPending || !withdrawalReviewCurrent || (withdrawalReview.action === "approve" && !withdrawalReview.row.address?.trim())}
@@ -2362,11 +2336,7 @@ export function AdminWorkspace({
                 setVaults(Array.isArray(response.vaults) ? response.vaults : []);
                 onNotice("Approved vault destination saved.");
               } catch (error) {
-                onNotice(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not save vault destination.",
-                );
+                logDeskFailure("admin.vault-save", error);
               } finally {
                 setVaultSavePending(false);
               }
@@ -2423,7 +2393,24 @@ export function AdminWorkspace({
             <div><strong>Recent Auto rejections</strong><small>Mainnet Auto scheduler · admin-only · last 24 hours</small></div>
             <span className="mono">{syntheticAutoRejections.length}</span>
           </div>
-          {syntheticAutoRejectionsError ? <p role="status">{syntheticAutoRejectionsError}</p> : syntheticAutoRejections.length ? syntheticAutoRejections.map((event) => (
+          {!syntheticAutoRejectionsLoaded ? (
+            <div role="status">
+              <button className="small-action" type="button" disabled={syntheticAutoRejectionsPending} aria-busy={syntheticAutoRejectionsPending} onClick={async () => {
+                setSyntheticAutoRejectionsPending(true);
+                try {
+                  const response = await request("/v1/admin/synthetic-auto-rejections", {}, environment);
+                  setSyntheticAutoRejections(Array.isArray(response.auto_rejections) ? response.auto_rejections : []);
+                  setSyntheticAutoRejectionsLoaded(true);
+                } catch (error) {
+                  logDeskFailure("admin.synthetic-rejections", error);
+                } finally {
+                  setSyntheticAutoRejectionsPending(false);
+                }
+              }}>
+                {syntheticAutoRejectionsPending ? "Loading…" : "Reload Auto rejections"}
+              </button>
+            </div>
+          ) : syntheticAutoRejections.length ? syntheticAutoRejections.map((event) => (
             <div className="admin-row" key={`${event.timestamp}:${event.user_id}:${event.signal_id}`}>
               <div>
                 <strong>User {event.user_id} · {event.signal_id || "signal unavailable"}</strong>

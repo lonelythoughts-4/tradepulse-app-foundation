@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AccessibleDialog } from "./accessible-dialog";
 import { DeskLocalized } from "./desk-language";
+import { logDeskFailure } from "../lib/desk-api";
 
 export type WebNotice = { id: string; title: string; body: string };
 
@@ -10,14 +11,12 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: () =>
   const [open, setOpen] = useState(false);
   const [notices, setNotices] = useState<WebNotice[]>([]);
   const [read, setRead] = useState<string[]>([]);
-  const [refreshError, setRefreshError] = useState(false);
   const loadRef = useRef(load);
   const initialRef = useRef(initial);
   loadRef.current = load;
   initialRef.current = initial;
   useEffect(() => {
     setOpen(false);
-    setRefreshError(false);
     setNotices(initialRef.current);
     let saved: string[] = [];
     try {
@@ -35,9 +34,8 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: () =>
         const next = await loadRef.current();
         if (cancelled) return;
         setNotices(next);
-        setRefreshError(false);
-      } catch {
-        if (!cancelled) setRefreshError(true);
+      } catch (error) {
+        if (!cancelled) logDeskFailure("notifications.refresh", error);
       } finally { inFlight = false; }
     };
     void refresh();
@@ -65,7 +63,7 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: () =>
     }
     setOpen(true);
   };
-  return { open, setOpen, openNotices, notices, refreshError,
+  return { open, setOpen, openNotices, notices,
     unread: notices.filter((item) => !read.includes(item.id)).length };
 }
 
@@ -75,7 +73,6 @@ export function NoticeCenter({ center, onPreferences }: {
   if (!center.open) return null;
   return <DeskLocalized><AccessibleDialog label="Notifications" onClose={() => center.setOpen(false)}>
     <h2>Notifications</h2>
-    {center.refreshError && <p role="status">Notifications could not be refreshed. Showing the latest saved notices and trying again automatically.</p>}
     {center.notices.length ? center.notices.map((item) => <div className="activity-row" key={item.id}>
       <div className="activity-info"><strong>{item.title}</strong><p>{item.body}</p></div>
     </div>) : <p>No current notices.</p>}

@@ -6864,7 +6864,7 @@ function LiveTradePulse() {
         signal: controller.signal,
         headers: requestHeaders,
       });
-      const body = await response.json().catch(() => ({}));
+      const body = await response.json();
       if (!response.ok) {
         const responseMessage = typeof body.error === "string" ? body.error : "";
         const reference = typeof body.request_id === "string"
@@ -7879,7 +7879,7 @@ function LiveTradePulse() {
           {tab === "Protection" && <ProtectionWorkspace data={data} />}
           {tab === "Admin" && admin && (
             <>
-              {admin.stale && <p role="status">Last verified operations data is shown while the refresh is unavailable.</p>}
+              {admin.stale && <p role="status">Showing the last verified operations data while the next refresh is checked.</p>}
               <AdminWorkspace
                 admin={admin}
                 environment={webEnvironment}
@@ -7897,10 +7897,9 @@ function LiveTradePulse() {
             <div className="empty-state">
               {adminLoadError ? (
                 <>
-                  <strong>Could not load the operations desk</strong>
-                  <p>{adminLoadError}</p>
+                  <strong>Checking operations data…</strong>
                   <button className="small-action" disabled={adminRetryPending} aria-busy={adminRetryPending} onClick={() => void retryAdminOverview()}>
-                    {adminRetryPending ? "Retrying overview…" : "Retry overview"}
+                    {adminRetryPending ? "Checking…" : "Check operations data"}
                   </button>
                 </>
               ) : (

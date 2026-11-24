@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { WorkspaceDashboard } from "./workspace-dashboard";
 import { DeskLocalized } from "../desk-language";
 import { Bell, GradientPanel, PulseMark, StateIcon, X } from "./shared-ui";
+import { logDeskFailure } from "../../lib/desk-api";
 
 export function DeskWorkspace({
   data,
@@ -106,7 +107,7 @@ export function DeskWorkspace({
     if (marketLabelRefreshKey.current === key) return;
     marketLabelRefreshKey.current = key;
     const timer = window.setTimeout(() => {
-      void reload().catch(() => onNotice(""));
+      void reload().catch((error) => logDeskFailure("desk.market-labels-refresh", error));
     }, 1_200);
     return () => window.clearTimeout(timer);
   }, [data.environment, data.memecoin?.market_labels, data.user.id, reload, selection]);
@@ -145,15 +146,11 @@ export function DeskWorkspace({
       setThreshold("");
       setAlertError("");
       onNotice("Price alert created.");
-      void reload().catch((error) => onNotice(error instanceof Error ? error.message : "The alert was created, but the list could not be refreshed."));
+      void reload().catch((error) => logDeskFailure("desk.alerts-refresh", error));
     } catch (error) {
-      setAlertError(
-        error instanceof Error ? error.message : "Could not create the alert.",
-      );
-      onNotice(
-        error instanceof Error ? error.message : "Could not create the alert.",
-      );
-      void reload().catch((refreshError) => onNotice(refreshError instanceof Error ? refreshError.message : "Could not refresh alerts."));
+      logDeskFailure("desk.alert-create", error);
+      setAlertError("");
+      void reload().catch((refreshError) => logDeskFailure("desk.alerts-refresh", refreshError));
     } finally {
       endAlertAction("create");
     }
@@ -183,8 +180,9 @@ export function DeskWorkspace({
       setAnalystQuestion("");
     } catch (error) {
       if (requestId !== analystRequestId.current) return;
-      setAnalystProviderAvailable(false);
-      setAnalystError(error instanceof Error ? error.message : "The AI provider could not answer. Please try again or contact support.");
+      logDeskFailure("desk.analyst-briefing", error);
+      setAnalystProviderAvailable(null);
+      setAnalystError("");
     } finally {
       if (requestId === analystRequestId.current) setAnalystLoading(false);
     }
@@ -206,7 +204,8 @@ export function DeskWorkspace({
       setAnalystQuestion("");
     } catch (error) {
       if (requestId === analystRequestId.current) {
-        setAnalystError(error instanceof Error ? error.message : "The support request could not be sent. Try again.");
+        logDeskFailure("desk.analyst-escalate", error);
+        setAnalystError("");
       }
     } finally {
       setSupportLoading(false);
@@ -418,14 +417,10 @@ export function DeskWorkspace({
                     });
                     setAlerts((current) => current.filter((item) => item.id !== alert.id));
                     onNotice("Alert removed.");
-                    void reload().catch((error) => onNotice(error instanceof Error ? error.message : "The alert was removed, but the list could not be refreshed."));
+                    void reload().catch((error) => logDeskFailure("desk.alerts-refresh", error));
                   } catch (error) {
-                    onNotice(
-                      error instanceof Error
-                        ? error.message
-                        : "Could not remove alert.",
-                    );
-                    void reload().catch((refreshError) => onNotice(refreshError instanceof Error ? refreshError.message : "Could not refresh alerts."));
+                    logDeskFailure("desk.alert-remove", error);
+                    void reload().catch((refreshError) => logDeskFailure("desk.alerts-refresh", refreshError));
                   } finally {
                     endAlertAction(actionKey);
                   }

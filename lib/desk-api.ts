@@ -22,6 +22,15 @@ export class DeskApiError extends Error {
   }
 }
 
+export function logDeskFailure(operation: string, error: unknown): void {
+  console.error("TradeMemo operation failed", {
+    operation,
+    status: error instanceof DeskApiError ? error.status : undefined,
+    reference: error instanceof DeskApiError ? error.reference : undefined,
+    errorType: error instanceof Error ? error.name : "UnknownError",
+  });
+}
+
 export interface DeskApiMutation {
   body?: BodyInit | null;
   headers?: HeadersInit;
@@ -75,9 +84,20 @@ export class DeskApi {
       throw new Error("");
     }
     const contentType = response.headers.get("content-type") ?? "";
-    const payload = contentType.includes("application/json")
-      ? await response.json().catch(() => ({}))
-      : await response.text();
+    let payload: unknown;
+    try {
+      payload = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+    } catch (error) {
+      if (init.signal?.aborted) throw new DOMException("", "AbortError");
+      console.error("TradeMemo API response could not be read", {
+        resource,
+        status: response.status,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      throw new Error("");
+    }
 
     if (!response.ok) {
       const responseMessage = typeof payload === "object" && payload && "error" in payload
@@ -91,7 +111,7 @@ export class DeskApi {
         status: response.status,
         requestId: reference,
       });
-      throw new DeskApiError("", response.status, reference, responseMessage);
+      throw new DeskApiError("", response.status, reference, responseMessage, payload);
     }
 
     return payload as T;

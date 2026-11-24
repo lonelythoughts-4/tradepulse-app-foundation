@@ -7,6 +7,7 @@ import { DeskLocalized } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
+import { logDeskFailure } from "../../lib/desk-api";
 import {
   getFlashbackStartAvailability,
   parseFlashbackEntryAmount,
@@ -324,7 +325,7 @@ export function BotsWorkspace({
     3_000,
     shouldPollFlashbackStatus(view === "flashback", flashbackSessions),
     `flashback:${flashbackSessionIds}`,
-    () => onNotice(""),
+    (error) => logDeskFailure("bots.flashback-refresh", error),
   );
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
@@ -390,8 +391,9 @@ export function BotsWorkspace({
   }, [selected?.id, selected?.product, data.memecoin?.authorization?.settings_json]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
-    void refreshMemecoinCatalog().catch(() => {
+    void refreshMemecoinCatalog().catch((error) => {
       // A label refresh cannot interrupt the existing market or order view.
+      logDeskFailure("bots.memecoin-catalog", error);
     });
   }, [selected?.id, selected?.product, refreshMemecoinCatalog]);
   const openBasketPicker = async () => {
@@ -402,7 +404,8 @@ export function BotsWorkspace({
     try {
       await refreshMemecoinCatalog();
     } catch (error) {
-      setBasketPickerError(error instanceof Error ? error.message : "Markets could not be loaded. Try again.");
+      logDeskFailure("bots.memecoin-catalog", error);
+      setBasketPickerError("unavailable");
     } finally {
       setBasketPickerLoading(false);
     }
@@ -459,7 +462,7 @@ export function BotsWorkspace({
     5_000,
     Boolean(selected && selected.product === "memecoin"),
     `memecoin:${selected?.id || ""}:${memecoinMarket}`,
-    () => onNotice(""),
+    (error) => logDeskFailure("bots.memecoin-snapshot", error),
   );
   useEffect(() => {
     if (!selected || selected.product !== "memecoin" || !memecoinAssets.length) return;
@@ -472,7 +475,11 @@ export function BotsWorkspace({
           .filter((item: { symbol?: string }) => Boolean(item.symbol))
           .map((item: { symbol: string; available?: boolean; completed_positions?: number; participant_count?: number; positive_position_rate?: number }) => [item.symbol, item])));
       })
-      .catch(() => { if (!cancelled) setMemecoinInsights({}); });
+      .catch((error) => {
+        if (cancelled) return;
+        logDeskFailure("bots.memecoin-insights", error);
+        setMemecoinInsights({});
+      });
     return () => { cancelled = true; };
   }, [selected?.id, selected?.product, memecoinAssets, request]);
   const actionKeyFor = (path: string, payload: Record<string, unknown>) => {
@@ -516,16 +523,13 @@ export function BotsWorkspace({
       // quiet follow-up read: it is the durable source of truth if a proxy or
       // an earlier desk snapshot arrives out of order.
       if (durableAction || !hasAuthoritativeResult) {
-        void reload().catch(() => onNotice(""));
+        void reload().catch((error) => logDeskFailure("bots.dashboard-reconcile", error));
       }
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setReviewError(message);
-      onNotice(message);
-      if (path === "/v1/bots") {
-        void reload().catch(() => onNotice(""));
-      }
+      logDeskFailure("bots.action", error);
+      setReviewError("");
+      void reload().catch((reloadError) => logDeskFailure("bots.dashboard-reconcile", reloadError));
       return false;
     } finally {
       setPendingActions((current) => {
@@ -1252,7 +1256,7 @@ export function BotsWorkspace({
                 </div>
               </>}
               {basketPickerLoading && <div className="activity-row" role="status"><div className="activity-info"><strong>Loading eligible markets</strong><small>Checking the current executable catalogue.</small></div></div>}
-              {basketPickerError && <p className="security-feedback" role="alert">{basketPickerError}</p>}
+              {basketPickerError && <div role="status"><button type="button" className="small-action" onClick={() => void openBasketPicker()}>Reload markets</button></div>}
               {!basketPickerLoading && !basketPickerError && <>
                 <span className="eyebrow">AVAILABLE NOW</span>
                 {filteredBasketAssets.length ? <div className="support-ticket-list">

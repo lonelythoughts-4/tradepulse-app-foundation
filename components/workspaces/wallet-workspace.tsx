@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AccessibleDialog } from "../accessible-dialog";
 import { applyResourceIfUnchanged, useDeskSelector, type DeskStore } from "../../lib/desk-store";
-import { DeskApiError } from "../../lib/desk-api";
+import { DeskApiError, logDeskFailure } from "../../lib/desk-api";
 import type { DeskState } from "../../lib/desk-types";
 import { getIdempotencyKeyForPayload } from "../../lib/idempotency-key";
 import { translateDeskPhrase } from "../../lib/desk-i18n";
@@ -251,6 +251,16 @@ function WalletWorkspaceBody({
     ["POLYGON", "Polygon"],
     ["SPL", "Solana"],
   ];
+  const reconcileDashboard = useCallback(async (operation: string) => {
+    try {
+      const latest = await request("/v1/dashboard", {}, environment);
+      if (latest?.wallet && Array.isArray(latest.deposits)) {
+        onWalletUpdate({ wallet: latest.wallet, deposits: latest.deposits });
+      }
+    } catch (error) {
+      logDeskFailure(operation, error);
+    }
+  }, [environment, onWalletUpdate, request]);
   const loadDepositRoutes = useCallback(async () => {
     setDepositRoutesLoading(true);
     setDepositRoutesError("");
@@ -274,9 +284,8 @@ function WalletWorkspaceBody({
       setDepositRoutes(result.routes);
     } catch (error) {
       setDepositRoutes([]);
-      setDepositRoutesError(
-        error instanceof Error ? error.message : t("Deposit network options could not be loaded. Try again."),
-      );
+      logDeskFailure("wallet.deposit-routes", error);
+      setDepositRoutesError("unavailable");
     } finally {
       setDepositRoutesLoading(false);
     }
@@ -339,12 +348,7 @@ function WalletWorkspaceBody({
       (route) => route.asset === asset && route.chain === chain,
     );
     if (!selectedRoute?.available) {
-      onNotice(
-        selectedRoute
-          ? t("{network} is under maintenance. Choose another network or retry the options later.", { network: selectedRoute.network })
-          : t("That {environment} deposit route is no longer available. Reload the network options and choose another route.", { environment }),
-      );
-      await loadDepositRoutes();
+      void loadDepositRoutes();
       setStep(1);
       return;
     }
@@ -413,17 +417,14 @@ function WalletWorkspaceBody({
                   "watch_enabled" in route && Boolean(route.watch_enabled),
               });
             } else {
-              onNotice(error.message);
+              void reconcileDashboard("wallet.deposit-route-reconcile");
             }
             return;
           }
         }
       }
-      onNotice(
-        error instanceof Error
-          ? error.message
-          : t("A deposit address could not be created. Choose another network or try again."),
-      );
+      logDeskFailure("wallet.deposit-route-create", error);
+      void reconcileDashboard("wallet.deposit-route-reconcile");
     } finally {
       routeCreateInFlight.current = false;
       setRouteCreatePending(false);
@@ -489,13 +490,9 @@ function WalletWorkspaceBody({
       withdrawalIdempotencyKeys.current.delete(fingerprint);
       setReviewWithdrawal(false);
     } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : t("The withdrawal request could not be created. Check the details and try again.");
-      const dailyLimit = /^Daily limit reached: (.+)\.$/.exec(rawMessage);
-      const message = dailyLimit
-        ? t("Daily limit reached: {limit}. Start a new withdrawal with a lower amount.", { limit: dailyLimit[1] })
-        : rawMessage;
-      setWithdrawalError(message);
-      onNotice(message);
+      logDeskFailure("wallet.withdrawal-create", error);
+      setWithdrawalError("");
+      void reconcileDashboard("wallet.withdrawal-reconcile");
     } finally {
       withdrawalSubmitting.current = false;
       setWalletPending(false);
@@ -528,10 +525,9 @@ function WalletWorkspaceBody({
             <div className="choice-grid">
               {depositRoutesLoading && <p role="status">{t("Loading {environment} deposit assets…", { environment })}</p>}
               {depositRoutesError && (
-                <div role="alert">
-                  <p>{depositRoutesError}</p>
+                <div role="status">
                   <button type="button" className="small-action" onClick={() => void loadDepositRoutes()}>
-                    {t("Retry network options")}
+                    {t("Reload network options")}
                   </button>
                 </div>
               )}
@@ -756,13 +752,8 @@ function WalletWorkspaceBody({
                       );
                     }
                   } catch (error) {
-                    onNotice(
-                      error instanceof DOMException && error.name === "AbortError"
-                        ? t("Monitoring could not be confirmed. Your address is unchanged. Retry monitoring from My Deposits; do not send another transfer.")
-                        : error instanceof Error
-                          ? error.message
-                          : t("Deposit tracking could not start. Try again."),
-                    );
+                    logDeskFailure("wallet.deposit-monitor", error);
+                    void reconcileDashboard("wallet.deposit-monitor-reconcile");
                   } finally {
                     depositCheckInFlight.current = false;
                     setDepositCheckPending(false);
