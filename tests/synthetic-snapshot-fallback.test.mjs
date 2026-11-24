@@ -24,19 +24,20 @@ test("a delayed account snapshot keeps its last verified value and logs refresh 
   assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);[\s\S]*?return undefined;/);
   assert.match(source, /useResourcePoller<\{ snapshot: Snapshot; requestRevision: number \}>/);
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
-  assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotCheckedKey\(resourceKey\);\s+setExecutionCapacityRefreshing\(false\);/);
+  assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotCheckedKey\(resourceKey\);/);
   assert.match(source, /snapshotPending \? "Checking" : snapshot\.partial \? "Unavailable"/);
   assert.match(source, /finally \{ if \(changesExecutionMode\) \{ setExecutionTransition\(null\);/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
   assert.doesNotMatch(source, /loadError|Market data is temporarily unavailable/);
 });
 
-test("Synthetic separates Auto available margin from locked margin and does not repeat accepted risk acknowledgement", () => {
+test("Synthetic uses the full allocation and keeps risk acknowledgement in bot creation", () => {
   assert.match(source, /Auto available/);
   assert.match(source, /Auto locked margin/);
   assert.match(source, /execution\?\.(auto_locked_usd)/);
-  assert.match(source, /!snapshot\.partial && snapshot\.live_disclosure_accepted === false/);
-  assert.match(source, /response\.accepted/);
+  assert.match(source, /Auto evaluates shared signals using 100% of your funded Synthetic allocation/);
+  assert.doesNotMatch(source, /LIVE-RISK ACKNOWLEDGEMENT|live_disclosure_accepted === false|Set aside for Auto|Auto amount per order/);
+  assert.doesNotMatch(source, /\/v1\/synthetic\/disclosure/);
   assert.doesNotMatch(source, /latestAuto|autoActivityTitle|autoActivityDetail/);
 });
 
@@ -79,7 +80,7 @@ test("one-second quote updates stay separate from account controls", () => {
   assert.doesNotMatch(source, /snapshot\.partial \? <div className="activity-row" role="status"/);
   assert.doesNotMatch(source, /if \(snapshot\?\.partial\) \{ onNotice\(/);
   assert.doesNotMatch(source, /value > capacity/);
-  assert.match(source, /Set aside at least/);
+  assert.doesNotMatch(source, /Set aside at least|Set aside for Auto|Auto amount per order/);
   assert.doesNotMatch(source, /manualOrderPending|disabled=\{manualOrderPending/);
 });
 

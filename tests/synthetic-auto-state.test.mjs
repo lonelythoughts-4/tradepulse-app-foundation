@@ -12,12 +12,10 @@ test("Auto changes show a distinct pending state until the server confirms the m
   assert.match(source, /setExecutionTransition\(payload\.execution_mode === "AUTO" \? "AUTO" : "MANUAL"\)/);
   assert.match(source, /executionTransition === "AUTO" \? "Enabling Auto…" : executionTransition === "MANUAL" \? "Turning Auto off…"/);
   assert.match(source, /execution_mode: response\.execution_mode, execution: \{ \.\.\.current\.execution, \.\.\.response \}/);
-  assert.match(source, /executionCapacityRefreshing \? "Updating…" : money/);
-  assert.match(source, /Capacity is refreshing\. New orders are checked against current funding before submission\./);
-  assert.doesNotMatch(source, /kind !== "auto" && value > capacity && !executionCapacityRefreshing/);
-  assert.match(source, /!Number\.isFinite\(reserved\) \|\| reserved < value/);
-  assert.doesNotMatch(source, /if \(executionCapacityRefreshing && \(path === "\/v1\/synthetic\/orders"/);
-  assert.match(source, /Saving the Auto setting\. The state changes to on only after the server confirms the allocation\./);
+  assert.match(source, /execution_mode: confirmedAuto \? "MANUAL" : "AUTO"/);
+  assert.match(source, /"Enable Auto"/);
+  assert.match(source, /"Turn Auto off"/);
+  assert.doesNotMatch(source, /Review Auto changes|auto_margin_usd:|auto_allocation_usd:/);
 });
 
 test("Auto settings and status have a dedicated responsive group", () => {
@@ -28,8 +26,9 @@ test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /snapshot\.execution\?\.daily_outcome === "loss"[\s\S]*?loss limit/);
   assert.match(source, /Daily Auto progress: \{money\(dailyNetUsd\)\} net.*of \{dailyTargetLabel\}\./);
   assert.doesNotMatch(source, /0\.2–0\.3%|daily-loss reference|profit ceiling/);
-  assert.match(styles, /\.synthetic-auto-fields\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-fields,\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.match(source, /Auto evaluates shared signals using 100% of your funded Synthetic allocation/);
+  assert.match(source, /aria-label="Automatic allocation and available margin"/);
+  assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
 
 test("Synthetic contract and action controls keep readable theme-aware states", () => {

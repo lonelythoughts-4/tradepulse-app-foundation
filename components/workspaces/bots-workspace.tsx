@@ -135,6 +135,7 @@ export function BotsWorkspace({
   const [product, setProduct] = useState<"memecoin" | "synthetic">("memecoin");
   const [amount, setAmount] = useState("20");
   const [review, setReview] = useState(false);
+  const [syntheticRiskAcknowledged, setSyntheticRiskAcknowledged] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(initialBotId);
   // Pending state is scoped to the action and its resource. A slow request on
   // one bot must never make another bot, position, or Flashback control look
@@ -874,7 +875,7 @@ export function BotsWorkspace({
           disabled={
             Number(amount) < 20 || Number(amount) > data.wallet.available
           }
-          onClick={() => { setReviewError(""); setReview(true); }}
+          onClick={() => { setReviewError(""); setSyntheticRiskAcknowledged(false); setReview(true); }}
         >
           Review allocation <ChevronRight />
         </button>
@@ -899,15 +900,27 @@ export function BotsWorkspace({
                   COMPOUNDING <b>{initialCompoundPercent}%</b>
                 </span>
                 {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
+                {product === "synthetic" && <span>AUTO EXECUTION <b>{data.environment === "mainnet" ? "ON AFTER CREATION" : "NOT AVAILABLE IN TESTNET"}</b></span>}
               </div>
               {product === "memecoin" && <p>Results use live market data and settle within this Memecoin allocation.</p>}
+              {product === "synthetic" && data.environment === "mainnet" && <label className="toggle-row">
+                <span>I understand Synthetic Auto will use 100% of this funded allocation as 1:1 trade margin. Price movement, spread, and tier fees can reduce my allocation; Auto may place orders without asking each time, and returns are not guaranteed.</span>
+                <input type="checkbox" checked={syntheticRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setSyntheticRiskAcknowledged(event.target.checked)} />
+                <i aria-hidden="true" />
+              </label>}
+              {product === "synthetic" && data.environment === "mainnet" && <p>Auto starts with this full allocation. Future Synthetic top-ups are also available to Auto.</p>}
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
-                disabled={isActionPending("bot:create")}
+                disabled={isActionPending("bot:create") || (product === "synthetic" && data.environment === "mainnet" && !syntheticRiskAcknowledged)}
                 aria-busy={isActionPending("bot:create")}
                 onClick={async () => {
-                  const created = await run("/v1/bots", { product, amount: Number(amount), compound_percent: initialCompoundPercent });
+                  const created = await run("/v1/bots", {
+                    product,
+                    amount: Number(amount),
+                    compound_percent: initialCompoundPercent,
+                    ...(product === "synthetic" && data.environment === "mainnet" ? { live_risk_acknowledged: syntheticRiskAcknowledged } : {}),
+                  });
                   if (created) {
                     setReview(false);
                     setView("fleet");

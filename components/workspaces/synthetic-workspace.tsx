@@ -3,7 +3,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { AccessibleDialog } from "../accessible-dialog";
 import { DeskLocalized } from "../desk-language";
-import { ActionFeedback } from "../ui/action-feedback";
 import { useDeskSelector, type DeskStore } from "../../lib/desk-store";
 import type { ActionKey, DeskState } from "../../lib/desk-types";
 import type { LiveDashboard } from "../tradepulse-shell";
@@ -22,8 +21,6 @@ type SyntheticSnapshots = Record<string, Snapshot | undefined>;
 type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
-type Review = { kind: "auto"; path: string; payload: Record<string, unknown>; amount: number; market: string; direction: string; fee: number | null };
-
 export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
@@ -141,17 +138,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const fallbackSnapshot = useMemo<Snapshot>(() => ({ market, partial: true, latest: { market }, ticks: [], positions: [], settings: {} }), [market]);
   const snapshot = storedSnapshot?.market === market ? storedSnapshot : fallbackSnapshot;
   const [snapshotCheckedKey, setSnapshotCheckedKey] = useState<string | null>(null);
-  const [autoAmount, setAutoAmount] = useState("");
-  const [autoAllocation, setAutoAllocation] = useState("");
   const [signals, setSignals] = useState<Signal[]>([]);
   const [quoteError, setQuoteError] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [review, setReview] = useState<Review | null>(null);
-  const [reviewError, setReviewError] = useState("");
-  const reviewSubmitting = useRef<string | null>(null);
-  const [autoAcknowledged, setAutoAcknowledged] = useState(false);
   const [executionTransition, setExecutionTransition] = useState<"MANUAL" | "AUTO" | null>(null);
-  const [executionCapacityRefreshing, setExecutionCapacityRefreshing] = useState(false);
   const executionSubmitting = useRef(false);
   const executionRevision = useRef(0);
   const executionReconcilePending = useRef(false);
@@ -169,8 +159,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     else delete updatedSnapshots[resourceKey];
     store.applyResource("syntheticSnapshots", updatedSnapshots);
   }, [fallbackSnapshot, resourceKey, store]);
-  useEffect(() => { setReview(null); setReviewError(""); setQuoteError(false); }, [environment, market]);
-  useEffect(() => { if (snapshot && !snapshot.partial) { setAutoAmount((current) => current || String(Number(snapshot.execution?.auto_margin_usd || 20))); setAutoAllocation((current) => current || String(Number(snapshot.execution?.auto_allocation_usd || 0))); } }, [snapshot]);
+  useEffect(() => { setQuoteError(false); }, [environment, market]);
   useResourcePoller<{ snapshot: Snapshot; requestRevision: number }>(async (_token, signal) => {
     try {
       const requestRevision = executionRevision.current;
@@ -182,7 +171,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       logDeskFailure("synthetic.snapshot", error);
       if (marketRef.current === market) {
         setSnapshotCheckedKey(resourceKey);
-        setExecutionCapacityRefreshing(false);
       }
       return undefined;
     }
@@ -200,7 +188,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       executionReconcilePending.current = false;
       setExecutionTransition(null);
     }
-    if (environment === "mainnet" && !next.partial && executionCapacityRefreshing) setExecutionCapacityRefreshing(false);
     update({ ...next, ...(mode && executionSubmitting.current ? { execution_mode: mode } : {}) });
   }, 5000, true, `synthetic:${environment}:${market}`, (error) => logDeskFailure("synthetic.snapshot", error), "Synthetic");
   useResourcePoller<Signal[]>(async (_token, signal) => {
@@ -250,8 +237,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     if (path.includes("execution-mode")) return ("execution:" + String(payload.execution_mode || "execution-mode").toLowerCase()) as ActionKey;
     return (path.includes("disclosure") ? "disclosure:accept" : path + ":action") as ActionKey;
   };
-  const reviewActionKey = review ? actionKey(review.path, review.payload) : null;
-  const activeReviewActionPending = Boolean(reviewActionKey && pendingFor(reviewActionKey));
   const act = async (path: string, payload: Record<string, unknown>) => {
     const key = actionKey(path, payload); if (pendingFor(key)) return false;
     const changesExecutionMode = path === "/v1/synthetic/settings/execution-mode";
@@ -270,12 +255,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       if (path === "/v1/synthetic/disclosure" && response.accepted) update((current) => current ? { ...current, live_disclosure_accepted: true } : current);
       if (path === "/v1/synthetic/settings/execution-mode" && response.execution_mode) {
         update((current) => current ? { ...current, execution_mode: response.execution_mode, execution: { ...current.execution, ...response } } : current);
-        if (response.execution_mode === "MANUAL" && response.capacity_refresh_required) {
-          setAutoAllocation(String(Number(response.auto_allocation_usd || 0)));
-          setExecutionCapacityRefreshing(true);
-        } else {
-          setExecutionCapacityRefreshing(false);
-        }
         setExecutionTransition(null);
       }
       const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
@@ -313,25 +292,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     }
     finally { if (changesExecutionMode) { setExecutionTransition(null); executionSubmitting.current = false; executionRevision.current += 1; } }
   };
-  const openReview = () => {
-    if (environment !== "mainnet") return;
-    const value = Number(autoAmount), reserved = Number(autoAllocation);
-    if (!Number.isFinite(value) || value < 20) return onNotice("Set an order size of at least $20.00.");
-    if (!Number.isFinite(reserved) || reserved < value) return onNotice("Auto capacity must cover at least one Auto order.");
-    const path = "/v1/synthetic/settings/execution-mode";
-    const payload = { execution_mode: "AUTO", auto_margin_usd: value, auto_allocation_usd: reserved };
-    const fee = snapshot.partial ? null : value * Number(snapshot.settings?.["fee_bps_" + account.user.tier.toLowerCase()] || 20) / 10000;
-    setAutoAcknowledged(false); setReviewError(""); setReview({ kind: "auto", path, payload, amount: value, market, direction: "auto", fee });
-  };
-  const confirm = async () => {
-    if (!review) return;
-    const submission = review;
-    const key = actionKey(submission.path, submission.payload);
-    if (reviewSubmitting.current === key || pendingFor(key)) return;
-    if (!autoAcknowledged) { setReviewError("Review and acknowledge the Auto allocation before continuing."); return; }
-    reviewSubmitting.current = key; setReviewError("");
-    try { const submitted = await act(submission.path, submission.payload); if (submitted) setReview(null); } catch { setReviewError(""); } finally { if (reviewSubmitting.current === key) reviewSubmitting.current = null; }
-  };
   const manualKey = "execution:manual";
   const autoKey = "execution:auto";
   const confirmedAuto = snapshot.execution_mode === "AUTO";
@@ -359,27 +319,19 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     {environment === "testnet" && account.user.is_admin && <p className="synthetic-environment-note">Admin test environment · Virtual funds only.</p>}
     <div id="synthetic-market-snapshot" aria-label={market + " market snapshot"}>
       <MemoizedSyntheticMarketData account={account} environment={environment} executionLabel={executionLabel} market={market} marketChart={MarketChart} snapshot={snapshot} store={store} />
-      {!snapshot.partial && snapshot.live_disclosure_accepted === false && environment === "mainnet" && <section className="announcements synthetic-risk-notice" aria-labelledby="synthetic-risk-title"><div className="synthetic-risk-copy"><span className="eyebrow">LIVE-RISK ACKNOWLEDGEMENT</span><strong id="synthetic-risk-title">Required before wallet-funded Synthetic trading or Auto.</strong><p>Orders reserve wallet funds at 1:1 margin. Price movement can lose the full reserved amount; spread and tier fees apply. Auto may place wallet-funded orders up to the amount you approve.</p></div><button className="primary-action" disabled={pendingFor("disclosure:accept")} onClick={() => void act("/v1/synthetic/disclosure", {}).catch(() => undefined)}>{pendingFor("disclosure:accept") ? "Saving…" : "Review & accept"}</button></section>}
       {environment === "mainnet" ? <>
         <section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title" aria-busy={Boolean(executionTransition)}>
           <div className="synthetic-auto-heading">
-            <div className="synthetic-auto-title"><h3 id="synthetic-auto-title">Automatic execution</h3><p>Auto evaluates shared signals for your account using its assigned allocation. Set the per-order margin and total allocation; enabling requires review.</p></div>
+            <div className="synthetic-auto-title"><h3 id="synthetic-auto-title">Automatic execution</h3><p>Auto evaluates shared signals using 100% of your funded Synthetic allocation. One scheduled position opens at a time; top-ups are included automatically.</p></div>
             <div className="synthetic-auto-state" role="status" aria-live="polite" aria-atomic="true" aria-busy={Boolean(executionTransition)}><span className={"status-chip " + (executionTransition ? "paused" : confirmedAuto ? "running" : "paused")}><i />{executionStatus}</span></div>
           </div>
-          <div className="synthetic-auto-fields">
-            <label className="amount-field">Auto amount per order<input value={autoAmount} onChange={(event) => setAutoAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic order size" /></label>
-            <label className="amount-field">Set aside for Auto<input value={autoAllocation} onChange={(event) => setAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" /></label>
-          </div>
-          <div className="synthetic-auto-capacity" aria-label="Automatic and unassigned available capacity"><span>Auto available <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_available_usd || 0))}</b></span><span>Auto locked margin <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_locked_usd || 0))}</b></span><span>Unassigned Synthetic capacity <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.manual_available_usd ?? snapshot.allocation?.available_usd ?? 0))}</b></span></div>
-          {executionCapacityRefreshing && <p className="synthetic-auto-hint" role="status">Capacity is refreshing. New orders are checked against current funding before submission.</p>}
-          {Number(autoAllocation) < Number(autoAmount) && <p className="synthetic-auto-hint" role="status">Set aside at least {money(Math.max(20, Number(autoAmount) || 20))} for one Auto order. The remaining Synthetic capacity will not be used by Auto.</p>}
+          <div className="synthetic-auto-capacity" aria-label="Automatic allocation and available margin"><span>Auto allocation <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : money(Number(snapshot.execution?.auto_allocation_usd || 0))}</b></span><span>Auto available <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : money(Number(snapshot.execution?.auto_available_usd || 0))}</b></span><span>Auto locked margin <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : money(Number(snapshot.execution?.auto_locked_usd || 0))}</b></span></div>
           {confirmedAuto && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">
             Daily Auto progress: {money(dailyNetUsd)} net ({money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} settled + {money(Number(snapshot.execution?.daily_open_net_pnl_usd || 0))} live) of {dailyTargetLabel}.
           </p>}
           {confirmedAuto && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">{dailyExecutionPause}</p>}
           <div className="synthetic-auto-actions">
-            <button className="primary-action" disabled={pendingFor(autoKey) || Boolean(executionTransition) || Number(autoAmount) < 20 || Number(autoAllocation) < Number(autoAmount)} onClick={() => openReview()}>{executionTransition === "AUTO" ? "Enabling Auto…" : confirmedAuto ? "Review Auto changes" : "Review & enable Auto"}</button>
-            {(confirmedAuto || snapshot.partial) && <button className="small-action" disabled={pendingFor(manualKey) || Boolean(executionTransition)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: "MANUAL" }).catch(() => undefined)}>{executionTransition === "MANUAL" ? "Turning Auto off…" : pendingFor(manualKey) ? "Saving…" : "Turn Auto off"}</button>}
+            <button className={confirmedAuto ? "small-action" : "primary-action"} disabled={pendingFor(confirmedAuto ? manualKey : autoKey) || Boolean(executionTransition) || (!confirmedAuto && Number(account.bots.find((bot) => bot.product === "synthetic")?.capital_usd || 0) < 20)} onClick={() => void act("/v1/synthetic/settings/execution-mode", { execution_mode: confirmedAuto ? "MANUAL" : "AUTO" }).catch(() => onNotice(confirmedAuto ? "Auto could not be turned off. Refresh and retry." : "Auto could not be enabled. Check the allocation and try again."))}>{executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : confirmedAuto ? pendingFor(manualKey) ? "Saving…" : "Turn Auto off" : pendingFor(autoKey) ? "Saving…" : "Enable Auto"}</button>
           </div>
         </section>
         <SyntheticSignalList signals={signals} />
@@ -389,24 +341,5 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     </div>
   </div>
   {helpOpen && <AccessibleDialog label="How Synthetic quotes work" onClose={() => setHelpOpen(false)}><span className="eyebrow">SYNTHETIC QUOTES</span><h2>How quotes work</h2><p>Each index uses TradeMemo’s shared model feed. The displayed reference updates about once a second; it is not an external spot-market price.</p><div className="fact-block"><span>ORDER PRICE <b>Checked again at execution</b></span><span>SPREAD <b>Shown before review</b></span><span>TIER FEE <b>Applied at execution</b></span></div><p>A stale or unavailable quote prevents a new order. Existing positions remain unchanged until a valid close can be priced.</p><button type="button" className="primary-action" onClick={() => setHelpOpen(false)}>Back to market</button></AccessibleDialog>}
-  {review && <AccessibleDialog label={review.kind === "auto" ? "Review automatic execution" : "Review synthetic order"} onClose={() => setReview(null)}>
-    <span className="eyebrow">MAINNET / FINAL REVIEW</span>
-    <h2>Enable automatic execution?</h2>
-    <div className="fact-block">
-      <span>EXECUTION <b>AUTO</b></span>
-      <span>MARGIN PER AUTO ORDER <b>{money(review.amount)}</b></span>
-      <span>AUTO CAPACITY <b>{money(Number((review.payload as { auto_allocation_usd?: number }).auto_allocation_usd || 0))}</b></span>
-      <span>ESTIMATED TIER FEE <b>{review.fee === null ? "Calculated at execution" : money(review.fee)}</b></span>
-    </div>
-    <p>Auto evaluates eligible shared signals using the settings above. You can lose the full reserved margin; returns are not guaranteed.</p>
-    <label className="toggle-row"><span>I understand Auto uses only the stated allocation and margin per order; the remaining Synthetic capacity is not auto-traded.</span><input type="checkbox" checked={autoAcknowledged} disabled={activeReviewActionPending} onChange={(event) => setAutoAcknowledged(event.target.checked)} /><i aria-hidden="true" /></label>
-    {reviewError && <p role="alert">{reviewError}</p>}
-    {review.kind === "auto" && activeReviewActionPending && <p role="status">Saving the Auto setting. The state changes to on only after the server confirms the allocation.</p>}
-    <button className="primary-action" disabled={activeReviewActionPending || (review.kind === "auto" && !autoAcknowledged)} onClick={() => void confirm()}>
-      <ActionFeedback state={activeReviewActionPending ? "pending" : reviewError ? "error" : "idle"}>{activeReviewActionPending ? "Saving Auto setting…" : "Confirm Auto execution"}</ActionFeedback>
-    </button>
-    {activeReviewActionPending && <p role="status">The request is being submitted. You can return to the controls without cancelling it; the result will appear here.</p>}
-    <button type="button" className="ghost-action" onClick={() => setReview(null)}>{activeReviewActionPending ? "Return to controls" : "Go back"}</button>
-  </AccessibleDialog>}
   </div></DeskLocalized>;
 }

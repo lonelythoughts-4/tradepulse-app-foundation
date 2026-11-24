@@ -33,7 +33,7 @@ Users may arrive from Telegram on a phone, from a desktop browser handoff, or th
 - Admins can prefund signer-derived native gas reserves per network; automatic deposit top-ups cover the calculated sweep shortfall rather than using a fixed transfer amount.
 - Funded Memecoin authorization and its Auto/Trench strategy controls belong inside the Memecoin product view; the general bot fleet is an entry point, not the control home.
 - Improve clarity, accessibility, responsive behavior, and consistency without changing API contracts or business logic.
-- MANUAL remains the default execution mode; AUTO is explicit opt-in.
+- Synthetic Auto starts only after a funded Synthetic bot is created with explicit live-risk acknowledgement; Auto then uses the full allocation.
 
 ## Brand Commitments
 
