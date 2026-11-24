@@ -7,12 +7,13 @@ import { logDeskFailure } from "../lib/desk-api";
 
 export type WebNotice = { id: string; title: string; body: string };
 
-export function useNoticeCenter(scope: string, initial: WebNotice[], load: () => Promise<WebNotice[]>) {
+export function useNoticeCenter(scope: string, initial: WebNotice[], load: (signal?: AbortSignal) => Promise<WebNotice[]>) {
   const [open, setOpen] = useState(false);
   const [notices, setNotices] = useState<WebNotice[]>([]);
   const [read, setRead] = useState<string[]>([]);
   const loadRef = useRef(load);
   const initialRef = useRef(initial);
+  const refreshRef = useRef<() => void>(() => {});
   loadRef.current = load;
   initialRef.current = initial;
   useEffect(() => {
@@ -27,20 +28,25 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: () =>
     if (!scope) return;
     let cancelled = false;
     let inFlight = false;
+    const controller = new AbortController();
     const refresh = async () => {
-      if (cancelled || inFlight) return;
+      if (cancelled || inFlight || document.visibilityState !== "visible") return;
       inFlight = true;
       try {
-        const next = await loadRef.current();
+        const next = await loadRef.current(controller.signal);
         if (cancelled) return;
         setNotices(next);
       } catch (error) {
-        if (!cancelled) logDeskFailure("notifications.refresh", error);
+        if (!cancelled && !controller.signal.aborted) logDeskFailure("notifications.refresh", error);
       } finally { inFlight = false; }
     };
+    refreshRef.current = () => { void refresh(); };
     void refresh();
-    const timer = window.setInterval(refresh, 30000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      refreshRef.current = () => {};
+    };
   }, [scope]);
   useEffect(() => {
     if (!open || !scope || !notices.length) return;
@@ -62,6 +68,7 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: () =>
       });
     }
     setOpen(true);
+    refreshRef.current();
   };
   return { open, setOpen, openNotices, notices,
     unread: notices.filter((item) => !read.includes(item.id)).length };

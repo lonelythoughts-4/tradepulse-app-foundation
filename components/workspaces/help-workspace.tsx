@@ -9,6 +9,7 @@ import {
   Send,
   StateIcon,
 } from "./shared-ui";
+import { useWorkspacePollingState } from "./use-resource-poller";
 
 export type HelpDashboard = {
   community_url: string;
@@ -61,9 +62,10 @@ export function HelpWorkspace({
   const selectedTicketIdRef = useRef<string | null>(null);
   const ticketThreadRequestRef = useRef(0);
   const ticketListRequestRef = useRef(0);
-  const loadTickets = async () => {
+  const pollingState = useWorkspacePollingState("Help");
+  const loadTickets = async (signal?: AbortSignal) => {
     const requestId = ++ticketListRequestRef.current;
-    const response = await request("/v1/support/tickets");
+    const response = await request("/v1/support/tickets", { signal });
     if (requestId === ticketListRequestRef.current) {
       const nextTickets = Array.isArray(response.tickets)
         ? response.tickets.map((ticket: SupportTicket) => ({ ...ticket, id: String(ticket.id) }))
@@ -99,7 +101,12 @@ export function HelpWorkspace({
     ticketReplyPendingRef.current = next;
     setTicketReplyPendingIds(next);
   };
-  const openTicket = async (ticket: { id: string; topic?: string; status: string }, managePending = true, resetReply = true) => {
+  const openTicket = async (
+    ticket: { id: string; topic?: string; status: string },
+    managePending = true,
+    resetReply = true,
+    signal?: AbortSignal,
+  ) => {
     const requestId = ++ticketThreadRequestRef.current;
     if (managePending) {
       if (!beginTicketOpen(ticket.id)) return;
@@ -111,7 +118,7 @@ export function HelpWorkspace({
       }
     }
     try {
-      const response = await request(`/v1/support/tickets/${ticket.id}`);
+      const response = await request(`/v1/support/tickets/${ticket.id}`, { signal });
       if (requestId === ticketThreadRequestRef.current && selectedTicketIdRef.current === ticket.id) {
         const responseTicket = response.ticket
           ? { ...response.ticket, id: String(response.ticket.id ?? ticket.id) }
@@ -121,35 +128,52 @@ export function HelpWorkspace({
         if (resetReply) setTicketReply("");
       }
     } catch (error) {
-      logDeskFailure("support.ticket-open", error);
+      if (!signal?.aborted) logDeskFailure("support.ticket-open", error);
     } finally {
       if (managePending) endTicketOpen(ticket.id);
     }
   };
   useEffect(() => {
-    loadTickets()
-      .catch((error) => logDeskFailure("support.ticket-list", error));
-  }, []);
+    if (
+      !pollingState.isActive
+      || !pollingState.isVisible
+      || document.visibilityState !== "visible"
+    ) return;
+    const controller = new AbortController();
+    loadTickets(controller.signal)
+      .catch((error) => {
+        if (!controller.signal.aborted) logDeskFailure("support.ticket-list", error);
+      });
+    return () => controller.abort();
+  }, [pollingState.isActive, pollingState.isVisible]);
   useEffect(() => {
     setRecoveryCases(data.recovery_cases || []);
   }, [data.recovery_cases]);
   useEffect(() => {
-    if (!activeTicket || activeTicket.status === "closed") return;
+    if (
+      !activeTicket
+      || activeTicket.status === "closed"
+      || !pollingState.isActive
+      || !pollingState.isVisible
+      || document.visibilityState !== "visible"
+    ) return;
     let cancelled = false;
     let refreshInFlight = false;
+    const controller = new AbortController();
     const refreshThread = () => {
       if (cancelled || refreshInFlight) return;
       refreshInFlight = true;
-      void openTicket(activeTicket, false, false).finally(() => {
+      void openTicket(activeTicket, false, false, controller.signal).finally(() => {
         refreshInFlight = false;
       });
     };
     const timer = window.setInterval(refreshThread, 15_000);
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearInterval(timer);
     };
-  }, [activeTicket?.id, activeTicket?.status]);
+  }, [activeTicket?.id, activeTicket?.status, pollingState.isActive, pollingState.isVisible]);
   return (
     <DeskLocalized>
     <div className="account-screen">

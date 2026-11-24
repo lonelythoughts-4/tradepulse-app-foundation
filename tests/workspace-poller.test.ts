@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createResourcePoller } from "../components/workspaces/use-resource-poller.ts";
+import {
+  createResourcePoller,
+  isWorkspacePollingAllowed,
+} from "../components/workspaces/use-resource-poller.ts";
+
+test("starts API polling only for the active, visible workspace", () => {
+  assert.equal(isWorkspacePollingAllowed("Synthetic", "Synthetic", true, true), true);
+  assert.equal(isWorkspacePollingAllowed("Dashboard", "Synthetic", true, true), false);
+  assert.equal(isWorkspacePollingAllowed("Synthetic", "Synthetic", false, true), false);
+  assert.equal(isWorkspacePollingAllowed("Synthetic", "Synthetic", true, false), false);
+});
 
 test("polls Synthetic only while the Synthetic workspace is active and visible", async () => {
   let polls = 0;

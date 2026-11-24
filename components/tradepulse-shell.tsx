@@ -19,6 +19,11 @@ import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { ProtectionWorkspace } from "./workspaces/protection-workspace";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
+import {
+  useDocumentVisibility,
+  WorkspacePollingProvider,
+} from "./workspaces/use-resource-poller";
+import { createInFlightRequestCache } from "../lib/in-flight-request-cache";
 import { reconcileSyntheticTicks, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
 import { formatMarketPrice, makeMarketCandles, type MarketChartCandle, type MarketChartPoint } from "../lib/market-chart-series";
@@ -5151,9 +5156,12 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
     let inFlight = false;
     let terminal = false;
     let disposed = false;
+    let resumeWhenIdle = false;
+    let refreshWhenVisible = false;
+    let activeController: AbortController | null = null;
     let transientFailures = 0;
     const poll = async () => {
-      if (disposed || inFlight) return;
+      if (disposed || inFlight || document.visibilityState !== "visible") return;
       inFlight = true;
       if (Date.now() >= deadline) {
         timer.current = null;
@@ -5167,12 +5175,14 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         inFlight = false;
         return;
       }
+      const controller = new AbortController();
+      activeController = controller;
       try {
         const response = await fetch(
           `/api/v1/auth/handoff/complete?token=${encodeURIComponent(token)}`,
-          { credentials: "same-origin", cache: "no-store" },
+          { credentials: "same-origin", cache: "no-store", signal: controller.signal },
         );
-        if (disposed) return;
+        if (disposed || controller.signal.aborted) return;
         if (response.status === 410) {
           terminal = true;
           timer.current = null;
@@ -5222,7 +5232,7 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
           return;
         }
       } catch {
-        if (disposed) return;
+        if (disposed || controller.signal.aborted) return;
         if (Date.now() >= deadline) {
           terminal = true;
           timer.current = null;
@@ -5240,16 +5250,45 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         timer.current = window.setTimeout(poll, Math.min(8_000, 1_000 * 2 ** Math.min(transientFailures - 1, 3)));
       } finally {
         inFlight = false;
-        if (!disposed && !terminal && timer.current === null && Date.now() < deadline) {
+        if (activeController === controller) activeController = null;
+        if (!disposed && !terminal && document.visibilityState === "visible" && resumeWhenIdle) {
+          resumeWhenIdle = false;
+          if (timer.current) window.clearTimeout(timer.current);
+          timer.current = null;
+          void poll();
+        } else if (
+          !disposed
+          && !terminal
+          && document.visibilityState === "visible"
+          && timer.current === null
+          && Date.now() < deadline
+        ) {
           timer.current = window.setTimeout(poll, 1000);
         }
       }
     };
-    // Browsers throttle timers while this tab is backgrounded and Telegram is
-    // open. Recheck immediately when the user returns so a confirmed handoff
-    // never waits for the throttled timer budget.
     const resumePoll = () => {
-      if (document.visibilityState !== "visible" || inFlight) return;
+      if (document.visibilityState !== "visible") {
+        if (timer.current) window.clearTimeout(timer.current);
+        timer.current = null;
+        if (refreshTimer.current) {
+          window.clearTimeout(refreshTimer.current);
+          refreshWhenVisible = true;
+        }
+        refreshTimer.current = null;
+        activeController?.abort();
+        return;
+      }
+      if (refreshWhenVisible) {
+        refreshWhenVisible = false;
+        setAttempt((current) => current + 1);
+        return;
+      }
+      if (terminal) return;
+      if (inFlight) {
+        resumeWhenIdle = true;
+        return;
+      }
       if (timer.current) window.clearTimeout(timer.current);
       timer.current = null;
       void poll();
@@ -5751,7 +5790,8 @@ function LiveWalletScreen({
       return;
     }
     let cancelled = false;
-    void request(`/v1/deposits/${intent.id}/qr`)
+    const controller = new AbortController();
+    void request(`/v1/deposits/${intent.id}/qr`, { signal: controller.signal })
       .then((result) => {
         if (!cancelled) setQrDataUrl(String(result.data_url || ""));
       })
@@ -5760,6 +5800,7 @@ function LiveWalletScreen({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [intent?.id]);
   useEffect(() => {
@@ -5773,8 +5814,9 @@ function LiveWalletScreen({
     ]);
     if (!intent?.watch_enabled || !trackedStatuses.has(intent.status.toLowerCase())) return;
     let cancelled = false;
+    const controller = new AbortController();
     const refreshDepositStatus = () => {
-      void requestRef.current("/v1/dashboard")
+      void requestRef.current("/v1/dashboard", { signal: controller.signal })
         .then((snapshot: LiveDashboard) => {
           const updatedIntent = snapshot.deposits.find((row) => row.id === intent.id);
           if (cancelled || !updatedIntent) return;
@@ -5787,12 +5829,11 @@ function LiveWalletScreen({
         .catch(() => undefined);
     };
     refreshDepositStatus();
-    const timer = window.setInterval(refreshDepositStatus, 15_000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      controller.abort();
     };
-  }, [intent?.id, intent?.status, intent?.watch_enabled]);
+  }, [intent?.id, intent?.watch_enabled]);
   const networks = [
     ["ERC20", "Ethereum"],
     ["BEP20", "BNB Chain"],
@@ -6620,6 +6661,7 @@ function LiveTradePulse() {
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarPickerRequired, setAvatarPickerRequired] = useState(false);
   const [tab, setTab] = useState<DeskTab>("Dashboard");
+  const isDocumentVisible = useDocumentVisibility();
   const [walletEntry, setWalletEntry] = useState<
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
@@ -6833,6 +6875,7 @@ function LiveTradePulse() {
   // cannot make an unrelated control render the wrong loading label.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
   const isActionPending = (key: string) => Boolean(pendingActions[key]);
+  const inFlightRequestsRef = useRef(createInFlightRequestCache());
   const headers = (targetEnvironment = webEnvironment) => ({
     "X-Telegram-Init-Data": telegramInitData(),
     "X-TradePulse-Environment": targetEnvironment,
@@ -6843,84 +6886,101 @@ function LiveTradePulse() {
     targetEnvironment = webEnvironment,
     timeoutMs = 15_000,
   ) => {
-    const controller = new AbortController();
-    const callerSignal = options.signal;
-    let timedOut = false;
-    const abortFromCaller = () => controller.abort();
-    if (callerSignal?.aborted) abortFromCaller();
-    else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
-    const timeout = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
-    const requestId = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    try {
-      const requestHeaders = { ...headers(targetEnvironment), ...(options.headers || {}) } as Record<string, string>;
-      requestHeaders["X-TradePulse-Request-Id"] = requestId;
-      if (!(options.body instanceof FormData) && !Object.keys(requestHeaders).some((name) => name.toLowerCase() === "content-type")) {
-        requestHeaders["Content-Type"] = "application/json";
-      }
-      const response = await fetch(`/api${path}`, {
-        ...options,
-        signal: controller.signal,
-        headers: requestHeaders,
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        const responseMessage = typeof body.error === "string" ? body.error : "";
-        const reference = typeof body.request_id === "string"
-          ? body.request_id
-          : response.headers.get("x-tradepulse-request-id") || undefined;
-        const responseBody =
-          path === "/v1/deposits/routes" && response.status === 409
-            ? body
-            : undefined;
-        console.error("TradeMemo API request failed", {
-            path,
-            status: response.status,
-            requestId: reference || requestId,
+    const baseHeaders = { ...headers(targetEnvironment), ...(options.headers || {}) } as Record<string, string>;
+    const performRequest = async (requestSignal?: AbortSignal) => {
+      const controller = new AbortController();
+      const callerSignal = requestSignal ?? options.signal;
+      let timedOut = false;
+      const abortFromCaller = () => controller.abort();
+      if (callerSignal?.aborted) abortFromCaller();
+      else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
+      const requestId = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      try {
+        const requestHeaders = { ...baseHeaders };
+        requestHeaders["X-TradePulse-Request-Id"] = requestId;
+        if (!(options.body instanceof FormData) && !Object.keys(requestHeaders).some((name) => name.toLowerCase() === "content-type")) {
+          requestHeaders["Content-Type"] = "application/json";
+        }
+        const response = await fetch(`/api${path}`, {
+          ...options,
+          signal: controller.signal,
+          headers: requestHeaders,
         });
-        if (response.status === 401) {
-          if (path === "/v1/dashboard") {
-            updateDashboard(null);
-            setTelegramIdentityPending(false);
-            setTelegramLaunchContext(false);
-            setSessionHandoffRequired(true);
-            setSessionBootstrapComplete(true);
-          } else {
-            sessionValidationRef.current?.(targetEnvironment);
+        const body = await response.json();
+        if (!response.ok) {
+          const responseMessage = typeof body.error === "string" ? body.error : "";
+          const reference = typeof body.request_id === "string"
+            ? body.request_id
+            : response.headers.get("x-tradepulse-request-id") || undefined;
+          const responseBody =
+            path === "/v1/deposits/routes" && response.status === 409
+              ? body
+              : undefined;
+          console.error("TradeMemo API request failed", {
+              path,
+              status: response.status,
+              requestId: reference || requestId,
+          });
+          if (response.status === 401) {
+            if (path === "/v1/dashboard") {
+              updateDashboard(null);
+              setTelegramIdentityPending(false);
+              setTelegramLaunchContext(false);
+              setSessionHandoffRequired(true);
+              setSessionBootstrapComplete(true);
+            } else {
+              sessionValidationRef.current?.(targetEnvironment);
+            }
+            throw new DeskApiError("", response.status, reference, responseMessage, responseBody);
           }
           throw new DeskApiError("", response.status, reference, responseMessage, responseBody);
         }
-        throw new DeskApiError("", response.status, reference, responseMessage, responseBody);
-      }
-      return body;
-    } catch (error) {
-      if (timedOut) {
-        console.error("TradeMemo API request timed out", { path, requestId });
+        return body;
+      } catch (error) {
+        if (timedOut) {
+          console.error("TradeMemo API request timed out", { path, requestId });
+          throw new Error("");
+        }
+        if (callerSignal?.aborted) throw new DOMException("", "AbortError");
+        if (error instanceof TypeError) {
+          console.error("TradeMemo API transport failed", { path, requestId });
+          throw new Error("");
+        }
+        console.error("TradeMemo API processing failed", {
+          path,
+          requestId,
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
         throw new Error("");
+      } finally {
+        window.clearTimeout(timeout);
+        callerSignal?.removeEventListener("abort", abortFromCaller);
       }
-      if (callerSignal?.aborted) throw new DOMException("", "AbortError");
-      if (error instanceof TypeError) {
-        console.error("TradeMemo API transport failed", { path, requestId });
-        throw new Error("");
-      }
-      console.error("TradeMemo API processing failed", {
-        path,
-        requestId,
-        errorType: error instanceof Error ? error.name : "UnknownError",
-      });
-      throw new Error("");
-    } finally {
-      window.clearTimeout(timeout);
-      callerSignal?.removeEventListener("abort", abortFromCaller);
+    };
+    if ((options.method || "GET").toUpperCase() !== "GET" || options.body) {
+      return performRequest();
     }
+    const cacheKey = JSON.stringify([
+      path,
+      targetEnvironment,
+      timeoutMs,
+      Object.entries(baseHeaders).sort(([left], [right]) => left.localeCompare(right)),
+      options.cache,
+      options.credentials,
+    ]);
+    return inFlightRequestsRef.current.request(
+      cacheKey,
+      options.signal ?? undefined,
+      (signal) => performRequest(signal),
+    );
   }, [updateDashboard, webEnvironment]);
-  const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async () => {
-    // Notification polling must not replace the desk projection. Replacing
-    // it tears down the Synthetic live effects every 30 seconds and looks
-    // like an unexplained full-page refresh while Auto is enabled.
-    const result = await request("/v1/account/notices");
+  const noticeCenter = useNoticeCenter(data ? `${data.user.id}:${webEnvironment}` : "", data?.notices || [], async (signal) => {
+    // Notification refreshes must not replace the desk projection.
+    const result = await request("/v1/account/notices", { signal });
     return result.notices || [];
   });
   const load = async (targetEnvironment = webEnvironment): Promise<boolean> => {
@@ -7090,7 +7150,12 @@ function LiveTradePulse() {
     setNotice(`${next.title} — ${next.body}`);
   }, [data, notice]);
   useEffect(() => {
-    if (tab !== "Admin" || !data?.user.is_admin) return;
+    if (
+      tab !== "Admin"
+      || !data?.user.is_admin
+      || !isDocumentVisible
+      || document.visibilityState !== "visible"
+    ) return;
     let active = true;
     const controller = new AbortController();
     const selectedAtRequest = webEnvironment;
@@ -7108,9 +7173,14 @@ function LiveTradePulse() {
       active = false;
       controller.abort();
     };
-  }, [tab, data?.user.is_admin, webEnvironment]);
+  }, [tab, data?.user.is_admin, webEnvironment, isDocumentVisible]);
   useEffect(() => {
-    if (tab !== "Dashboard" || !data) return;
+    if (
+      tab !== "Dashboard"
+      || !data
+      || !isDocumentVisible
+      || document.visibilityState !== "visible"
+    ) return;
     const active = [
       ...new Set(
         data.bots
@@ -7123,10 +7193,14 @@ function LiveTradePulse() {
       ),
     ];
     let cancelled = false;
+    let inFlight = false;
+    const controller = new AbortController();
     const refresh = () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
       const chartRequests: Array<Promise<{ product: string; value: any } | { product: string; error: string } | null>> = [
         ...active.map((product) =>
-          request(`/v1/charts/${product}`)
+          request(`/v1/charts/${product}`, { signal: controller.signal })
             .then((value) => {
               const points = Array.isArray(value.points) ? value.points : [];
               return {
@@ -7145,7 +7219,7 @@ function LiveTradePulse() {
         ),
         // Synthetic prices are shared market data, so the live graph must not
         // depend on a user already having an open synthetic allocation.
-        request("/v1/synthetic/stream?market=SYN-25&include_history=1")
+        request("/v1/synthetic/stream?market=SYN-25&include_history=1", { signal: controller.signal })
           .then((snapshot) => ({
             product: "synthetic",
             value: {
@@ -7163,29 +7237,33 @@ function LiveTradePulse() {
           }))
           .catch(() => null),
       ];
-      return Promise.all(chartRequests).then((results) => {
-        if (cancelled) return;
-        setCharts((current) => {
-          const next = { ...current };
-          for (const item of results) {
-            if (!item) continue;
-            if ("error" in item) {
-              const previous = next[item.product];
-              next[item.product] = {
-                market: previous?.market || "Memecoin market",
-                points: previous?.points || [],
-                positions: previous?.positions || [],
-                activity: previous?.activity || [],
-                updated_at: Date.now(),
-                feedError: item.error,
-              };
-            } else {
-              next[item.product] = item.value;
+      void Promise.all(chartRequests)
+        .then((results) => {
+          if (cancelled) return;
+          setCharts((current) => {
+            const next = { ...current };
+            for (const item of results) {
+              if (!item) continue;
+              if ("error" in item) {
+                const previous = next[item.product];
+                next[item.product] = {
+                  market: previous?.market || "Memecoin market",
+                  points: previous?.points || [],
+                  positions: previous?.positions || [],
+                  activity: previous?.activity || [],
+                  updated_at: Date.now(),
+                  feedError: item.error,
+                };
+              } else {
+                next[item.product] = item.value;
+              }
             }
-          }
-          return next;
+            return next;
+          });
+        })
+        .finally(() => {
+          inFlight = false;
         });
-      });
     };
     void refresh();
     // Refresh the read-only market history frequently enough that the chart
@@ -7193,20 +7271,27 @@ function LiveTradePulse() {
     const timer = window.setInterval(refresh, 10000);
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearInterval(timer);
     };
-  }, [tab, data?.bots]);
+  }, [tab, data?.bots, isDocumentVisible]);
   useEffect(() => {
-    if (tab !== "Dashboard" || !data) return;
+    if (
+      tab !== "Dashboard"
+      || !data
+      || !isDocumentVisible
+      || document.visibilityState !== "visible"
+    ) return;
     let cancelled = false;
     let inFlight = false;
+    const controller = new AbortController();
     const refreshSyntheticTick = async () => {
       if (cancelled || inFlight) return;
       inFlight = true;
       try {
         const stream = await request(
           "/v1/synthetic/stream?market=SYN-25",
-          {},
+          { signal: controller.signal },
           webEnvironment,
         );
         if (cancelled || !stream?.latest) return;
@@ -7248,9 +7333,10 @@ function LiveTradePulse() {
     const timer = window.setInterval(refreshSyntheticTick, 1000);
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearInterval(timer);
     };
-  }, [tab, data, webEnvironment]);
+  }, [tab, data, webEnvironment, isDocumentVisible]);
   const applyActionResult = (path: string, payload: Record<string, unknown>, response: Record<string, unknown>) => {
     if (path === "/v1/bots" && response.bot && typeof response.bot === "object") {
       const createdBot = response.bot as LiveDashboard["bots"][number];
@@ -7671,6 +7757,7 @@ function LiveTradePulse() {
               </button>
             </div>
           )}
+          <WorkspacePollingProvider activeWorkspace={tab} isVisible={isDocumentVisible}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={tab}
@@ -7922,6 +8009,7 @@ function LiveTradePulse() {
           */}
             </motion.div>
           </AnimatePresence>
+          </WorkspacePollingProvider>
         </div>
       </main>
       <BottomNav

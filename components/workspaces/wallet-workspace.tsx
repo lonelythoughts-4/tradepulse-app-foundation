@@ -132,10 +132,11 @@ export function WalletWorkspace({
         onWalletUpdate({ wallet: next.wallet, deposits: next.deposits, bots: next.bots });
       }
     },
-    15_000,
+    0,
     true,
     `wallet-dashboard:${environment}`,
     () => onNotice(""),
+    "Wallet",
   );
   if (!data) return null;
   return (

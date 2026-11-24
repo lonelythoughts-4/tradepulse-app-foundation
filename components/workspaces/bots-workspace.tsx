@@ -155,6 +155,7 @@ export function BotsWorkspace({
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
   const [flashbackClockOffset, setFlashbackClockOffset] = useState(0);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
+  const pollingWorkspace = flashbackOnly ? "Flashback" : "Bots";
   const [initialCompoundPercent, setInitialCompoundPercent] = useState(0);
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
@@ -326,6 +327,7 @@ export function BotsWorkspace({
     shouldPollFlashbackStatus(view === "flashback", flashbackSessions),
     `flashback:${flashbackSessionIds}`,
     (error) => logDeskFailure("bots.flashback-refresh", error),
+    pollingWorkspace,
   );
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
@@ -465,9 +467,10 @@ export function BotsWorkspace({
       });
     },
     5_000,
-    Boolean(selected && selected.product === "memecoin"),
+    Boolean(!flashbackOnly && selected && selected.product === "memecoin"),
     `memecoin:${selected?.id || ""}:${memecoinMarket}`,
     (error) => logDeskFailure("bots.memecoin-snapshot", error),
+    "Bots",
   );
   useEffect(() => {
     if (!selected || selected.product !== "memecoin" || !memecoinAssets.length) return;

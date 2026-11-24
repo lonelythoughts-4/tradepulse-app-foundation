@@ -1051,14 +1051,6 @@ export function AdminWorkspace({
     }
   };
   autouserScheduleRefreshRef.current = refreshAutouserSchedule;
-  useEffect(() => {
-    if (!autouserScheduleDate) return;
-    const date = autouserScheduleDate;
-    const interval = window.setInterval(() => {
-      void autouserScheduleRefreshRef.current(date);
-    }, 5_000);
-    return () => window.clearInterval(interval);
-  }, [autouserScheduleDate]);
   const saveAutouserScheduleTime = async (item: AutouserScheduleItem, nigeriaTime: string) => {
     const date = autouserScheduleDate;
     const schedule = autouserSchedule;

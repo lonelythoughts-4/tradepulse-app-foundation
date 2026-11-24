@@ -202,7 +202,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     }
     if (environment === "mainnet" && !next.partial && executionCapacityRefreshing) setExecutionCapacityRefreshing(false);
     update({ ...next, ...(mode && executionSubmitting.current ? { execution_mode: mode } : {}) });
-  }, 5000, true, `synthetic:${environment}:${market}`, (error) => logDeskFailure("synthetic.snapshot", error));
+  }, 5000, true, `synthetic:${environment}:${market}`, (error) => logDeskFailure("synthetic.snapshot", error), "Synthetic");
   useResourcePoller<Signal[]>(async (_token, signal) => {
     const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10", { signal });
     return (result.signals || []) as Signal[];
@@ -213,7 +213,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       return signal.id === updated.id && signal.market === updated.market && signal.direction === updated.direction
         && signal.reference_price === updated.reference_price && signal.expires_at === updated.expires_at;
     }) ? current : next);
-  }, 2000, true, `synthetic-signals:${environment}:${market}`, (error) => logDeskFailure("synthetic.signals", error));
+  }, 2000, true, `synthetic-signals:${environment}:${market}`, (error) => logDeskFailure("synthetic.signals", error), "Synthetic");
   useResourcePoller<Record<string, unknown>>(async (_token, signal) => {
     return await request("/v1/synthetic/stream?market=" + market + "&include_history=1", { signal }, environment);
   }, (stream) => {
@@ -241,7 +241,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   }, 1000, true, `synthetic-quotes:${environment}:${market}`, (error) => {
     logDeskFailure("synthetic.quotes", error);
     setQuoteError(true);
-  });
+  }, "Synthetic");
   const actionKey = (path: string, payload: Record<string, unknown>) => {
     const position = path.match(/^\/v1\/synthetic\/positions\/([^/]+)\/close$/); const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (path === "/v1/synthetic/actions") return ("synthetic-testnet:" + String(payload.action || "action")) as ActionKey;

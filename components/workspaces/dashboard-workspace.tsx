@@ -33,6 +33,7 @@ export function DashboardWorkspace<T>({ store, poll, onPollError, ...dashboardPr
     true,
     "dashboard",
     onPollError,
+    "Dashboard",
   );
 
   return dashboard ? <Dashboard {...dashboardProps} /> : null;
