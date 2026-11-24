@@ -245,7 +245,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const syntheticAutoOn = syntheticBot?.state === "running" && Number(syntheticBot.capital_usd || 0) > 0;
   const executionStatus = syntheticBot?.state === "paused" ? "Paused" : syntheticAutoOn ? "Auto on" : "Waiting for funding";
   const executionLabel = syntheticBot?.state === "paused" ? "PAUSED" : syntheticAutoOn ? "AUTO" : "WAITING";
-  const snapshotPending = snapshot.partial && snapshotCheckedKey !== resourceKey;
+  const snapshotPending = snapshot.partial === true && snapshotCheckedKey !== resourceKey;
   const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
   const dailyNetUsd = Number(snapshot.execution?.daily_net_pnl_usd || 0);
   const dailyTargetLabel = snapshot.execution?.daily_outcome === "loss"
