@@ -140,6 +140,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const storedSnapshot = snapshots?.[resourceKey] ?? null;
   const fallbackSnapshot = useMemo<Snapshot>(() => ({ market, partial: true, latest: { market }, ticks: [], positions: [], settings: {} }), [market]);
   const snapshot = storedSnapshot?.market === market ? storedSnapshot : fallbackSnapshot;
+  const [snapshotCheckedKey, setSnapshotCheckedKey] = useState<string | null>(null);
   const [autoAmount, setAutoAmount] = useState("");
   const [autoAllocation, setAutoAllocation] = useState("");
   const [signals, setSignals] = useState<Signal[]>([]);
@@ -179,10 +180,15 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     catch (error) {
       if (signal.aborted) throw error;
       logDeskFailure("synthetic.snapshot", error);
+      if (marketRef.current === market) {
+        setSnapshotCheckedKey(resourceKey);
+        setExecutionCapacityRefreshing(false);
+      }
       return undefined;
     }
   }, ({ snapshot: next, requestRevision }) => {
     if (next.market !== marketRef.current) return;
+    setSnapshotCheckedKey(resourceKey);
     const confirmed = confirmedMode.current;
     const mode = confirmed && confirmed.revision >= executionRevision.current ? confirmed.mode : undefined;
     if (
@@ -194,7 +200,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       executionReconcilePending.current = false;
       setExecutionTransition(null);
     }
-    if (environment === "mainnet" && !next.partial && next.execution_mode === "MANUAL" && executionCapacityRefreshing) setExecutionCapacityRefreshing(false);
+    if (environment === "mainnet" && !next.partial && executionCapacityRefreshing) setExecutionCapacityRefreshing(false);
     update({ ...next, ...(mode && executionSubmitting.current ? { execution_mode: mode } : {}) });
   }, 5000, true, `synthetic:${environment}:${market}`, (error) => logDeskFailure("synthetic.snapshot", error));
   useResourcePoller<Signal[]>(async (_token, signal) => {
@@ -305,7 +311,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       logDeskFailure("synthetic.action", error);
       throw error;
     }
-    finally { if (changesExecutionMode) { executionSubmitting.current = false; executionRevision.current += 1; } }
+    finally { if (changesExecutionMode) { setExecutionTransition(null); executionSubmitting.current = false; executionRevision.current += 1; } }
   };
   const openReview = () => {
     if (environment !== "mainnet") return;
@@ -329,8 +335,9 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const manualKey = "execution:manual";
   const autoKey = "execution:auto";
   const confirmedAuto = snapshot.execution_mode === "AUTO";
-  const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : snapshot.partial && !snapshot.execution_mode ? "Checking" : confirmedAuto ? "Auto on" : "Auto off";
-  const executionLabel = executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "TURNING AUTO OFF" : snapshot.partial && !snapshot.execution_mode ? "CHECKING" : confirmedAuto ? "AUTO" : "AUTO OFF";
+  const snapshotPending = snapshot.partial && snapshotCheckedKey !== resourceKey;
+  const executionStatus = executionTransition === "AUTO" ? "Enabling Auto…" : executionTransition === "MANUAL" ? "Turning Auto off…" : snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : confirmedAuto ? "Auto on" : "Auto off";
+  const executionLabel = executionTransition === "AUTO" ? "ENABLING AUTO" : executionTransition === "MANUAL" ? "TURNING AUTO OFF" : snapshotPending ? "CHECKING" : snapshot.partial ? "UNAVAILABLE" : confirmedAuto ? "AUTO" : "AUTO OFF";
   const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
   const dailyNetUsd = Number(snapshot.execution?.daily_net_pnl_usd || 0);
   const dailyTargetLabel = snapshot.execution?.daily_outcome === "loss"
@@ -363,7 +370,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
             <label className="amount-field">Auto amount per order<input value={autoAmount} onChange={(event) => setAutoAmount(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic order size" /></label>
             <label className="amount-field">Set aside for Auto<input value={autoAllocation} onChange={(event) => setAutoAllocation(event.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label="Automatic Synthetic allocation" /></label>
           </div>
-          <div className="synthetic-auto-capacity" aria-label="Automatic and unassigned available capacity"><span>Auto available <b>{snapshot.partial ? "Checking" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_available_usd || 0))}</b></span><span>Auto locked margin <b>{snapshot.partial ? "Checking" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_locked_usd || 0))}</b></span><span>Unassigned Synthetic capacity <b>{snapshot.partial ? "Checking" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.manual_available_usd || snapshot.allocation?.available_usd || 0))}</b></span></div>
+          <div className="synthetic-auto-capacity" aria-label="Automatic and unassigned available capacity"><span>Auto available <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_available_usd || 0))}</b></span><span>Auto locked margin <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.auto_locked_usd || 0))}</b></span><span>Unassigned Synthetic capacity <b>{snapshotPending ? "Checking" : snapshot.partial ? "Unavailable" : executionCapacityRefreshing ? "Updating…" : money(Number(snapshot.execution?.manual_available_usd ?? snapshot.allocation?.available_usd ?? 0))}</b></span></div>
           {executionCapacityRefreshing && <p className="synthetic-auto-hint" role="status">Capacity is refreshing. New orders are checked against current funding before submission.</p>}
           {Number(autoAllocation) < Number(autoAmount) && <p className="synthetic-auto-hint" role="status">Set aside at least {money(Math.max(20, Number(autoAmount) || 20))} for one Auto order. The remaining Synthetic capacity will not be used by Auto.</p>}
           {confirmedAuto && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">

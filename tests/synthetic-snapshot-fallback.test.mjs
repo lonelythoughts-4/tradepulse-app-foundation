@@ -21,9 +21,12 @@ test("Bots hides disabled Demo accounts and Flashback has a separate workspace",
 
 test("a delayed account snapshot keeps its last verified value and logs refresh failures privately", () => {
   assert.match(source, /request\("\/v1\/synthetic\/" \+ market \+ "\?view=trading"/);
-  assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);\s*return undefined;/);
+  assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);[\s\S]*?return undefined;/);
   assert.match(source, /useResourcePoller<\{ snapshot: Snapshot; requestRevision: number \}>/);
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
+  assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotCheckedKey\(resourceKey\);\s+setExecutionCapacityRefreshing\(false\);/);
+  assert.match(source, /snapshotPending \? "Checking" : snapshot\.partial \? "Unavailable"/);
+  assert.match(source, /finally \{ if \(changesExecutionMode\) \{ setExecutionTransition\(null\);/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
   assert.doesNotMatch(source, /loadError|Market data is temporarily unavailable/);
 });
