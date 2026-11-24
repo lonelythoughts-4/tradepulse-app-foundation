@@ -211,6 +211,21 @@ export function AdminWorkspace({
   const [vaults, setVaults] = useState<
     Array<{ chain: string; asset: string; address: string }>
   >([]);
+  const [gasVaults, setGasVaults] = useState<Array<{
+    chain: string;
+    asset: string;
+    address: string;
+    balance: string | null;
+    active: boolean;
+    error: string;
+  }>>([]);
+  const [gasVaultsPending, setGasVaultsPending] = useState(false);
+  const [gasVaultsError, setGasVaultsError] = useState("");
+  const gasVaultsSubmitting = useRef(false);
+  const gasVaultsRequestId = useRef(0);
+  const [gasVaultCopyPending, setGasVaultCopyPending] = useState<Record<string, boolean>>({});
+  const [gasVaultCopyErrors, setGasVaultCopyErrors] = useState<Record<string, string>>({});
+  const gasVaultCopySubmitting = useRef(new Set<string>());
   const [syntheticConfig, setSyntheticConfig] = useState<Record<string, string>>({});
   const [syntheticAutoRejections, setSyntheticAutoRejections] = useState<Array<{
     timestamp: number;
@@ -391,6 +406,25 @@ export function AdminWorkspace({
       .catch((error) => {
         if (active) logDeskFailure("admin.vaults", error);
       });
+    setGasVaultsPending(true);
+    gasVaultsSubmitting.current = true;
+      const requestId = ++gasVaultsRequestId.current;
+    request("/v1/admin/gas-vaults", {}, environment)
+      .then((response) => {
+          if (!active || requestId !== gasVaultsRequestId.current) return;
+        setGasVaults(Array.isArray(response.vaults) ? response.vaults : []);
+        setGasVaultsError("");
+      })
+      .catch((error) => {
+          if (!active || requestId !== gasVaultsRequestId.current) return;
+        logDeskFailure("admin.gas-vaults", error);
+        setGasVaultsError("Reserve addresses or balances are unavailable. Unlock the signer once to initialize addresses, then refresh.");
+      })
+      .finally(() => {
+          if (!active || requestId !== gasVaultsRequestId.current) return;
+        gasVaultsSubmitting.current = false;
+        setGasVaultsPending(false);
+      });
     request("/v1/admin/synthetic-config")
       .then((response) => {
         if (active) setSyntheticConfig(response.settings || {});
@@ -432,8 +466,51 @@ export function AdminWorkspace({
       .catch((error) => {
         if (active) logDeskFailure("admin.flashback-direction-config", error);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      gasVaultsRequestId.current += 1;
+    };
   }, [environment]);
+  const refreshGasVaults = async (force = false) => {
+    if (gasVaultsSubmitting.current && !force) return;
+    gasVaultsSubmitting.current = true;
+    setGasVaultsPending(true);
+    setGasVaultsError("");
+    const requestId = ++gasVaultsRequestId.current;
+    try {
+      const response = await request("/v1/admin/gas-vaults", {}, environment);
+      if (requestId !== gasVaultsRequestId.current) return;
+      setGasVaults(Array.isArray(response.vaults) ? response.vaults : []);
+    } catch (error) {
+      if (requestId !== gasVaultsRequestId.current) return;
+      logDeskFailure("admin.gas-vaults", error);
+      setGasVaultsError("Reserve addresses or balances are unavailable. Check signer and RPC status, then refresh.");
+    } finally {
+      if (requestId === gasVaultsRequestId.current) {
+        gasVaultsSubmitting.current = false;
+        setGasVaultsPending(false);
+      }
+    }
+  };
+  const copyGasVaultAddress = async (chain: string, address: string) => {
+    if (gasVaultCopySubmitting.current.has(chain)) return;
+    gasVaultCopySubmitting.current.add(chain);
+    setGasVaultCopyPending((current) => ({ ...current, [chain]: true }));
+    setGasVaultCopyErrors((current) => ({ ...current, [chain]: "" }));
+    try {
+      await navigator.clipboard.writeText(address);
+      onNotice(`${chain} gas reserve address copied.`);
+    } catch (error) {
+      logDeskFailure("admin.gas-vault-copy", error);
+      setGasVaultCopyErrors((current) => ({
+        ...current,
+        [chain]: "Could not copy this address. Select it and copy it manually.",
+      }));
+    } finally {
+      gasVaultCopySubmitting.current.delete(chain);
+      setGasVaultCopyPending((current) => ({ ...current, [chain]: false }));
+    }
+  };
   const unlockSigner = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (signerSubmitting.current || !signerPin.trim()) return;
@@ -457,6 +534,7 @@ export function AdminWorkspace({
       }
       setSignerStatus("unlocked");
       onNotice("Protected signer unlocked. Signer-backed operations can proceed.");
+      void refreshGasVaults(true);
     } catch (error) {
       logDeskFailure("admin.signer-unlock", error);
       setSignerStatus("unavailable");
@@ -1526,6 +1604,65 @@ export function AdminWorkspace({
         )}
         {signerError && signerStatus !== "unavailable" && (
           <p className="signer-control-note" role="status">{signerError}</p>
+        )}
+      </section>
+      <section className="admin-table signer-control" aria-labelledby="gas-reserves-title">
+        <div className="signer-control-header">
+          <div className="signer-control-title">
+            <h3 id="gas-reserves-title">Network gas reserves</h3>
+            <p>
+              Fund each address with the native coin for its labeled network.
+              The signer calculates each shortfall from network fees and token
+              account rent, then transfers only the needed amount. EVM transfers
+              include a dynamic fee margin; there is no fixed top-up. TON may
+              require wallet activation after initial funding.
+            </p>
+          </div>
+          <button
+            className="small-action"
+            type="button"
+            disabled={gasVaultsPending}
+            aria-busy={gasVaultsPending}
+            onClick={() => void refreshGasVaults()}
+          >
+            {gasVaultsPending ? "Refreshing…" : "Refresh balances"}
+          </button>
+        </div>
+        {gasVaultsError && <p className="security-feedback" role="status">{gasVaultsError}</p>}
+        {gasVaults.map((vault) => (
+          <div className="admin-row" key={vault.chain}>
+            <div>
+              <strong>{vault.chain} · {vault.asset}</strong>
+              <small className="mono">{vault.address}</small>
+              <button
+                className="small-action"
+                type="button"
+                disabled={gasVaultCopyPending[vault.chain]}
+                aria-busy={gasVaultCopyPending[vault.chain]}
+                onClick={() => void copyGasVaultAddress(vault.chain, vault.address)}
+              >
+                {gasVaultCopyPending[vault.chain] ? "Copying…" : "Copy address"}
+              </button>
+              {gasVaultCopyErrors[vault.chain] && (
+                <small className="security-feedback" role="status">{gasVaultCopyErrors[vault.chain]}</small>
+              )}
+              <small>
+                {vault.error
+                  ? vault.error
+                  : vault.balance === null
+                    ? "Native balance unavailable"
+                    : `${vault.balance} ${vault.asset}${vault.active ? "" : " · activation required"}`}
+              </small>
+            </div>
+            <span className="signer-control-status" data-state={vault.error ? "unavailable" : vault.active ? "unlocked" : "locked"}>
+              {vault.error ? "unavailable" : vault.active ? "ready" : "activate"}
+            </span>
+          </div>
+        ))}
+        {!gasVaults.length && !gasVaultsError && (
+          <p className="signer-control-note" role="status">
+            {gasVaultsPending ? "Loading network reserve addresses…" : "No gas reserve addresses are available yet."}
+          </p>
         )}
       </section>
       {withdrawalReview && (

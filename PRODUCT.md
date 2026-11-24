@@ -30,6 +30,7 @@ Users may arrive from Telegram on a phone, from a desktop browser handoff, or th
 - Preserve server-authenticated API behavior, Mongo-backed market state, wallet safeguards, and admin-only controls.
 - Keep the web app connected to the same backend and database as the Telegram bot.
 - Keep each administrator's isolated Testnet selection across web app tabs; regular users remain on Mainnet and server-side authorization continues to gate Testnet data.
+- Admins can prefund signer-derived native gas reserves per network; automatic deposit top-ups cover the calculated sweep shortfall rather than using a fixed transfer amount.
 - Funded Memecoin authorization and its Auto/Trench strategy controls belong inside the Memecoin product view; the general bot fleet is an entry point, not the control home.
 - Improve clarity, accessibility, responsive behavior, and consistency without changing API contracts or business logic.
 - MANUAL remains the default execution mode; AUTO is explicit opt-in.
