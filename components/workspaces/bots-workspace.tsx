@@ -822,6 +822,9 @@ export function BotsWorkspace({
       const paused = selected.state === "paused";
       const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
       const isClosing = selected.state === "closing";
+      const topUpAmount = Number(amount);
+      const availableBalance = Number.isFinite(data.wallet.available) ? Math.max(0, data.wallet.available) : 0;
+      const canTopUp = Number.isFinite(topUpAmount) && topUpAmount >= 20 && topUpAmount <= availableBalance;
     return (
       <DeskLocalized>
       <div className="bot-detail">
@@ -911,6 +914,10 @@ export function BotsWorkspace({
           )}
           <div className="detail-actions">
             {!isClosing && <>
+              <div className="available-line bot-topup-available">
+                <span>FROM AVAILABLE BALANCE</span>
+                <strong>{money(availableBalance)}</strong>
+              </div>
               <div className="amount-input">
                 <span>$</span>
                 <input
@@ -924,7 +931,7 @@ export function BotsWorkspace({
               </div>
               <button
                 className="small-action"
-                disabled={Number(amount) < 20 || isActionPending(`bot:${selected.id}:topup`)}
+                disabled={!canTopUp || isActionPending(`bot:${selected.id}:topup`)}
                 onClick={() =>
                   run(`/v1/bots/${selected.id}/actions`, {
                     action: "topup",
