@@ -12,7 +12,7 @@ import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
 import { syntheticQuoteStatus } from "../../lib/synthetic-quote-status";
 import { logDeskFailure } from "../../lib/desk-api";
 import { useResourcePoller } from "./use-resource-poller";
-import { ChevronRight, ProductPnlSummary } from "./shared-ui";
+import { ChevronRight, ProductPnlSummary, type ProductPnlSummaryData } from "./shared-ui";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
@@ -152,6 +152,33 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   useEffect(() => {
     if (snapshotPositionCount > 0) setHasStartedTradeThisSession(true);
   }, [snapshotPositionCount]);
+  useResourcePoller<ProductPnlSummaryData>(async (_token, signal) => {
+    const result = await request("/v1/synthetic/pnl-summary", { signal }, environment);
+    const summary = result.summary;
+    if (
+      !summary ||
+      typeof summary.last_24h_usd !== "number" ||
+      !Number.isFinite(summary.last_24h_usd) ||
+      typeof summary.all_time_usd !== "number" ||
+      !Number.isFinite(summary.all_time_usd)
+    ) {
+      return undefined;
+    }
+    return {
+      last_24h_usd: summary.last_24h_usd,
+      all_time_usd: summary.all_time_usd,
+    };
+  }, (summary) => {
+    onDashboardPatch((current) => current ? {
+      ...current,
+      synthetic: {
+        ...current.synthetic,
+        pnl_summary: summary,
+      },
+    } : current);
+  }, 15_000, true, `synthetic-pnl:${account.user.id}:${environment}`, (error) => {
+    logDeskFailure("synthetic.pnl-summary", error);
+  }, "Synthetic");
   const pending = useDeskSelector(store, (state) => state.actions);
   const pendingFor = (key: string) => Boolean(pending[key as ActionKey]?.pending);
   const update = useCallback((next: Snapshot | null | ((current: Snapshot | null) => Snapshot | null)) => {
