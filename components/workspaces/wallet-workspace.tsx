@@ -603,7 +603,9 @@ function WalletWorkspaceBody({
       setReviewWithdrawal(false);
     } catch (error) {
       logDeskFailure("wallet.withdrawal-create", error);
-      setWithdrawalError("");
+      const message = t("The withdrawal request could not be created. Check the details and try again.");
+      setWithdrawalError(message);
+      onNotice(message);
       void reconcileDashboard("wallet.withdrawal-reconcile");
     } finally {
       withdrawalSubmitting.current = false;
