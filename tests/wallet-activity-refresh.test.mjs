@@ -21,7 +21,7 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.match(pollerCall, /,\s*30_000,\s*true,/);
   assert.match(pollerCall, /`wallet-dashboard:\$\{environment\}`/);
   assert.match(pollerCall, /"Wallet"/);
-  assert.match(source, /data\.ledger\.length/);
+  assert.match(source, /const sortedActivity = \[\.\.\.data\.ledger\]/);
   const activityViewStart = source.indexOf('if (view === "activity")');
   const activityViewEnd = source.indexOf('return (\n    <div className="wallet-grid">', activityViewStart);
   assert.notEqual(activityViewStart, -1);
