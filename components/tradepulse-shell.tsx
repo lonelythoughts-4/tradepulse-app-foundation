@@ -6958,7 +6958,9 @@ function LiveTradePulse() {
         if (error instanceof DeskApiError) throw error;
         if (timedOut) {
           console.error("TradeMemo API request timed out", { path, requestId });
-          throw new Error("");
+          const timeoutError = new Error("");
+          timeoutError.name = "TimeoutError";
+          throw timeoutError;
         }
         if (callerSignal?.aborted) throw new DOMException("", "AbortError");
         if (error instanceof TypeError) {
@@ -7025,11 +7027,9 @@ function LiveTradePulse() {
         return false;
       }
       setTelegramIdentityPending(false);
-      // A Telegram-authenticated first load has to assemble the complete
-      // account projection. Give a healthy, signed desk enough room to finish
-      // during a transient database reconnect instead of mislabelling it as
-      // an authentication failure at twelve seconds.
-      const next = await request("/v1/dashboard", {}, targetEnvironment, 25_000);
+      // Keep the first-load wait bounded so a slow API produces a retry state
+      // instead of leaving the user on an indefinite full-screen loader.
+      const next = await request("/v1/dashboard", {}, targetEnvironment, 15_000);
       if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
         return false;
       }
@@ -7060,8 +7060,16 @@ function LiveTradePulse() {
       selectedEnvironmentRef.current = resolvedEnvironment;
       setWebEnvironment(resolvedEnvironment);
       return true;
-    } catch {
-      setNotice("");
+    } catch (error) {
+      if (checkingSession && !dashboardAuthenticationRejectedRef.current) {
+        setNotice(
+          error instanceof Error && error.name === "TimeoutError"
+            ? "The desk is taking longer than expected. Try again."
+            : "The desk could not be opened. Check your connection and try again.",
+        );
+      } else {
+        setNotice("");
+      }
       return false;
     } finally {
       if (checkingSession) {
@@ -7461,7 +7469,7 @@ function LiveTradePulse() {
       }
       return (
         <DeskLoading
-          status="Opening your desk…"
+          status={notice || "Opening your desk…"}
           onRetry={() => {
             setNotice("");
             void load();
@@ -7475,7 +7483,7 @@ function LiveTradePulse() {
     if (!sessionHandoffRequired) {
       return (
         <DeskLoading
-          status="Opening your desk…"
+          status={notice || "Opening your desk…"}
           onRetry={() => {
             setNotice("");
             void load();
