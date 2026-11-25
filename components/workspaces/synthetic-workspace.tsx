@@ -12,7 +12,7 @@ import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
 import { syntheticQuoteStatus } from "../../lib/synthetic-quote-status";
 import { logDeskFailure } from "../../lib/desk-api";
 import { useResourcePoller } from "./use-resource-poller";
-import { ChevronRight } from "./shared-ui";
+import { ChevronRight, ProductPnlSummary } from "./shared-ui";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
@@ -282,6 +282,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     {environment === "testnet" && account.user.is_admin && <p className="synthetic-environment-note">Admin test environment · Virtual funds only.</p>}
     <div id="synthetic-market-snapshot" aria-label={market + " market snapshot"}>
       <MemoizedSyntheticMarketData account={account} environment={environment} executionLabel={executionLabel} market={market} marketChart={MarketChart} snapshot={snapshot} store={store} />
+      <ProductPnlSummary product="Synthetic" summary={account.synthetic?.pnl_summary} />
       {environment === "mainnet" ? <>
         <section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title">
           <div className="synthetic-auto-heading">

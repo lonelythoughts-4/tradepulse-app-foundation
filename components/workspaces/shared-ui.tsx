@@ -64,6 +64,47 @@ export function money(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 }
 
+export type ProductPnlSummaryData = {
+  last_24h_usd: number;
+  all_time_usd: number;
+};
+
+export function ProductPnlSummary({
+  product,
+  summary,
+}: {
+  product: "Memecoin" | "Synthetic";
+  summary?: ProductPnlSummaryData | null;
+}) {
+  const values = [
+    { label: "24-HOUR REALIZED NET P&L", value: summary?.last_24h_usd },
+    { label: "ALL-TIME REALIZED NET P&L", value: summary?.all_time_usd },
+  ];
+  return (
+    <section className="product-pnl-summary" aria-label={`${product} P&L`}>
+      <h3>{product} P&L</h3>
+      <dl>
+        {values.map(({ label, value }) => {
+          const amount = typeof value === "number" && Number.isFinite(value)
+            ? value
+            : null;
+          const display = amount !== null
+            ? `${amount > 0 ? "+" : ""}${money(amount)}`
+            : "Unavailable";
+          return (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd className={amount === null ? undefined : amount > 0 ? "up" : amount < 0 ? "down" : undefined}>
+                {display}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
+  );
+}
+
 const paymentMarks: Record<string, string> = {
   USDT: "usdt", USDC: "usdc", Ethereum: "ethereum", ERC20: "ethereum",
   "BNB Chain": "bnb", BEP20: "bnb", Base: "base", BASE: "base",

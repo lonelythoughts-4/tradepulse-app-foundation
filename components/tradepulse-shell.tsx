@@ -18,6 +18,7 @@ import { AccountWorkspace } from "./workspaces/account-workspace";
 import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { ProtectionWorkspace } from "./workspaces/protection-workspace";
+import { ProductPnlSummary } from "./workspaces/shared-ui";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import {
   useDocumentVisibility,
@@ -4818,10 +4819,12 @@ export type LiveDashboard = {
     health?: { status?: string; assets?: number; latest_tick_at?: number | null };
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
     market_labels?: Record<string, string>;
+    pnl_summary?: { last_24h_usd: number; all_time_usd: number } | null;
     recent_settlements?: Array<{ id?: string; bot_id?: number; symbol?: string; direction?: string; realized_pnl?: number; close_reason?: string; closed_at?: number }>;
   };
   synthetic?: {
     execution_mode?: "MANUAL" | "AUTO";
+    pnl_summary?: { last_24h_usd: number; all_time_usd: number } | null;
     open_positions?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; entry_price?: number; stop_price?: number; take_price?: number; contract_expires_at?: number }>;
     realized_pnl_usd?: number;
     recent_settlements?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; user_net_pnl_usd?: number; realized_pnl_usd?: number; close_reason?: string; closed_at?: number }>;
@@ -7844,6 +7847,10 @@ function LiveTradePulse() {
                       : undefined}
                     feedError={isMemecoin ? chart.feedError : undefined}
                     accent={isMemecoin ? "#60a5fa" : "#34d399"}
+                  />
+                  <ProductPnlSummary
+                    product={isMemecoin ? "Memecoin" : "Synthetic"}
+                    summary={isMemecoin ? data.memecoin?.pnl_summary : data.synthetic?.pnl_summary}
                   />
                   <div className="activity-row">
                     <div className="activity-info">
