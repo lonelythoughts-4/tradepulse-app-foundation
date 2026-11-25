@@ -15,7 +15,8 @@ import { logDeskFailure } from "../../lib/desk-api";
 import { useResourcePoller } from "./use-resource-poller";
 import { ChevronRight, ProductPnlSummary, type ProductPnlSummaryData } from "./shared-ui";
 
-type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
+export const SYNTHETIC_MARKETS = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"] as const;
+type Market = (typeof SYNTHETIC_MARKETS)[number];
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
 type Snapshot = { market: string; partial?: boolean; history_available?: boolean; history_stale?: boolean; positions_stale?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; auto_locked_usd?: number; manual_available_usd?: number; auto_margin_usd?: number; capacity_refresh_required?: boolean; daily_outcome?: "win" | "loss" | null; daily_goal_percent?: number | null; daily_goal_usd?: number | null; daily_settled_net_pnl_usd?: number; daily_open_net_pnl_usd?: number; daily_net_pnl_usd?: number; daily_loss_target_usd?: number | null; daily_loss_target_reached?: boolean; daily_goal_reached?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number } };
 type SyntheticQuote = { market: string; latest: Snapshot["latest"]; ticks: Snapshot["ticks"]; history_available?: boolean; history_stale?: boolean; received_at: number; server_updated_at: number };
@@ -24,7 +25,6 @@ type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots" | "ledger" | "memecoin" | "synthetic">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
 export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; store: DeskStore };
-const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
 const capacityValue = (value: number | undefined, pending: boolean, fallback?: number) => {
@@ -145,14 +145,15 @@ function SyntheticPositionList({ positions, pending, pendingFor, onClose }: {
   </section>;
 }
 
-function SyntheticSettlementList({ settlements }: {
+export function SyntheticSettlementList({ settlements, titleId = "synthetic-settlements-title" }: {
   settlements: NonNullable<NonNullable<Account["synthetic"]>["recent_settlements"]>;
+  titleId?: string;
 }) {
   const recent = settlements.slice(0, 5);
-  return <section className="synthetic-settlement-section" aria-labelledby="synthetic-settlements-title">
+  return <section className="synthetic-settlement-section" aria-labelledby={titleId}>
     <div className="synthetic-section-heading">
       <div className="synthetic-settlement-title-region">
-        <h3 id="synthetic-settlements-title">Recent closed trades</h3>
+        <h3 id={titleId}>Recent closed trades</h3>
         <span>{recent.length === 5 ? "Latest 5" : `${recent.length} shown`}</span>
       </div>
     </div>
@@ -376,7 +377,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       <div className="synthetic-market-action-region"><button type="button" className="small-action synthetic-help-link" onClick={() => setHelpOpen(true)}>How quotes work</button></div>
     </div>
     <div className="segment-control synthetic-market-rail" role="group" aria-label="Synthetic markets">
-      {markets.map((item) => <button key={item} className={market === item ? "active" : ""} aria-pressed={market === item} onClick={() => { if (item !== market) { setSignals([]); marketRef.current = item; setMarket(item); } }}>{item}</button>)}
+      {SYNTHETIC_MARKETS.map((item) => <button key={item} className={market === item ? "active" : ""} aria-pressed={market === item} onClick={() => { if (item !== market) { setSignals([]); marketRef.current = item; setMarket(item); } }}>{item}</button>)}
     </div>
     {environment === "testnet" && account.user.is_admin && <p className="synthetic-environment-note">Admin test environment · Virtual funds only.</p>}
     <div id="synthetic-market-snapshot" aria-label={market + " market snapshot"}>

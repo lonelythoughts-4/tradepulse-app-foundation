@@ -55,6 +55,14 @@ test("Synthetic shows recent canonical settlements separately from open position
   assert.match(source, /response\.position\.status === "closed"[\s\S]*?recent_settlements/);
 });
 
+test("Synthetic bot detail puts its selected-market chart directly above five recent closed trades", () => {
+  assert.match(botsSource, /\/v1\/synthetic\/stream\?market=\$\{syntheticMarket\}&include_history=1/);
+  assert.match(botsSource, /SYNTHETIC_MARKETS\.map/);
+  assert.match(botsSource, /<MarketChart\s+key=\{syntheticMarket\}[\s\S]*?\/>\s*<SyntheticSettlementList\s+settlements=\{data\.synthetic\?\.recent_settlements \|\| \[\]\}/);
+  assert.match(source, /export function SyntheticSettlementList[\s\S]*?const recent = settlements\.slice\(0, 5\)/);
+  assert.match(styles, /@media \(max-width: 420px\) \{\s*\.synthetic-bot-chart-heading \{\s*grid-template-columns: minmax\(0, 1fr\);/);
+});
+
 test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);

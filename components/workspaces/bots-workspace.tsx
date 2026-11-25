@@ -8,6 +8,7 @@ import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
 import { DeskApiError, logDeskFailure } from "../../lib/desk-api";
+import { reconcileSyntheticTicks } from "../../lib/synthetic-ticks";
 import {
   getFlashbackStartAvailability,
   parseFlashbackEntryAmount,
@@ -17,7 +18,31 @@ import {
 import type { WorkspaceDashboard } from "./workspace-dashboard";
 import { useResourcePoller } from "./use-resource-poller";
 import { MarketChart, formatMarketPrice, type MarketCandle, type MarketPoint } from "./market-chart";
+import { SyntheticSettlementList, SYNTHETIC_MARKETS } from "./synthetic-workspace";
 import { ChevronRight, GradientPanel, PaymentMark, Plus, ProductPnlSummary, StateIcon, StateSwapIcon, X, Zap, money } from "./shared-ui";
+
+type SyntheticStreamTick = {
+  market?: string;
+  sequence?: number;
+  price?: number;
+  reference?: number;
+  timestamp?: number;
+  created_at?: number;
+};
+type SyntheticStreamSnapshot = {
+  market?: string;
+  latest?: SyntheticStreamTick | null;
+  ticks?: SyntheticStreamTick[];
+  history_available?: boolean;
+  history_stale?: boolean;
+};
+type SyntheticChartState = {
+  environment: "mainnet" | "testnet" | null;
+  points: MarketPoint[];
+  historyDelayed: boolean;
+  historyUnavailable: boolean;
+  feedError: boolean;
+};
 
 function BotProductCard({ name, description, selected, onClick }: { name: string; description: string; selected?: boolean; onClick: () => void }) {
   return <DeskLocalized><button className={`product-card ${selected ? "selected" : ""}`} onClick={onClick}><span><strong>{name}</strong><small>{description}</small></span><ChevronRight /></button></DeskLocalized>;
@@ -192,6 +217,8 @@ export function BotsWorkspace({
     percent: number;
   } | null>(null);
   const pollingWorkspace = flashbackOnly ? "Flashback" : "Bots";
+  const syntheticChartEnvironment =
+    data.environment === "mainnet" || data.environment === "testnet" ? data.environment : null;
   const [initialCompoundPercent, setInitialCompoundPercent] = useState(0);
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
@@ -199,6 +226,14 @@ export function BotsWorkspace({
   const [memecoinMarket, setMemecoinMarket] = useState("DOGE");
   const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; chain_label?: string }>>([]);
   const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ symbol?: string; bot_id?: number | null; environment?: string; partial?: boolean; points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }> }>({});
+  const [syntheticMarket, setSyntheticMarket] = useState<(typeof SYNTHETIC_MARKETS)[number]>("SYN-25");
+  const [syntheticChart, setSyntheticChart] = useState<SyntheticChartState>({
+    environment: null,
+    points: [],
+    historyDelayed: false,
+    historyUnavailable: false,
+    feedError: false,
+  });
   useEffect(() => {
     setSelectedId(initialBotId);
     setView(initialBotId ? "detail" : initialView);
@@ -419,6 +454,78 @@ export function BotsWorkspace({
     (error) => logDeskFailure("bots.memecoin-snapshot", error),
     "Bots",
   );
+  useResourcePoller<SyntheticStreamSnapshot>(
+    async (_token, signal) => {
+      if (!syntheticChartEnvironment) {
+        throw new Error("Synthetic market data is unavailable for this account environment.");
+      }
+      return await request(
+        `/v1/synthetic/stream?market=${syntheticMarket}&include_history=1`,
+        { signal },
+        syntheticChartEnvironment,
+      );
+    },
+    (snapshot) => {
+      if (snapshot?.market && snapshot.market !== syntheticMarket) return;
+      const latest = snapshot?.latest;
+      const latestPrice = Number(latest?.reference ?? latest?.price);
+      const latestValid = Boolean(
+        latest
+          && (!latest.market || latest.market === syntheticMarket)
+          && Number.isInteger(Number(latest.sequence))
+          && Number.isFinite(latestPrice)
+          && latestPrice > 0,
+      );
+      const sourceTicks = [
+        ...(Array.isArray(snapshot?.ticks) ? snapshot.ticks : []),
+        ...(latestValid && latest ? [latest] : []),
+      ].filter((tick): tick is SyntheticStreamTick => Boolean(tick && typeof tick === "object"));
+      const points = reconcileSyntheticTicks(sourceTicks.map((tick) => ({
+        market: tick.market || snapshot?.market || syntheticMarket,
+        sequence: Number(tick.sequence),
+        price: Number(tick.reference ?? tick.price),
+        timestamp: tick.timestamp ?? tick.created_at,
+      })), syntheticMarket).slice(-80);
+      setSyntheticChart({
+        environment: syntheticChartEnvironment,
+        points,
+        historyDelayed: snapshot?.history_stale === true,
+        historyUnavailable: snapshot?.history_available === false,
+        feedError: !latestValid,
+      });
+    },
+    1_000,
+    Boolean(!flashbackOnly && view === "detail" && selected?.product === "synthetic" && syntheticChartEnvironment),
+    `synthetic:${selected?.id || ""}:${data.environment}:${syntheticMarket}`,
+    (error) => {
+      logDeskFailure("bots.synthetic-stream", error);
+      setSyntheticChart((current) => ({
+        environment: syntheticChartEnvironment,
+        points: current.environment === syntheticChartEnvironment ? current.points : [],
+        historyDelayed: current.environment === syntheticChartEnvironment ? current.historyDelayed : false,
+        historyUnavailable: current.environment === syntheticChartEnvironment ? current.historyUnavailable : false,
+        feedError: true,
+      }));
+    },
+    pollingWorkspace,
+  );
+  const chartMatchesEnvironment = syntheticChart.environment === syntheticChartEnvironment;
+  const syntheticChartPoints = chartMatchesEnvironment ? syntheticChart.points : [];
+  const syntheticChartFeedError = chartMatchesEnvironment && syntheticChart.feedError;
+  const syntheticChartHistoryDelayed = chartMatchesEnvironment && syntheticChart.historyDelayed;
+  const syntheticChartHistoryUnavailable = chartMatchesEnvironment && syntheticChart.historyUnavailable;
+  const syntheticChartStatus = !syntheticChartEnvironment
+    ? "Market unavailable"
+    : syntheticChartFeedError
+      ? "Feed reconnecting"
+      : syntheticChartHistoryDelayed
+        ? "History delayed"
+        : syntheticChartHistoryUnavailable
+          ? "History unavailable"
+          : syntheticChartPoints.length
+            ? "Simulation feed"
+            : "Connecting";
+  const syntheticChartStatusTone = syntheticChartStatus === "Simulation feed" ? "running" : "paused";
   const actionKeyFor = (path: string, payload: Record<string, unknown>) => {
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (botAction) {
@@ -1061,6 +1168,62 @@ export function BotsWorkspace({
           )}
           {selected.product === "memecoin" && (
             <ProductPnlSummary product="Memecoin" summary={data.memecoin?.pnl_summary} />
+          )}
+          {selected.product === "synthetic" && (
+            <GradientPanel className="compound-panel synthetic-bot-chart-panel">
+              <div className="synthetic-bot-chart-heading">
+                <div className="synthetic-bot-chart-title-region">
+                  <h3>Synthetic market chart</h3>
+                </div>
+                <div className="synthetic-bot-chart-status-region">
+                  <span className={`status-chip ${syntheticChartStatusTone}`} role="status" aria-live="polite" aria-atomic="true">
+                    <i />
+                    {syntheticChartStatus}
+                  </span>
+                </div>
+              </div>
+              <div className="segment-control" role="radiogroup" aria-label="Synthetic market" onKeyDown={handleBotChoiceKeyDown}>
+                {SYNTHETIC_MARKETS.map((market) => (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={syntheticMarket === market}
+                    tabIndex={syntheticMarket === market ? 0 : -1}
+                    className={syntheticMarket === market ? "active" : ""}
+                    key={market}
+                    onClick={() => {
+                      if (market === syntheticMarket) return;
+                      setSyntheticMarket(market);
+                      setSyntheticChart((current) => ({
+                        ...current,
+                        points: [],
+                        historyDelayed: false,
+                        historyUnavailable: false,
+                        feedError: false,
+                      }));
+                    }}
+                  >
+                    {market}
+                  </button>
+                ))}
+              </div>
+              <MarketChart
+                key={syntheticMarket}
+                points={syntheticChartPoints}
+                market={syntheticMarket}
+                sourceLabel="Synthetic index"
+                emptyMessage={!syntheticChartEnvironment
+                  ? "Synthetic market data is unavailable for this account environment."
+                  : syntheticChartFeedError
+                    ? "Synthetic feed reconnecting; waiting for market ticks."
+                    : "Waiting for Synthetic market ticks."}
+                feedError={syntheticChartFeedError ? "Synthetic feed reconnecting" : undefined}
+              />
+              <SyntheticSettlementList
+                settlements={data.synthetic?.recent_settlements || []}
+                titleId="bots-synthetic-settlements-title"
+              />
+            </GradientPanel>
           )}
           {!isClosing && (
             <GradientPanel className="compound-panel">

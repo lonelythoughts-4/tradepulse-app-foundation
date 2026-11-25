@@ -190,6 +190,32 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
   font-size: 11px;
   text-align: right;
 }
+.synthetic-bot-chart-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  margin-bottom: 3px;
+}
+.synthetic-bot-chart-title-region {
+  min-width: 0;
+}
+.synthetic-bot-chart-title-region h3 {
+  margin: 0;
+  color: var(--tp-ink);
+  font: 600 15px/1.3 var(--font-space-grotesk), sans-serif;
+}
+.synthetic-bot-chart-status-region {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.synthetic-bot-chart-status-region .status-chip {
+  max-width: 100%;
+  white-space: normal;
+  text-align: right;
+}
 .synthetic-signal-section,
 .synthetic-position-section,
 .synthetic-settlement-section {
@@ -223,6 +249,20 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
 @media (max-width: 520px) {
   .synthetic-settlement-section .synthetic-section-heading {
     align-items: flex-start;
+  }
+  .synthetic-bot-chart-heading {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 420px) {
+  .synthetic-bot-chart-heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .synthetic-bot-chart-status-region {
+    justify-content: flex-start;
+  }
+  .synthetic-bot-chart-status-region .status-chip {
+    text-align: left;
   }
 }
 .synthetic-pilot [role="tabpanel"] {
