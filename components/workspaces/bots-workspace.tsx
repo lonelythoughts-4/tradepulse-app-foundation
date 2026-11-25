@@ -912,7 +912,7 @@ export function BotsWorkspace({
                 <input type="checkbox" checked={syntheticRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setSyntheticRiskAcknowledged(event.target.checked)} />
                 <i aria-hidden="true" />
               </label>}
-              {product === "synthetic" && data.environment === "mainnet" && <p>Auto starts with this full allocation. The first simulated entry is scheduled within 1–2 minutes when a shared-index signal qualifies. Future top-ups are also available to Auto.</p>}
+              {product === "synthetic" && data.environment === "mainnet" && <p>Auto starts with this full allocation. The first simulated entry is scheduled within 1–2 minutes when a shared-index signal qualifies. Future Synthetic top-ups are also available to Auto.</p>}
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
