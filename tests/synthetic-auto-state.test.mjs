@@ -44,7 +44,7 @@ test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /syntheticAutoOn && dailyExecutionPause/);
   assert.doesNotMatch(source, /0\.2–0\.3%|daily-loss reference|profit ceiling/);
   assert.match(source, /Auto evaluates shared signals using 100% of your funded Synthetic allocation/);
-  assert.match(source, /aria-label="Automatic allocation, available margin, and locked margin"/);
+  assert.match(source, /aria-label="Auto available and locked margin"/);
   assert.match(styles, /@media\(max-width:520px\)\{[\s\S]*?\.synthetic-auto-capacity\{grid-template-columns:minmax\(0,1fr\)\}/);
 });
 

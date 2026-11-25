@@ -27,7 +27,6 @@ test("a delayed account snapshot keeps its last verified value and logs refresh 
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
   assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotCheckedKey\(resourceKey\);/);
   assert.match(source, /const capacityValue = \(value: number \| undefined, pending: boolean, fallback\?: number\)/);
-  assert.match(source, /snapshot\.execution\?\.auto_allocation_usd, snapshotPending, Number\(syntheticBot\?\.capital_usd\)/);
   assert.doesNotMatch(source, /snapshot\.partial \? "Unavailable"/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
   assert.doesNotMatch(source, /execution-mode|MANUAL|Enable Auto|Turn Auto off/);
