@@ -55,8 +55,7 @@ function percentageLabel(value: number) {
 type BotTopUpFeedback =
   | { kind: "success"; amount: number; botName: string }
   | { kind: "below-minimum"; minimum: number; available: number }
-  | { kind: "over-available"; available: number }
-  | { kind: "unconfirmed"; botName: string };
+  | { kind: "over-available"; available: number };
 
 function remainingTargetLabel(mark: number, target: number, direction: string) {
   const distance = direction.toLowerCase() === "short"
@@ -436,8 +435,6 @@ export function BotsWorkspace({
               ? Number(currentAvailable[1].replace(/,/g, ""))
               : available,
           });
-        } else {
-          setTopUpFeedback({ kind: "unconfirmed", botName: selected?.name || "this bot" });
         }
       }
       setReviewError(
@@ -1007,7 +1004,6 @@ export function BotsWorkspace({
                 success: "Top-up complete",
                 "below-minimum": "Amount below minimum",
                 "over-available": "Amount exceeds available balance",
-                unconfirmed: "Top-up not confirmed",
               }[topUpFeedback.kind]}
               onClose={() => setTopUpFeedback(null)}
             >
@@ -1017,7 +1013,6 @@ export function BotsWorkspace({
                     success: "Top-up complete",
                     "below-minimum": "Amount below minimum",
                     "over-available": "Amount exceeds available balance",
-                    unconfirmed: "Top-up not confirmed",
                   }[topUpFeedback.kind]}
                 </h2>
                 <button
@@ -1042,11 +1037,6 @@ export function BotsWorkspace({
               )}
               {topUpFeedback.kind === "over-available" && (
                 <p role="alert">Available balance: {money(topUpFeedback.available)}. Reduce the amount and try again.</p>
-              )}
-              {topUpFeedback.kind === "unconfirmed" && (
-                <p role="alert">
-                  We couldn&apos;t confirm the top-up to {topUpFeedback.botName}. Check its allocation and your available balance before retrying.
-                </p>
               )}
             </AccessibleDialog>
           )}

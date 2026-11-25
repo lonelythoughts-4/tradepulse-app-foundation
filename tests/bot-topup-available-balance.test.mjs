@@ -20,6 +20,7 @@ test("product top-ups report minimum, available-balance, and success outcomes in
   assert.match(workspace, /Minimum top-up: \{money\(topUpFeedback\.minimum\)\}/);
   assert.match(workspace, /Available balance: \{money\(topUpFeedback\.available\)\}\. Reduce the amount and try again\./);
   assert.match(workspace, /Added \{money\(topUpFeedback\.amount\)\} to \{topUpFeedback\.botName\}\./);
+  assert.doesNotMatch(workspace, /Top-up not confirmed|kind: "unconfirmed"/);
   assert.match(dashboardApi, /"min_bot_investment_usd": float\(configured\("min_bot_investment_usd"\)\)/);
   assert.match(translations, /"FROM AVAILABLE BALANCE": \[/);
 });
