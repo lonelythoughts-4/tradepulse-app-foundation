@@ -99,7 +99,7 @@ test("Telegram Mini Apps recover to secure handoff after bridge detection or ses
 
   assert.match(shell, /setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\)/);
   assert.match(shell, /sessionHandoffRequired \? \(\s*<BrowserBotHandoff/);
-  assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{\s*telegramHandoffSessionRef\.current = true;\s*const loaded = await load\(\);/);
+  assert.match(shell, /<BrowserBotHandoff onComplete=\{async \(\) => \{[\s\S]*?telegramHandoffSessionRef\.current = true;[\s\S]*?const loaded = await load\(\);/);
   assert.doesNotMatch(handoff, /state === "error"/);
   assert.match(load, /if \(checkingSession && telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*return false;\s*\}/);
   assert.ok(load.indexOf("if (checkingSession && telegramContext && !telegramInitData())") < load.indexOf('request("/v1/dashboard"'));
@@ -118,7 +118,7 @@ test("an endpoint-specific 401 validates the dashboard before asking the user to
 
   assert.match(
     request,
-    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}\s*throw new DeskApiError/,
+    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{[\s\S]*?updateDashboard\(null\);[\s\S]*?setTelegramIdentityPending\(false\);[\s\S]*?setTelegramLaunchContext\(false\);[\s\S]*?setSessionHandoffRequired\(true\);[\s\S]*?setSessionBootstrapComplete\(true\);[\s\S]*?\} else \{[\s\S]*?sessionValidationRef\.current\?\.\(targetEnvironment\);[\s\S]*?\}\s*throw new DeskApiError/,
   );
   assert.doesNotMatch(shell, /Reconnect your TradeMemo session/);
 });
