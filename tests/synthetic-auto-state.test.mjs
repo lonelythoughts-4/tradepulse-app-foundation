@@ -11,10 +11,19 @@ const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
 
 test("funded Synthetic is Auto-managed without a Manual mode switch", () => {
   assert.match(source, /const syntheticAutoOn = syntheticBot\?\.state === "running" && Number\(syntheticBot\.capital_usd \|\| 0\) > 0/);
-  assert.match(source, /const executionStatus = syntheticBot\?\.state === "paused" \? "Paused" : syntheticAutoOn \? "Auto on" : "Waiting for funding"/);
+  assert.match(source, /const syntheticClosing = syntheticBot\?\.state === "closing"/);
+  assert.match(source, /const executionStatus = syntheticBot\?\.state === "paused" \? "Paused" : syntheticClosing \? "Closing allocation" : syntheticAutoOn \? "Auto on" : "Waiting for funding"/);
+  assert.match(source, /"SIM FEED · 1s"/);
   assert.match(botsSource, /bot\.state === "running" && Number\(bot\.capital_usd \|\| 0\) > 0\s+\? "Auto on"/);
   assert.doesNotMatch(source, /execution-mode|MANUAL|Enable Auto|Turn Auto off|executionModeKnown/);
   assert.doesNotMatch(botsSource, /data\.synthetic\?\.execution_mode \|\| "MANUAL"|Auto off/);
+});
+
+test("a closing bot keeps a retry action and shows product-specific close steps", () => {
+  assert.match(botsSource, /isClosing \? "Finish closing bot" : "Close bot"/);
+  assert.doesNotMatch(botsSource, /!isClosing && <button\s+className="danger-action"/);
+  assert.match(botsSource, /Closing stops Synthetic Auto first\. It does not close simulated positions/);
+  assert.match(botsSource, /Existing positions remain protected while the bot finishes closing them at executable market prices/);
 });
 
 test("the fleet keeps Auto order, latest settlement, and Memecoin customer-net summaries", () => {

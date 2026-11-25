@@ -537,7 +537,11 @@ export function BotsWorkspace({
       return true;
     } catch (error) {
       logDeskFailure("bots.action", error);
-      setReviewError("");
+      setReviewError(
+        payload.action === "close"
+          ? "Close status is not confirmed yet. Refresh the bot state before retrying."
+          : "",
+      );
       void reload().catch((reloadError) => logDeskFailure("bots.dashboard-reconcile", reloadError));
       return false;
     } finally {
@@ -904,11 +908,11 @@ export function BotsWorkspace({
               </div>
               {product === "memecoin" && <p>Results use live market data and settle within this Memecoin allocation.</p>}
               {product === "synthetic" && data.environment === "mainnet" && <label className="toggle-row">
-                <span>I understand Synthetic Auto will use 100% of this funded allocation as 1:1 trade margin. Price movement, spread, and tier fees can reduce my allocation; Auto may place orders without asking each time, and returns are not guaranteed.</span>
+                <span>I understand Synthetic is a game simulation using simulated index prices, not real exchange trades. Auto uses 100% of this allocation as 1:1 simulated trade margin. Daily outcomes are rolled independently per player: 80% win target (+2% to +4%) or 20% loss cap (−1%).</span>
                 <input type="checkbox" checked={syntheticRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setSyntheticRiskAcknowledged(event.target.checked)} />
                 <i aria-hidden="true" />
               </label>}
-              {product === "synthetic" && data.environment === "mainnet" && <p>Auto starts with this full allocation. Future Synthetic top-ups are also available to Auto.</p>}
+              {product === "synthetic" && data.environment === "mainnet" && <p>Auto starts with this full allocation. The first simulated entry is scheduled within 1–2 minutes when a shared-index signal qualifies. Future top-ups are also available to Auto.</p>}
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
@@ -1193,13 +1197,13 @@ export function BotsWorkspace({
               swapKey={paused ? "bot-resume" : "bot-pause"}
             />
           </button>}
-            {!isClosing && <button
+            <button
                 className="danger-action"
                 disabled={isActionPending(`bot:${selected.id}:close`)}
                 onClick={() => { setReviewError(""); setCloseReview(true); }}
               >
                 {isClosing ? "Finish closing bot" : "Close bot"} <X />
-              </button>}
+              </button>
           </div>
           {memecoinOrder && (
             <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!isActionPending(`memecoin-order:${selected.id}`)}>
@@ -1250,10 +1254,12 @@ export function BotsWorkspace({
               <span className="eyebrow">FINAL REVIEW</span>
               <h2>Close {selected.name}?</h2>
               <p>{isClosing
-                ? "The bot is already closing. Any in-flight position remains protected until settlement finishes."
+                ? selected.product === "synthetic"
+                  ? "Synthetic Auto is stopped. Close any remaining simulated positions in Synthetic, then finish closing here to return the remaining allocation."
+                  : "No new Memecoin positions will open. Existing positions remain protected while the bot finishes closing them at executable market prices; the remaining allocation returns after settlement."
                 : selected.product === "synthetic"
-                  ? "Close every open Synthetic position first. Once none remain, the available product allocation returns to your balance."
-                  : "The product’s available allocation returns to your balance. Any open position remains protected until its settlement finishes."}</p>
+                  ? "Closing stops Synthetic Auto first. It does not close simulated positions: close each one in Synthetic, then finish closing here to return the remaining allocation."
+                  : "Closing stops new Memecoin entries and closes open positions at executable market prices. The remaining allocation returns after settlements finish."}</p>
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button className="danger-action" disabled={isActionPending(`bot:${selected.id}:close`)} aria-busy={isActionPending(`bot:${selected.id}:close`)} onClick={async () => {
                 const closed = await run(`/v1/bots/${selected.id}/actions`, { action: "close" });
@@ -1326,7 +1332,9 @@ export function BotsWorkspace({
             const status = bot.state.replace(/_/g, " ");
             const statusTone = bot.state === "running" ? "running" : "paused";
             const isSynthetic = bot.product === "synthetic";
-            const syntheticExecution = bot.state === "paused"
+            const syntheticExecution = bot.state === "closing"
+              ? "Closing simulation"
+              : bot.state === "paused"
               ? "Paused"
               : bot.state === "running" && Number(bot.capital_usd || 0) > 0
                 ? "Auto on"

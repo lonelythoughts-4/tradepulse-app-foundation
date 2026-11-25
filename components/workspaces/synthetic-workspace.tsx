@@ -45,7 +45,7 @@ function SyntheticQuoteStatus({ environment, error, market, store }: { environme
   const label = status === "reconnecting"
     ? "Feed reconnecting"
     : status === "live"
-      ? "LIVE QUOTE · 1s"
+      ? "SIM FEED · 1s"
       : status === "delayed"
         ? "Quote delayed"
         : "Connecting…";
@@ -243,8 +243,9 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   };
   const syntheticBot = account.bots.find((bot) => bot.product === "synthetic");
   const syntheticAutoOn = syntheticBot?.state === "running" && Number(syntheticBot.capital_usd || 0) > 0;
-  const executionStatus = syntheticBot?.state === "paused" ? "Paused" : syntheticAutoOn ? "Auto on" : "Waiting for funding";
-  const executionLabel = syntheticBot?.state === "paused" ? "PAUSED" : syntheticAutoOn ? "AUTO" : "WAITING";
+  const syntheticClosing = syntheticBot?.state === "closing";
+  const executionStatus = syntheticBot?.state === "paused" ? "Paused" : syntheticClosing ? "Closing allocation" : syntheticAutoOn ? "Auto on" : "Waiting for funding";
+  const executionLabel = syntheticBot?.state === "paused" ? "PAUSED" : syntheticClosing ? "CLOSING" : syntheticAutoOn ? "AUTO" : "WAITING";
   const snapshotPending = snapshot.partial === true && snapshotCheckedKey !== resourceKey;
   const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
   const dailyNetUsd = Number(snapshot.execution?.daily_net_pnl_usd || 0);
