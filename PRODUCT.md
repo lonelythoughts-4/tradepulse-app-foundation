@@ -27,6 +27,7 @@ Users may arrive from Telegram on a phone, from a desktop browser handoff, or th
 - Inferred from the project constraints: the Telegram bot and web app are two surfaces of one product. Keep shared user-facing behavior, state, safeguards, notifications, and admin controls consistent across both; differences should be platform-specific rather than accidental.
 - Preserve the current routes, visual identity, illustrations, custom SVG icons, and information architecture.
 - Keep Memecoin and Synthetic product flows distinct while sharing wallet/account state.
+- Show realized net P&L for the previous 24 hours and all time in each product's own section; keep Memecoin and Synthetic figures separate.
 - Preserve server-authenticated API behavior, Mongo-backed market state, wallet safeguards, and admin-only controls.
 - Keep the web app connected to the same backend and database as the Telegram bot.
 - Keep each administrator's isolated Testnet selection across web app tabs; regular users remain on Mainnet and server-side authorization continues to gate Testnet data.
