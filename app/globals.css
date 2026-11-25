@@ -233,6 +233,16 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
   .synthetic-market-action-region {
     justify-content: flex-end;
   }
+  .synthetic-pilot .wallet-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .synthetic-pilot .wallet-stat-grid > div {
+    min-width: 0;
+  }
+  .synthetic-pilot .wallet-stat-grid strong {
+    font-size: clamp(16px, 4vw, 19px);
+    letter-spacing: -.03em;
+  }
   .synthetic-pilot .synthetic-market-rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
