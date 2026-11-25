@@ -107,14 +107,16 @@ function SyntheticSignalList({ signals }: {
     return () => window.clearInterval(timer);
   }, [signals.length]);
   const currentSignals = signals.filter((signal) => signal.expires_at * 1000 > now).slice(0, 3);
-  return <>
+  return <section className="synthetic-signal-section" aria-labelledby="synthetic-signals-title">
+    <div className="synthetic-section-heading"><h3 id="synthetic-signals-title">Current signals</h3><span>Auto feed</span></div>
     {currentSignals.map((signal) => <div className="activity-row" key={signal.id}><div className="activity-info"><strong>{signal.market} · {signal.direction} shared signal</strong><small>Auto evaluates eligible signals; no order is guaranteed. Expires in {Math.max(0, Math.ceil((signal.expires_at * 1000 - now) / 1000))}s</small></div></div>)}
-    {!currentSignals.length && <p role="status">No current signals. Waiting for the next update.</p>}
-  </>;
+    {!currentSignals.length && <p className="synthetic-empty-state" role="status">No current signals. Waiting for the next update.</p>}
+  </section>;
 }
 
-function SyntheticPositionList({ positions, pendingFor, onClose }: {
+function SyntheticPositionList({ positions, pending, pendingFor, onClose }: {
   positions: Snapshot["positions"];
+  pending: boolean;
   pendingFor: (key: string) => boolean;
   onClose: (positionId: string) => void;
 }) {
@@ -126,13 +128,18 @@ function SyntheticPositionList({ positions, pendingFor, onClose }: {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [hasExpiries]);
-  return <>{openPositions.map((position) => {
-    const key = "synthetic-position:" + position.id + ":close";
-    const expiry = Number(position.contract_expires_at);
-    const secondsToExpiry = Number.isFinite(expiry) ? Math.ceil(expiry - now / 1000) : null;
-    const expiryStatus = normaliseManualContractType(position.contract_type) === "fixed" && secondsToExpiry !== null ? secondsToExpiry > 0 ? " · scheduled close in " + secondsToExpiry + "s" : " · expiry reached; awaiting settlement" : "";
-    return <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{liveNetPnlLabel(Number(position.user_net_unrealized_pnl_usd || 0))} · {money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"}</small><small>Spread {money(position.spread_charged_usd || 0)} · tier fee {money(position.tier_fee_usd || 0)}</small><small className="synthetic-contract-record">{contractTypeLabel(position.contract_type)}{normaliseManualContractType(position.contract_type) === "open_ended" && Number.isFinite(Number(position.maximum_loss_percent)) ? " · max loss " + Number(position.maximum_loss_percent) + "%" : ""}{Number.isFinite(Number(position.manual_stop_loss_percent)) ? " · stop " + Number(position.manual_stop_loss_percent) + "%" : ""}{expiryStatus} · {contractReasonLabel(position.contract_reason)}</small></div><button className="small-action" disabled={pendingFor(key)} onClick={() => onClose(position.id)}>{pendingFor(key) ? "Closing…" : "Close"}</button></div>;
-  })}</>;
+  return <section className="synthetic-position-section" aria-labelledby="synthetic-positions-title">
+    <div className="synthetic-section-heading"><h3 id="synthetic-positions-title">Open positions</h3><span>{pending ? "Updating" : `${openPositions.length} open`}</span></div>
+    {!openPositions.length
+      ? <p className="synthetic-empty-state" role="status">{pending ? "Checking open positions…" : "No open positions right now."}</p>
+      : openPositions.map((position) => {
+        const key = "synthetic-position:" + position.id + ":close";
+        const expiry = Number(position.contract_expires_at);
+        const secondsToExpiry = Number.isFinite(expiry) ? Math.ceil(expiry - now / 1000) : null;
+        const expiryStatus = normaliseManualContractType(position.contract_type) === "fixed" && secondsToExpiry !== null ? secondsToExpiry > 0 ? " · scheduled close in " + secondsToExpiry + "s" : " · expiry reached; awaiting settlement" : "";
+        return <div className="activity-row" key={position.id}><div className="activity-info"><strong>{position.market} · {position.direction}</strong><small>{liveNetPnlLabel(Number(position.user_net_unrealized_pnl_usd || 0))} · {money(position.margin_usd)} reserved · {position.clearing_type || "PRINCIPAL"}</small><small>Spread {money(position.spread_charged_usd || 0)} · tier fee {money(position.tier_fee_usd || 0)}</small><small className="synthetic-contract-record">{contractTypeLabel(position.contract_type)}{normaliseManualContractType(position.contract_type) === "open_ended" && Number.isFinite(Number(position.maximum_loss_percent)) ? " · max loss " + Number(position.maximum_loss_percent) + "%" : ""}{Number.isFinite(Number(position.manual_stop_loss_percent)) ? " · stop " + Number(position.manual_stop_loss_percent) + "%" : ""}{expiryStatus} · {contractReasonLabel(position.contract_reason)}</small></div><button className="small-action" disabled={pendingFor(key)} onClick={() => onClose(position.id)}>{pendingFor(key) ? "Closing…" : "Close"}</button></div>;
+      })}
+  </section>;
 }
 
 export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, request, store }: SyntheticWorkspaceProps) {
@@ -300,8 +307,8 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       : "";
   return <DeskLocalized><div className="desk-screen"><div className="gradient-panel synthetic-pilot">
     <div className="synthetic-market-header">
-      <div><h2>Market</h2><MemoizedQuoteStatus environment={environment} error={quoteError} market={market} store={store} /></div>
-      <button type="button" className="small-action synthetic-help-link" onClick={() => setHelpOpen(true)}>How quotes work</button>
+      <div className="synthetic-market-title-region"><h2>{market}</h2><MemoizedQuoteStatus environment={environment} error={quoteError} market={market} store={store} /></div>
+      <div className="synthetic-market-action-region"><button type="button" className="small-action synthetic-help-link" onClick={() => setHelpOpen(true)}>How quotes work</button></div>
     </div>
     <div className="segment-control synthetic-market-rail" role="group" aria-label="Synthetic markets">
       {markets.map((item) => <button key={item} className={market === item ? "active" : ""} aria-pressed={market === item} onClick={() => { if (item !== market) { setSignals([]); marketRef.current = item; setMarket(item); } }}>{item}</button>)}
@@ -325,7 +332,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         </section>
         <SyntheticSignalList signals={signals} />
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
-      <SyntheticPositionList positions={snapshot.positions} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
+      <SyntheticPositionList positions={snapshot.positions} pending={snapshotPending || snapshot.positions_stale === true} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
       {account.user.is_admin && snapshot.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable. Open and close requests are checked against the current server state.</p>}
     </div>
   </div>

@@ -113,26 +113,43 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
    chart and order controls. The quote-method explanation lives in Help. */
 .synthetic-pilot .synthetic-market-header {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding-bottom: 14px;
   border-bottom: 1px solid rgba(148, 163, 184, .12);
 }
-.synthetic-pilot .synthetic-market-header h2 {
-  margin: 0 0 7px;
-  font: 600 20px var(--font-space-grotesk), sans-serif;
-  letter-spacing: -.02em;
+.synthetic-market-title-region {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
 }
-.synthetic-pilot .synthetic-market-header .live-indicator {
+.synthetic-market-title-region h2 {
   margin: 0;
+  color: var(--tp-ink);
+  font: 600 22px/1.15 var(--font-space-grotesk), sans-serif;
+  letter-spacing: -.025em;
+}
+.synthetic-market-title-region .live-indicator {
+  margin: 0;
+  min-height: 28px;
+}
+.synthetic-market-action-region {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 .synthetic-pilot .synthetic-help-link {
   flex: 0 0 auto;
-  min-height: 36px;
-  padding: 7px 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  color: var(--tp-accent);
   text-decoration: underline;
-  text-decoration-color: rgba(174, 183, 255, .42);
+  text-decoration-color: color-mix(in srgb, var(--tp-accent) 50%, transparent);
   text-underline-offset: 4px;
 }
 .synthetic-pilot .synthetic-market-rail {
@@ -151,6 +168,41 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
   color: var(--tp-supporting-text);
   font-size: 11px;
 }
+.synthetic-pilot .market-chart {
+  margin-top: 18px;
+  border-radius: 12px;
+}
+.synthetic-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 3px;
+}
+.synthetic-section-heading h3 {
+  margin: 0;
+  color: var(--tp-ink);
+  font: 600 15px/1.3 var(--font-space-grotesk), sans-serif;
+}
+.synthetic-section-heading span {
+  color: var(--tp-supporting-text);
+  font-size: 11px;
+  text-align: right;
+}
+.synthetic-signal-section,
+.synthetic-position-section {
+  min-width: 0;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.synthetic-empty-state {
+  margin: 8px 0 0;
+  color: var(--tp-supporting-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .synthetic-pilot [role="tabpanel"] {
   min-width: 0;
 }
@@ -160,18 +212,40 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
 @media (max-width:760px){.telegram-entry-hero{grid-template-columns:1fr}.telegram-entry-preview{min-height:0}.telegram-preview-copy h2{font-size:28px}.telegram-preview-chart{height:154px}.telegram-preview-footer{padding:14px 16px}.telegram-preview-body{padding:20px 16px 14px}}
 @media (max-width: 520px) {
   .synthetic-pilot .synthetic-market-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px 10px;
   }
   .synthetic-pilot .synthetic-help-link {
     min-height: 44px;
+    padding-inline: 8px;
+  }
+  .synthetic-market-title-region {
+    gap: 5px 8px;
+  }
+  .synthetic-market-title-region h2 {
+    font-size: 20px;
+  }
+  .synthetic-market-title-region .live-indicator {
+    font-size: 9px;
+  }
+  .synthetic-market-action-region {
+    justify-content: flex-end;
   }
   .synthetic-pilot .synthetic-market-rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .synthetic-pilot .synthetic-market-rail button:last-child {
     grid-column: span 2;
+  }
+}
+@media (max-width: 420px) {
+  .synthetic-pilot .synthetic-market-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .synthetic-market-action-region {
+    justify-content: flex-start;
   }
 }
 
