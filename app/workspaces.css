@@ -255,6 +255,13 @@
   font-size: 11px;
 }
 
+.wallet-ledger-row > .wallet-event-action {
+  grid-column: 1;
+  justify-self: start;
+  min-height: 44px;
+  padding: 4px 0;
+}
+
 .ledger-screen > .filter-chips button.active {
   border-color: color-mix(in srgb, var(--tp-accent) 58%, transparent);
   background: var(--tp-accent-wash);

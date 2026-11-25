@@ -12,6 +12,7 @@ import { describeActivity } from "../../lib/activity-presentation";
 import { useDeskLanguage } from "../desk-language";
 import { useResourcePoller } from "./use-resource-poller";
 import {
+  ActivityDetailDialog,
   activityAmountDisplay,
   activityTone,
   ChevronRight,
@@ -281,6 +282,8 @@ function WalletWorkspaceBody({
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
+  const [selectedActivityEntry, setSelectedActivityEntry] =
+    useState<LiveDashboard["ledger"][number] | null>(null);
   const depositStatus = intent?.status.toLowerCase() || "";
   const depositClosed = Boolean(intent && !watchableDepositStatuses.has(depositStatus));
   const depositTerminalMessage = depositProcessingStatuses.has(depositStatus)
@@ -1423,6 +1426,15 @@ function WalletWorkspaceBody({
                       <code className={isNonFinancial ? undefined : amount > 0 ? "mint" : amount < 0 ? "down" : undefined}>
                         {isNonFinancial ? "—" : activityAmountDisplay(amount)}
                       </code>
+                      <button
+                        type="button"
+                        className="small-action wallet-event-action"
+                        aria-label={`${t(entry.trade_detail ? "View settlement" : "View event")}: ${t(presentation.title)}`}
+                        onClick={() => setSelectedActivityEntry(entry)}
+                      >
+                        {t(entry.trade_detail ? "View settlement" : "View event")}
+                        <ChevronRight size={14} />
+                      </button>
                     </div>
                   );
                 })
@@ -1438,6 +1450,12 @@ function WalletWorkspaceBody({
             )}
           </GradientPanel>
         </div>
+        {selectedActivityEntry && (
+          <ActivityDetailDialog
+            entry={selectedActivityEntry}
+            onClose={() => setSelectedActivityEntry(null)}
+          />
+        )}
       </div>
     );
   return (

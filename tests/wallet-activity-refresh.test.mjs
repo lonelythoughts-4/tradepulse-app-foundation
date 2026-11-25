@@ -18,4 +18,13 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.match(pollerCall, /`wallet-dashboard:\$\{environment\}`/);
   assert.match(pollerCall, /"Wallet"/);
   assert.match(source, /data\.ledger\.length/);
+  const activityViewStart = source.indexOf('if (view === "activity")');
+  const activityViewEnd = source.indexOf('return (\n    <div className="wallet-grid">', activityViewStart);
+  assert.notEqual(activityViewStart, -1);
+  assert.notEqual(activityViewEnd, -1);
+  const activityView = source.slice(activityViewStart, activityViewEnd);
+  assert.match(activityView, /className="small-action wallet-event-action"/);
+  assert.match(activityView, /setSelectedActivityEntry\(entry\)/);
+  assert.match(activityView, /<ActivityDetailDialog/);
+  assert.match(activityView, /View settlement.*View event/);
 });

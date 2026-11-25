@@ -1273,7 +1273,7 @@ export function isFlashbackEntryLock(kind: string) {
   return kind === "flashback_allocation";
 }
 
-function ActivityDetailDialog({ entry, onClose }: { entry: VisualDeskModel["ledger"][number]; onClose: () => void }) {
+export function ActivityDetailDialog({ entry, onClose }: { entry: LiveDashboard["ledger"][number]; onClose: () => void }) {
   const amount = entry.amount_usd;
   const detail = entry.trade_detail;
   const position = detail?.position;
