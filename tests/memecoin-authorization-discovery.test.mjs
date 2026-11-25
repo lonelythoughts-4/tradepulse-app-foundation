@@ -13,7 +13,9 @@ test("Memecoin creation collects risk acknowledgement and starts Auto with Trenc
   assert.match(source, /ON AFTER CREATION/);
   assert.match(source, /TRENCH MODE <b>ON · CORE TOKENS INCLUDED<\/b>/);
   assert.match(source, /100% OF ALLOCATION, INCLUDING TOP-UPS/);
-  assert.match(source, /Slot #1 is scheduled 4–5 minutes after activation/);
+  assert.doesNotMatch(source, /Slot #1 is scheduled|first simulated entry is scheduled/);
+  assert.match(source, /I understand and accept the Memecoin Auto and Trench Mode risks/);
+  assert.match(source, /simulation rolls a \+2% to \+4% daily win target/);
 });
 
 test("Memecoin workspace retains monitoring and account actions without strategy/order controls", () => {

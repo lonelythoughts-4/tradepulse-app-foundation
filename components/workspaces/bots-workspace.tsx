@@ -777,7 +777,7 @@ export function BotsWorkspace({
               </div>
               {product === "memecoin" && <>
                 <p>Auto uses live market data and the full bot allocation as daily P&amp;L capacity. The simulation rolls a +2% to +4% daily win target or a −1% daily loss stop against that allocation. Trench launches can rug, freeze, or lose value rapidly; quote and liquidity checks cannot prevent every loss.</p>
-                <p>Slot #1 is scheduled 4–5 minutes after activation if a market passes the existing execution checks. Future top-ups are included automatically.</p>
+                <p>Future top-ups are included automatically.</p>
                 <label className="toggle-row">
                   <span>I understand and accept the Memecoin Auto and Trench Mode risks, including automated trading with my full allocation and the possibility of rapid losses.</span>
                   <input type="checkbox" checked={memecoinRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setMemecoinRiskAcknowledged(event.target.checked)} />
@@ -789,7 +789,7 @@ export function BotsWorkspace({
                 <input type="checkbox" checked={syntheticRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setSyntheticRiskAcknowledged(event.target.checked)} />
                 <i aria-hidden="true" />
               </label>}
-              {product === "synthetic" && data.environment === "mainnet" && <p>Auto starts with this full allocation. The first simulated entry is scheduled within 1–2 minutes when a shared-index signal qualifies. Future Synthetic top-ups are also available to Auto.</p>}
+              {product === "synthetic" && data.environment === "mainnet" && <p>Future Synthetic top-ups are also available to Auto.</p>}
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
