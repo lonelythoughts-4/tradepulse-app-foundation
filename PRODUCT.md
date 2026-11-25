@@ -34,6 +34,7 @@ Users may arrive from Telegram on a phone, from a desktop browser handoff, or th
 - Funded Memecoin authorization and its Auto/Trench strategy controls belong inside the Memecoin product view; the general bot fleet is an entry point, not the control home.
 - Improve clarity, accessibility, responsive behavior, and consistency without changing API contracts or business logic.
 - Synthetic Auto starts only after a funded Synthetic bot is created with explicit live-risk acknowledgement; Auto then uses the full allocation.
+- Confirmed from the current request: a user with no prior trade activity who opens Synthetic should see a "Pick a strategy" action leading directly to the existing Memecoin/Synthetic allocation flow. Suppressing that shortcut when a bot already exists is an inferred safeguard against duplicate allocation setup.
 
 ## Brand Commitments
 

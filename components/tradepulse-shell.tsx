@@ -6673,6 +6673,7 @@ function LiveTradePulse() {
     "overview" | "deposit" | "withdraw" | "history" | "activity" | "gas"
   >("overview");
   const [botEntryId, setBotEntryId] = useState<string | null>(null);
+  const [botEntryView, setBotEntryView] = useState<"fleet" | "create">("fleet");
   const [identityPending, setIdentityPending] = useState(false);
   const [notice, setNotice] = useState("");
   const [openNotificationsRequest, setOpenNotificationsRequest] = useState(false);
@@ -7590,6 +7591,7 @@ function LiveTradePulse() {
     ) {
       if (value === "Bots") {
         setBotEntryId(null);
+        setBotEntryView("fleet");
       }
       if (value === "Wallet") setWalletEntry("overview");
       setTab(value as typeof tab);
@@ -7597,6 +7599,12 @@ function LiveTradePulse() {
   };
   const openBotFleet = () => {
     setBotEntryId(null);
+    setBotEntryView("fleet");
+    setTab("Bots");
+  };
+  const openBotStrategyPicker = () => {
+    setBotEntryId(null);
+    setBotEntryView("create");
     setTab("Bots");
   };
   const openIdentityUtility = () => {
@@ -7613,6 +7621,7 @@ function LiveTradePulse() {
       setTab("Account");
     } else if (utility === "vector") {
       setBotEntryId(null);
+      setBotEntryView("fleet");
       setTab("Bots");
     } else {
       setTab("Account");
@@ -7796,6 +7805,7 @@ function LiveTradePulse() {
               }}
               onOpenBot={(bot) => {
                 setBotEntryId(bot.id === undefined ? null : String(bot.id));
+                setBotEntryView("fleet");
                 setTab("Bots");
               }}
             />
@@ -7901,6 +7911,7 @@ function LiveTradePulse() {
               onActionResult={applyActionResult}
               onNotice={setNotice}
               initialBotId={botEntryId}
+              initialView={botEntryView}
             />
           )}
           {tab === "Flashback" && (
@@ -7980,6 +7991,7 @@ function LiveTradePulse() {
               marketChart={MarketChart}
               onDashboardPatch={updateDashboard}
               onNotice={setNotice}
+              onPickStrategy={openBotStrategyPicker}
               request={request}
               store={deskStore}
             />

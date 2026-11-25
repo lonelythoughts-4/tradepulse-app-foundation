@@ -12,6 +12,7 @@ import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
 import { syntheticQuoteStatus } from "../../lib/synthetic-quote-status";
 import { logDeskFailure } from "../../lib/desk-api";
 import { useResourcePoller } from "./use-resource-poller";
+import { ChevronRight } from "./shared-ui";
 
 type Market = "SYN-10" | "SYN-25" | "SYN-50" | "SYN-75" | "SYN-100";
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
@@ -19,9 +20,9 @@ type Snapshot = { market: string; partial?: boolean; history_available?: boolean
 type SyntheticQuote = { market: string; latest: Snapshot["latest"]; ticks: Snapshot["ticks"]; history_available?: boolean; history_stale?: boolean; received_at: number; server_updated_at: number };
 type SyntheticSnapshots = Record<string, Snapshot | undefined>;
 type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
-type Account = Pick<LiveDashboard, "user" | "wallet" | "bots">;
+type Account = Pick<LiveDashboard, "user" | "wallet" | "bots" | "ledger" | "memecoin" | "synthetic">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const capacityValue = (value: number | undefined, pending: boolean, fallback?: number) => {
@@ -134,7 +135,7 @@ function SyntheticPositionList({ positions, pendingFor, onClose }: {
   })}</>;
 }
 
-export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, request, store }: SyntheticWorkspaceProps) {
+export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, request, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
   const marketRef = useRef(market);
   const resourceKey = syntheticResourceKey(environment, market);
@@ -142,10 +143,15 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const storedSnapshot = snapshots?.[resourceKey] ?? null;
   const fallbackSnapshot = useMemo<Snapshot>(() => ({ market, partial: true, latest: { market }, ticks: [], positions: [], settings: {} }), [market]);
   const snapshot = storedSnapshot?.market === market ? storedSnapshot : fallbackSnapshot;
+  const snapshotPositionCount = snapshot.positions.length;
   const [snapshotCheckedKey, setSnapshotCheckedKey] = useState<string | null>(null);
+  const [hasStartedTradeThisSession, setHasStartedTradeThisSession] = useState(false);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [quoteError, setQuoteError] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  useEffect(() => {
+    if (snapshotPositionCount > 0) setHasStartedTradeThisSession(true);
+  }, [snapshotPositionCount]);
   const pending = useDeskSelector(store, (state) => state.actions);
   const pendingFor = (key: string) => Boolean(pending[key as ActionKey]?.pending);
   const update = useCallback((next: Snapshot | null | ((current: Snapshot | null) => Snapshot | null)) => {
@@ -232,6 +238,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     if (actionLabel) onNotice(actionLabel);
     try {
       const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }, environment, durableAction ? 40_000 : undefined));
+      if (response.position || (path === "/v1/synthetic/actions" && payload.action === "open")) setHasStartedTradeThisSession(true);
       if (response.position) update((current) => current ? { ...current, positions: [response.position, ...current.positions.filter((item) => item.id !== response.position.id)] } : current);
       const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
       if (bot && payload.action === "topup") onDashboardPatch((current) => current ? { ...current, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet, bots: current.bots.map((item) => item.id === bot[1] ? { ...item, ...(response.bot || {}) } : item) } : current);
@@ -247,6 +254,13 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const executionStatus = syntheticBot?.state === "paused" ? "Paused" : syntheticClosing ? "Closing allocation" : syntheticAutoOn ? "Auto on" : "Waiting for funding";
   const executionLabel = syntheticBot?.state === "paused" ? "PAUSED" : syntheticClosing ? "CLOSING" : syntheticAutoOn ? "AUTO" : "WAITING";
   const snapshotPending = snapshot.partial === true && snapshotCheckedKey !== resourceKey;
+  const hasTradeHistory = account.ledger.some((entry) => Boolean(entry.trade_detail))
+    || Boolean(account.memecoin?.recent_settlements?.length)
+    || Boolean(account.synthetic?.recent_settlements?.length)
+    || Boolean(account.synthetic?.open_positions?.length)
+    || snapshot.positions.length > 0
+    || hasStartedTradeThisSession;
+  const shouldShowStrategyPicker = environment === "mainnet" && account.bots.length === 0 && !hasTradeHistory && !snapshotPending;
   const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
   const dailyNetUsd = Number(snapshot.execution?.daily_net_pnl_usd || 0);
   const dailyTargetLabel = snapshot.execution?.daily_outcome === "loss"
@@ -275,6 +289,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
             <div className="synthetic-auto-state" role="status" aria-live="polite" aria-atomic="true"><span className={"status-chip " + (syntheticAutoOn ? "running" : "paused")}><i />{executionStatus}</span></div>
           </div>
           <div className="synthetic-auto-capacity" aria-label="Automatic allocation and available margin"><span>Auto allocation <b>{capacityValue(snapshot.execution?.auto_allocation_usd, snapshotPending, Number(syntheticBot?.capital_usd))}</b></span><span>Auto available <b>{capacityValue(snapshot.execution?.auto_available_usd, snapshotPending)}</b></span><span>Auto locked margin <b>{capacityValue(snapshot.execution?.auto_locked_usd, snapshotPending)}</b></span></div>
+          {shouldShowStrategyPicker && <button type="button" className="primary-action synthetic-strategy-entry" onClick={onPickStrategy}>Pick a strategy <ChevronRight size={14} /></button>}
           {syntheticAutoOn && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">
             Daily Auto progress: {money(dailyNetUsd)} net ({money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} settled + {money(Number(snapshot.execution?.daily_open_net_pnl_usd || 0))} live) of {dailyTargetLabel}.
           </p>}
