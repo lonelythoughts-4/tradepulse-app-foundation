@@ -4708,6 +4708,7 @@ export type LiveDashboard = {
     onboarding?: { step: number; terms_accepted_at?: number | null; channel: { enabled: boolean; configured: boolean; url: string; verified: boolean; verified_at?: number | null } };
   };
   environment: string;
+  min_bot_investment_usd?: number;
   features?: {
     live_desk_enabled?: boolean;
   };

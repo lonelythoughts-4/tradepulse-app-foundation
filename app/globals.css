@@ -558,6 +558,9 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
 .confirm-modal, .account-modal { border-radius: var(--tp-radius-lg); }
 .confirm-modal { max-height: min(720px, calc(100dvh - 32px)); overflow-y: auto; }
 .account-modal { max-height: calc(100dvh - 24px); }
+.topup-feedback-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.topup-feedback-heading h2 { min-width: 0; margin: 0 0 8px; overflow-wrap: anywhere; }
+.topup-feedback-modal .topup-feedback-heading .modal-close { position: static; float: none; display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; margin: -4px 0 0; }
 .status-chip, .activity-status, .positive-chip, .compound-chip { line-height: 1.2; }
 
 @media (min-width: 861px) {

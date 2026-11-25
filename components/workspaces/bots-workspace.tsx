@@ -7,7 +7,7 @@ import { DeskLocalized } from "../desk-language";
 import { ActionFeedback } from "../ui/action-feedback";
 import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { flashbackSettlementPresentation } from "../../lib/financial-flow-reconciliation";
-import { logDeskFailure } from "../../lib/desk-api";
+import { DeskApiError, logDeskFailure } from "../../lib/desk-api";
 import {
   getFlashbackStartAvailability,
   parseFlashbackEntryAmount,
@@ -51,6 +51,12 @@ function percentageFromMargin(amount: number, margin: number) {
 function percentageLabel(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
+
+type BotTopUpFeedback =
+  | { kind: "success"; amount: number; botName: string }
+  | { kind: "below-minimum"; minimum: number; available: number }
+  | { kind: "over-available"; available: number }
+  | { kind: "unconfirmed"; botName: string };
 
 function remainingTargetLabel(mark: number, target: number, direction: string) {
   const distance = direction.toLowerCase() === "short"
@@ -120,6 +126,7 @@ export function BotsWorkspace({
   // like it is processing.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
   const [reviewError, setReviewError] = useState("");
+  const [topUpFeedback, setTopUpFeedback] = useState<BotTopUpFeedback | null>(null);
   const [closeReview, setCloseReview] = useState(false);
   const [flashbackAmount, setFlashbackAmount] = useState("20");
   const [flashbackReview, setFlashbackReview] = useState(false);
@@ -387,7 +394,8 @@ export function BotsWorkspace({
         method: "POST",
         body: JSON.stringify(payload),
       }, undefined, durableAction ? 40_000 : undefined);
-      onNotice(response.message || "Your changes were saved.");
+      const isTopUp = payload.action === "topup" && /^\/v1\/bots\/\d+\/actions$/.test(path);
+      if (!isTopUp) onNotice(response.message || "Your changes were saved.");
       // The parent owns the desk snapshot. Apply an authoritative response
       // there rather than reaching across component scope; only responses
       // without a usable projection are reconciled in the background. The
@@ -404,6 +412,34 @@ export function BotsWorkspace({
       return true;
     } catch (error) {
       logDeskFailure("bots.action", error);
+      if (payload.action === "topup" && /^\/v1\/bots\/\d+\/actions$/.test(path)) {
+        const responseMessage = error instanceof DeskApiError ? error.responseMessage : "";
+        const minimum = Number(data.min_bot_investment_usd);
+        const configuredMinimum = Number.isFinite(minimum) && minimum > 0 ? minimum : 20;
+        const available = Number.isFinite(Number(data.wallet.available))
+          ? Math.max(0, Number(data.wallet.available))
+          : 0;
+        if (/minimum product top-up is/i.test(responseMessage)) {
+          const currentMinimum = responseMessage.match(/minimum product top-up is\s+\$([\d,]+(?:\.\d{1,2})?)/i);
+          setTopUpFeedback({
+            kind: "below-minimum",
+            minimum: currentMinimum
+              ? Number(currentMinimum[1].replace(/,/g, ""))
+              : configuredMinimum,
+            available,
+          });
+        } else if (/insufficient unassigned TradeMemo balance/i.test(responseMessage)) {
+          const currentAvailable = responseMessage.match(/:\s*\$([\d,]+(?:\.\d{1,2})?)\s+available/i);
+          setTopUpFeedback({
+            kind: "over-available",
+            available: currentAvailable
+              ? Number(currentAvailable[1].replace(/,/g, ""))
+              : available,
+          });
+        } else {
+          setTopUpFeedback({ kind: "unconfirmed", botName: selected?.name || "this bot" });
+        }
+      }
       setReviewError(
         payload.action === "close"
           ? "Close status is not confirmed yet. Refresh the bot state before retrying."
@@ -824,7 +860,8 @@ export function BotsWorkspace({
       const isClosing = selected.state === "closing";
       const topUpAmount = Number(amount);
       const availableBalance = Number.isFinite(data.wallet.available) ? Math.max(0, data.wallet.available) : 0;
-      const canTopUp = Number.isFinite(topUpAmount) && topUpAmount >= 20 && topUpAmount <= availableBalance;
+      const configuredMinimum = Number(data.min_bot_investment_usd);
+      const minimumTopUp = Number.isFinite(configuredMinimum) && configuredMinimum > 0 ? configuredMinimum : 20;
     return (
       <DeskLocalized>
       <div className="bot-detail">
@@ -931,17 +968,88 @@ export function BotsWorkspace({
               </div>
               <button
                 className="small-action"
-                disabled={!canTopUp || isActionPending(`bot:${selected.id}:topup`)}
-                onClick={() =>
-                  run(`/v1/bots/${selected.id}/actions`, {
+                disabled={isActionPending(`bot:${selected.id}:topup`)}
+                aria-busy={isActionPending(`bot:${selected.id}:topup`)}
+                onClick={async () => {
+                  if (!Number.isFinite(topUpAmount) || topUpAmount < minimumTopUp) {
+                    setTopUpFeedback({
+                      kind: "below-minimum",
+                      minimum: minimumTopUp,
+                      available: availableBalance,
+                    });
+                    return;
+                  }
+                  if (topUpAmount > availableBalance) {
+                    setTopUpFeedback({ kind: "over-available", available: availableBalance });
+                    return;
+                  }
+                  setTopUpFeedback(null);
+                  const succeeded = await run(`/v1/bots/${selected.id}/actions`, {
                     action: "topup",
-                    amount: Number(amount),
-                  })
-                }
+                    amount: topUpAmount,
+                  });
+                  if (succeeded) {
+                    setTopUpFeedback({
+                      kind: "success",
+                      amount: topUpAmount,
+                      botName: selected.name,
+                    });
+                  }
+                }}
               >
                 {isActionPending(`bot:${selected.id}:topup`) ? "Updating…" : "Top up allocation"} <Plus />
               </button>
             </>}
+          {topUpFeedback && (
+            <AccessibleDialog
+              className="account-modal topup-feedback-modal"
+              label={{
+                success: "Top-up complete",
+                "below-minimum": "Amount below minimum",
+                "over-available": "Amount exceeds available balance",
+                unconfirmed: "Top-up not confirmed",
+              }[topUpFeedback.kind]}
+              onClose={() => setTopUpFeedback(null)}
+            >
+              <div className="topup-feedback-heading">
+                <h2>
+                  {{
+                    success: "Top-up complete",
+                    "below-minimum": "Amount below minimum",
+                    "over-available": "Amount exceeds available balance",
+                    unconfirmed: "Top-up not confirmed",
+                  }[topUpFeedback.kind]}
+                </h2>
+                <button
+                  type="button"
+                  className="modal-close"
+                  aria-label="Close top-up message"
+                  onClick={() => setTopUpFeedback(null)}
+                >
+                  <X />
+                </button>
+              </div>
+              {topUpFeedback.kind === "success" && (
+                <p role="status">Added {money(topUpFeedback.amount)} to {topUpFeedback.botName}.</p>
+              )}
+              {topUpFeedback.kind === "below-minimum" && (
+                <p role="alert">
+                  Minimum top-up: {money(topUpFeedback.minimum)}. Enter at least that amount.
+                  {topUpFeedback.available < topUpFeedback.minimum
+                    ? ` Available balance: ${money(topUpFeedback.available)}.`
+                    : ""}
+                </p>
+              )}
+              {topUpFeedback.kind === "over-available" && (
+                <p role="alert">Available balance: {money(topUpFeedback.available)}. Reduce the amount and try again.</p>
+              )}
+              {topUpFeedback.kind === "unconfirmed" && (
+                <p role="alert">
+                  We couldn&apos;t confirm the top-up to {topUpFeedback.botName}. Check its allocation and your available balance before retrying.
+                </p>
+              )}
+            </AccessibleDialog>
+          )}
           {paused && !isClosing && !awaitingAuthorization && <button
             className="primary-action"
             disabled={isActionPending(`bot:${selected.id}:resume`)}
