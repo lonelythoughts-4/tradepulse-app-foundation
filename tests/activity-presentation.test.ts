@@ -133,8 +133,8 @@ test("activity views display the API's canonical signed amount without inferring
     `${shell}\n${wallet}`,
     /signedActivityAmount|Math\.abs\(Number\(amount/,
   );
-  assert.match(wallet, /data\.ledger\.length \? \(/);
-  assert.match(wallet, /\[\.\.\.data\.ledger\]\s*\.sort\(/);
+  assert.match(wallet, /const sortedActivity = \[\.\.\.data\.ledger\]\.sort\(/);
+  assert.match(wallet, /sortedActivity\.length \? \(/);
   assert.doesNotMatch(wallet, /\[\.\.\.data\.engine,\s*\.\.\.data\.ledger\]/);
   assert.doesNotMatch(wallet, /data\.engine\.map\(\(entry\) => \(\{/);
 });
