@@ -6,6 +6,10 @@ const source = await readFile(
   new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),
   "utf8",
 );
+const dashboardSource = await readFile(
+  new URL("../components/workspaces/dashboard-workspace.tsx", import.meta.url),
+  "utf8",
+);
 
 test("Wallet activity refreshes the dashboard ledger while Wallet is active", () => {
   const pollerStart = source.indexOf("useResourcePoller(");
@@ -14,7 +18,7 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.notEqual(pollerEnd, -1);
 
   const pollerCall = source.slice(pollerStart, pollerEnd);
-  assert.match(pollerCall, /,\s*[1-9][\d_]*,\s*true,/);
+  assert.match(pollerCall, /,\s*30_000,\s*true,/);
   assert.match(pollerCall, /`wallet-dashboard:\$\{environment\}`/);
   assert.match(pollerCall, /"Wallet"/);
   assert.match(source, /data\.ledger\.length/);
@@ -27,4 +31,15 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.match(activityView, /setSelectedActivityEntry\(entry\)/);
   assert.match(activityView, /<ActivityDetailDialog/);
   assert.match(activityView, /View settlement.*View event/);
+});
+
+test("Dashboard polls the full account projection every thirty seconds", () => {
+  const pollerStart = dashboardSource.indexOf("useResourcePoller(");
+  const pollerEnd = dashboardSource.indexOf("\n  );", pollerStart);
+  assert.notEqual(pollerStart, -1);
+  assert.notEqual(pollerEnd, -1);
+
+  const pollerCall = dashboardSource.slice(pollerStart, pollerEnd);
+  assert.match(pollerCall, /,\s*30_000,\s*true,/);
+  assert.match(pollerCall, /"Dashboard"/);
 });

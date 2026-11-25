@@ -181,7 +181,7 @@ export function WalletWorkspace({
         onWalletUpdate({ wallet: next.wallet, deposits: next.deposits, bots: next.bots });
       }
     },
-    10_000,
+    30_000,
     true,
     `wallet-dashboard:${environment}`,
     () => onNotice(""),
