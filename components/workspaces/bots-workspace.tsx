@@ -776,7 +776,6 @@ export function BotsWorkspace({
                 {product === "synthetic" && <span>AUTO EXECUTION <b>{data.environment === "mainnet" ? "ON AFTER CREATION" : "NOT AVAILABLE IN TESTNET"}</b></span>}
               </div>
               {product === "memecoin" && <>
-                <p>Auto uses live market data and the full bot allocation as daily P&amp;L capacity. The simulation rolls a +2% to +4% daily win target or a −1% daily loss stop against that allocation. Trench launches can rug, freeze, or lose value rapidly; quote and liquidity checks cannot prevent every loss.</p>
                 <p>Future top-ups are included automatically.</p>
                 <label className="toggle-row">
                   <span>I understand and accept the Memecoin Auto and Trench Mode risks, including automated trading with my full allocation and the possibility of rapid losses.</span>
