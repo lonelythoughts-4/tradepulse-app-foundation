@@ -5069,7 +5069,7 @@ async function waitForTelegramWebApp() {
   }
   return undefined;
 }
-function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> }) {
+function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<"opened" | "retry" | "unauthenticated"> }) {
   const [state, setState] = useState<"preparing" | "ready" | "waiting">("preparing");
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
@@ -5160,6 +5160,24 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
     let refreshWhenVisible = false;
     let activeController: AbortController | null = null;
     let transientFailures = 0;
+    const retryConfirmedDeskLoad = async (attempt: number) => {
+      if (disposed) return;
+      const result = await onCompleteRef.current();
+      if (disposed || result === "opened") return;
+      if (result === "unauthenticated") {
+        terminal = false;
+        setState("preparing");
+        setMessage("Preparing a fresh secure link…");
+        setAttempt((current) => current + 1);
+        return;
+      }
+      setState("waiting");
+      setMessage("Telegram confirmed. Opening your desk…");
+      timer.current = window.setTimeout(
+        () => void retryConfirmedDeskLoad(attempt + 1),
+        Math.min(10_000, 1_000 * 2 ** Math.min(attempt, 3)),
+      );
+    };
     const poll = async () => {
       if (disposed || inFlight || document.visibilityState !== "visible") return;
       inFlight = true;
@@ -5215,22 +5233,8 @@ function BrowserBotHandoff({ onComplete }: { onComplete: () => Promise<boolean> 
         timer.current = null;
         terminal = true;
         setMessage("Telegram confirmed. Opening your desk…");
-        let opened = await onCompleteRef.current();
-        if (disposed) return;
-        for (let retry = 0; !opened && retry < 5; retry += 1) {
-          setMessage("Telegram confirmed. Finishing the secure desk connection…");
-          await new Promise((resolve) => window.setTimeout(resolve, 800 * (retry + 1)));
-          if (disposed) return;
-          opened = await onCompleteRef.current();
-          if (disposed) return;
-        }
-        if (!opened) {
-          terminal = false;
-          setState("waiting");
-          setMessage("Finishing your secure connection…");
-          timer.current = window.setTimeout(poll, 2_000);
-          return;
-        }
+        await retryConfirmedDeskLoad(0);
+        return;
       } catch {
         if (disposed || controller.signal.aborted) return;
         if (Date.now() >= deadline) {
@@ -6674,6 +6678,7 @@ function LiveTradePulse() {
   const [telegramLaunchContext, setTelegramLaunchContext] = useState(false);
   const [sessionBootstrapComplete, setSessionBootstrapComplete] = useState(false);
   const [sessionHandoffRequired, setSessionHandoffRequired] = useState(false);
+  const dashboardAuthenticationRejectedRef = useRef(false);
   useEffect(() => {
     setTelegramLaunchContext(openedInsideTelegram());
   }, []);
@@ -6909,6 +6914,7 @@ function LiveTradePulse() {
           ...options,
           signal: controller.signal,
           headers: requestHeaders,
+          credentials: "same-origin",
         });
         const body = await response.json();
         if (!response.ok) {
@@ -6927,6 +6933,7 @@ function LiveTradePulse() {
           });
           if (response.status === 401) {
             if (path === "/v1/dashboard") {
+              dashboardAuthenticationRejectedRef.current = true;
               updateDashboard(null);
               setTelegramIdentityPending(false);
               setTelegramLaunchContext(false);
@@ -7476,8 +7483,10 @@ function LiveTradePulse() {
         {sessionHandoffRequired ? (
           <BrowserBotHandoff onComplete={async () => {
             telegramHandoffSessionRef.current = true;
+            dashboardAuthenticationRejectedRef.current = false;
             const loaded = await load();
-            return Boolean(loaded && deskStore.getState().resources.dashboard !== null);
+            if (loaded && deskStore.getState().resources.dashboard !== null) return "opened";
+            return dashboardAuthenticationRejectedRef.current ? "unauthenticated" : "retry";
           }} />
         ) : (
           <p className={authEntryStyles.signInIntro} role="status" aria-live="polite">

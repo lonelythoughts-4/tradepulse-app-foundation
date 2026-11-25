@@ -26,10 +26,10 @@ test("only mobile browsers use a Telegram app launch", () => {
 });
 
 test("the browser handoff keeps the web link for desktop and never forces an install page", async () => {
-  const shell = await readFile(
+  const shell = (await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
-  );
+  )).replace(/\r\n/g, "\n");
 
   assert.match(shell, /const appUrl = telegramAppLaunchUrl\(botUrl\)/);
   assert.match(shell, /const isMobile = shouldUseTelegramAppLaunch\(/);
@@ -58,10 +58,10 @@ test("the browser handoff keeps the web link for desktop and never forces an ins
 });
 
 test("the handoff poll remains single-flight while Telegram is open and refreshes expired links", async () => {
-  const shell = await readFile(
+  const shell = (await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
-  );
+  )).replace(/\r\n/g, "\n");
   const handoffStart = shell.indexOf("function BrowserBotHandoff");
   const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
   const handoff = shell.slice(handoffStart, handoffEnd);
@@ -78,11 +78,28 @@ test("the handoff poll remains single-flight while Telegram is open and refreshe
   assert.doesNotMatch(poll, /\[state, token, expiresIn\]/);
 });
 
-test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
-  const shell = await readFile(
+test("a confirmed handoff retries the desk load without consuming a fresh Telegram link", async () => {
+  const shell = (await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
-  );
+  )).replace(/\r\n/g, "\n");
+  const handoffStart = shell.indexOf("function BrowserBotHandoff");
+  const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
+  const handoff = shell.slice(handoffStart, handoffEnd);
+
+  assert.match(handoff, /const retryConfirmedDeskLoad = async \(attempt: number\)/);
+  assert.match(handoff, /setMessage\("Telegram confirmed\. Opening your desk…"\)/);
+  assert.match(handoff, /retryConfirmedDeskLoad\(0\)/);
+  assert.match(handoff, /result === "unauthenticated"/);
+  assert.doesNotMatch(handoff, /timer\.current = window\.setTimeout\(poll, 2_000\);/);
+  assert.match(handoff, /\(\) => void retryConfirmedDeskLoad\(attempt \+ 1\)/);
+});
+
+test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
+  const shell = (await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  )).replace(/\r\n/g, "\n");
   const request = shell.slice(
     shell.indexOf("const request = useCallback"),
     shell.indexOf("const noticeCenter"),
@@ -98,7 +115,7 @@ test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
 
   assert.match(
     request,
-    /if \(path === "\/v1\/dashboard"\) \{\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
+    /if \(path === "\/v1\/dashboard"\) \{\s*dashboardAuthenticationRejectedRef\.current = true;\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
   );
   assert.match(pollErrorHandler, /setTimeout\(poll/);
   assert.match(pollErrorHandler, /current code remains visible/);
