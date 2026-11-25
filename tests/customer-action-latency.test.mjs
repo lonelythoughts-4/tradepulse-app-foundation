@@ -61,7 +61,7 @@ test("admin overview outages keep a neutral retry path without exposing error de
   const retryEnd = shell.indexOf("const walletEnvironment", retryStart);
   const retryAction = shell.slice(retryStart, retryEnd);
   assert.match(shell, /setAdminLoadError\("unavailable"\)/);
-  assert.match(shell, /adminLoadError \? \([\s\S]*?Checking operations data…[\s\S]*?Check operations data/);
+  assert.match(shell, /adminLoadError \? \([\s\S]*?Operations data could not be loaded\.[\s\S]*?Try again/);
   assert.match(retryAction, /catch \{\s*if \(shouldApplyEnvironmentProjection[\s\S]*?setAdminLoadError\("unavailable"\);/);
   assert.doesNotMatch(retryAction, /error\.message|setNotice\(/);
 });

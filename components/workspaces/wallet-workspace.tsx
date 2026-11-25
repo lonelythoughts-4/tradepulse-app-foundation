@@ -603,7 +603,10 @@ function WalletWorkspaceBody({
       setReviewWithdrawal(false);
     } catch (error) {
       logDeskFailure("wallet.withdrawal-create", error);
-      const message = t("The withdrawal request could not be created. Check the details and try again.");
+      const responseMessage = error instanceof DeskApiError ? error.responseMessage.trim() : "";
+      const message = responseMessage
+        ? t(responseMessage)
+        : t("The withdrawal request could not be created. Check the details and try again.");
       setWithdrawalError(message);
       onNotice(message);
       void reconcileDashboard("wallet.withdrawal-reconcile");
@@ -1399,17 +1402,8 @@ function WalletWorkspaceBody({
           tabIndex={0}
         >
           <GradientPanel className="ledger-card">
-            {[...data.engine, ...data.ledger].length ? (
-              [
-                ...data.engine.map((entry) => ({
-                  kind: entry.net_realized > 0 ? "trading_profit" : entry.net_realized < 0 ? "trading_loss" : "trading_settlement",
-                  asset: "USD",
-                  amount_usd: entry.net_realized,
-                  status: entry.status,
-                  created_at: entry.created_at,
-                })),
-                ...data.ledger,
-              ]
+            {data.ledger.length ? (
+              [...data.ledger]
                 .sort((a, b) => b.created_at - a.created_at)
                 .map((entry, index) => {
                   const amount = entry.amount_usd;

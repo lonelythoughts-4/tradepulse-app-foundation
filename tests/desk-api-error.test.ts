@@ -124,7 +124,17 @@ test("the language rollback preserves locale without exposing API error copy", a
   );
 
   assert.match(shell, /throw new DeskApiError\("", response\.status, reference, responseMessage, responseBody\)/);
+  assert.match(shell, /if \(error instanceof DeskApiError\) throw error;/);
   assert.match(shell, /setNotice\(""\);\s*throw error;/);
+});
+
+test("withdrawal errors use the safe server message when available", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(shell, /error instanceof DeskApiError \? error\.responseMessage\.trim\(\) : ""/);
 });
 
 test("activation language rollback does not expose API error copy", async () => {

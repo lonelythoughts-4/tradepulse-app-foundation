@@ -5936,7 +5936,10 @@ function LiveWalletScreen({
       setWithdrawCode("");
       setReviewWithdrawal(false);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "The withdrawal request could not be created. Check the details and try again.";
+      const responseMessage = error instanceof DeskApiError ? error.responseMessage.trim() : "";
+      const message = responseMessage || (error instanceof Error && error.message
+        ? error.message
+        : "The withdrawal request could not be created. Check the details and try again.");
       setWithdrawalError(message);
       onNotice(message);
     } finally {
@@ -6948,6 +6951,7 @@ function LiveTradePulse() {
         }
         return body;
       } catch (error) {
+        if (error instanceof DeskApiError) throw error;
         if (timedOut) {
           console.error("TradeMemo API request timed out", { path, requestId });
           throw new Error("");
@@ -8001,9 +8005,9 @@ function LiveTradePulse() {
             <div className="empty-state">
               {adminLoadError ? (
                 <>
-                  <strong>Checking operations data…</strong>
+                  <strong>Operations data could not be loaded.</strong>
                   <button className="small-action" disabled={adminRetryPending} aria-busy={adminRetryPending} onClick={() => void retryAdminOverview()}>
-                    {adminRetryPending ? "Checking…" : "Check operations data"}
+                    {adminRetryPending ? "Retrying…" : "Try again"}
                   </button>
                 </>
               ) : (

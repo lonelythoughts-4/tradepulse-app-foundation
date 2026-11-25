@@ -133,4 +133,18 @@ test("activity views display the API's canonical signed amount without inferring
     `${shell}\n${wallet}`,
     /signedActivityAmount|Math\.abs\(Number\(amount/,
   );
+  assert.match(wallet, /data\.ledger\.length \? \(/);
+  assert.match(wallet, /\[\.\.\.data\.ledger\]\s*\.sort\(/);
+  assert.doesNotMatch(wallet, /\[\.\.\.data\.engine,\s*\.\.\.data\.ledger\]/);
+  assert.doesNotMatch(wallet, /data\.engine\.map\(\(entry\) => \(\{/);
+});
+
+test("withdrawal failures show the safe API reason when one is available", async () => {
+  const wallet = await readFile(
+    new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(wallet, /error instanceof DeskApiError \? error\.responseMessage\.trim\(\) : ""/);
+  assert.match(wallet, /responseMessage\s*\?\s*t\(responseMessage\)/);
 });
