@@ -28,7 +28,7 @@ const money = (value: number) => new Intl.NumberFormat("en-US", { style: "curren
 const capacityValue = (value: number | undefined, pending: boolean, fallback?: number) => {
   if (pending) return "Checking";
   const amount = typeof value === "number" && Number.isFinite(value) ? value : fallback;
-  return typeof amount === "number" && Number.isFinite(amount) ? money(amount) : "Updating";
+  return typeof amount === "number" && Number.isFinite(amount) ? money(amount) : "Unavailable";
 };
 const selectSnapshots = (state: DeskState) => state.resources.syntheticSnapshots as SyntheticSnapshots | null;
 const selectQuotes = (state: DeskState) => state.resources.syntheticQuotes as SyntheticQuotes | null;
@@ -323,7 +323,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
             <div className="synthetic-auto-title"><h3 id="synthetic-auto-title">Automatic execution</h3><p>Auto evaluates shared signals using 100% of your funded Synthetic allocation. One scheduled position opens at a time; top-ups are included automatically.</p></div>
             <div className="synthetic-auto-state" role="status" aria-live="polite" aria-atomic="true"><span className={"status-chip " + (syntheticAutoOn ? "running" : "paused")}><i />{executionStatus}</span></div>
           </div>
-          <div className="synthetic-auto-capacity" aria-label="Automatic allocation and available margin"><span>Auto allocation <b>{capacityValue(snapshot.execution?.auto_allocation_usd, snapshotPending, Number(syntheticBot?.capital_usd))}</b></span><span>Auto available <b>{capacityValue(snapshot.execution?.auto_available_usd, snapshotPending)}</b></span><span>Auto locked margin <b>{capacityValue(snapshot.execution?.auto_locked_usd, snapshotPending)}</b></span></div>
+          <div className="synthetic-auto-capacity" aria-label="Automatic allocation, available margin, and locked margin"><span>Auto allocation <b>{capacityValue(snapshot.execution?.auto_allocation_usd, snapshotPending, Number(syntheticBot?.capital_usd))}</b></span><span>Auto available <b>{capacityValue(snapshot.execution?.auto_available_usd, snapshotPending)}</b></span><span>Auto locked margin <b>{capacityValue(snapshot.execution?.auto_locked_usd, snapshotPending)}</b></span></div>
           {shouldShowStrategyPicker && <button type="button" className="primary-action synthetic-strategy-entry" onClick={onPickStrategy}>Pick a strategy <ChevronRight size={14} /></button>}
           {syntheticAutoOn && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">
             Daily Auto progress: {money(dailyNetUsd)} net ({money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} settled + {money(Number(snapshot.execution?.daily_open_net_pnl_usd || 0))} live) of {dailyTargetLabel}.
