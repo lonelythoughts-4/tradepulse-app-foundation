@@ -52,69 +52,53 @@ function percentageLabel(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function CompoundSelectionDialog({
+  product,
+  percent,
+  onClose,
+}: {
+  product: "memecoin" | "synthetic";
+  percent: number;
+  onClose: () => void;
+}) {
+  const productLabel = product === "memecoin" ? "Memecoin" : "Synthetic";
+  const handling = percent === 0
+    ? "Release gains"
+    : percent === 50
+      ? "Split gains"
+      : "Recompound gains";
+  const effect = percent === 0
+    ? "Net profit returns to your available balance."
+    : percent === 50
+      ? "Half of net profit returns to your balance; half stays in bot capital."
+      : "Net profit stays in bot capital.";
+  return (
+    <AccessibleDialog
+      label={`${productLabel} compounding selection`}
+      onClose={onClose}
+      className="topup-feedback-modal compound-feedback-modal"
+    >
+      <div className="topup-feedback-heading">
+        <h2>Compounding selected</h2>
+        <button
+          type="button"
+          className="modal-close"
+          aria-label="Close compounding confirmation"
+          onClick={onClose}
+        >
+          <X />
+        </button>
+      </div>
+      <p><strong>{productLabel} · {percent}% · {handling}</strong></p>
+      <p>{effect}</p>
+    </AccessibleDialog>
+  );
+}
+
 type BotTopUpFeedback =
   | { kind: "success"; amount: number; botName: string }
   | { kind: "below-minimum"; minimum: number; available: number }
   | { kind: "over-available"; available: number };
-
-type BotNextEntry = {
-  state: string;
-  bot_state?: string;
-  entry_at?: number;
-  window_opens_at?: number;
-};
-
-function countdownClock(seconds: number) {
-  const total = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const remainder = total % 60;
-  return [hours, minutes, remainder].map((part) => String(part).padStart(2, "0")).join(":");
-}
-
-function botEntryPresentation(schedule: BotNextEntry | undefined, now: number) {
-  if (!schedule) return { title: "Loading next entry schedule", detail: "Schedule is checked with the bot engine." };
-  if (schedule.state === "paused" || (schedule.state === "not_running" && schedule.bot_state === "paused")) {
-    return { title: "Bot paused", detail: "Resume the bot to schedule its next entry." };
-  }
-  if (schedule.state === "not_running") {
-    const state = (schedule.bot_state || "not running").replace(/_/g, " ");
-    return { title: `Bot ${state}`, detail: "A next entry is scheduled only while the bot is running." };
-  }
-  if (schedule.state === "not_available") return { title: "Timer unavailable in this workspace", detail: "Entry schedules are available in mainnet." };
-  if (schedule.state === "awaiting_engine_schedule") return { title: "No next entry scheduled", detail: "The bot engine has not published an unused entry slot." };
-  const entryAt = schedule.entry_at;
-  const windowOpensAt = schedule.window_opens_at;
-  if (schedule.state !== "scheduled"
-    || typeof entryAt !== "number"
-    || !Number.isFinite(entryAt)
-    || typeof windowOpensAt !== "number"
-    || !Number.isFinite(windowOpensAt)) {
-    return { title: "Schedule unavailable", detail: "The bot engine schedule could not be loaded." };
-  }
-  const entryTime = new Date(entryAt * 1000).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
-  });
-  if (now < windowOpensAt) {
-    return {
-      title: `Window opens in ${countdownClock(windowOpensAt - now)}`,
-      detail: `Entry scheduled for ${entryTime}.`,
-    };
-  }
-  if (now < entryAt) {
-    return {
-      title: `Pre-entry open · ${countdownClock(entryAt - now)} to entry`,
-      detail: `Entry scheduled for ${entryTime}; quote and risk checks run at the slot.`,
-    };
-  }
-  return {
-    title: "Entry slot due",
-    detail: `Awaiting quote and risk checks · scheduled ${entryTime}.`,
-  };
-}
 
 function remainingTargetLabel(mark: number, target: number, direction: string) {
   const distance = direction.toLowerCase() === "short"
@@ -183,6 +167,7 @@ export function BotsWorkspace({
   // one bot must never make another bot, position, or Flashback control look
   // like it is processing.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
+  const [compoundErrors, setCompoundErrors] = useState<Record<string, string>>({});
   const [reviewError, setReviewError] = useState("");
   const [topUpFeedback, setTopUpFeedback] = useState<BotTopUpFeedback | null>(null);
   const [closeReview, setCloseReview] = useState(false);
@@ -199,13 +184,18 @@ export function BotsWorkspace({
   const [flashbackNow, setFlashbackNow] = useState(() => Date.now());
   const [flashbackClockOffset, setFlashbackClockOffset] = useState(0);
   const [compoundOverrides, setCompoundOverrides] = useState<Record<string, number>>({});
+  const compoundRequestRevision = useRef<Record<string, number>>({});
+  const [compoundFeedback, setCompoundFeedback] = useState<{
+    context: "create" | "existing";
+    botId?: string;
+    product: "memecoin" | "synthetic";
+    percent: number;
+  } | null>(null);
   const pollingWorkspace = flashbackOnly ? "Flashback" : "Bots";
   const [initialCompoundPercent, setInitialCompoundPercent] = useState(0);
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
   const [closedBotIds, setClosedBotIds] = useState<string[]>([]);
-  const [botSchedules, setBotSchedules] = useState<Record<string, BotNextEntry>>({});
-  const [scheduleNow, setScheduleNow] = useState(() => Date.now() / 1000);
   const [memecoinMarket, setMemecoinMarket] = useState("DOGE");
   const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; chain_label?: string }>>([]);
   const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ symbol?: string; bot_id?: number | null; environment?: string; partial?: boolean; points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }> }>({});
@@ -224,11 +214,6 @@ export function BotsWorkspace({
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running");
-  const scheduleBotSnapshot = JSON.stringify(displayBots.map((bot) => ({
-    id: bot.id,
-    state: bot.state,
-    capital_usd: bot.capital_usd,
-  })));
   const latestFlashback = data.flashback || null;
   const flashbackSessions = (data.flashback_sessions || (latestFlashback ? [latestFlashback] : []))
     .filter((session) => session.product_version === "market-direction-v1");
@@ -339,54 +324,6 @@ export function BotsWorkspace({
     setFlashbackNow(clientNow);
   }, [data.server_time]);
   useEffect(() => {
-    if (view !== "fleet" && view !== "detail") return;
-    const tick = () => setScheduleNow(Date.now() / 1000);
-    tick();
-    const countdown = window.setInterval(tick, 1_000);
-    return () => window.clearInterval(countdown);
-  }, [view]);
-  useEffect(() => {
-    if (view !== "fleet" && view !== "detail") return;
-    let active = true;
-    let inFlight = false;
-    const bots = JSON.parse(scheduleBotSnapshot) as Array<{
-      id: string;
-      state: string;
-      capital_usd: number;
-    }>;
-    const refresh = async () => {
-      if (inFlight || !bots.length) return;
-      inFlight = true;
-      const results = await Promise.all(bots.map(async (bot) => {
-        try {
-          const schedule = await request(
-            `/v1/bots/${bot.id}/next-entry`,
-            {},
-            data.environment === "testnet" ? "testnet" : "mainnet",
-          ) as BotNextEntry;
-          return [bot.id, schedule] as const;
-        } catch (error) {
-          logDeskFailure("bots.next-entry-schedule", error);
-          return [bot.id, { state: "unavailable" }] as const;
-        }
-      }));
-      if (active) {
-        setBotSchedules((current) => {
-          const next = { ...current };
-          for (const [botId, schedule] of results) next[botId] = schedule;
-          return next;
-        });
-      }
-      inFlight = false;
-    };
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 30_000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [data.environment, request, scheduleBotSnapshot, view]);
-  useEffect(() => {
     if (view !== "flashback" || !activeCountdownSession) return;
     const tick = () => setFlashbackNow(Date.now());
     tick();
@@ -484,7 +421,11 @@ export function BotsWorkspace({
   );
   const actionKeyFor = (path: string, payload: Record<string, unknown>) => {
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
-    if (botAction) return `bot:${botAction[1]}:${String(payload.action || "action")}`;
+    if (botAction) {
+      return payload.action === "compound"
+        ? `bot:${botAction[1]}:compound:${String(payload.percent)}`
+        : `bot:${botAction[1]}:${String(payload.action || "action")}`;
+    }
     const position = path.match(/^\/v1\/memecoin\/positions\/([^/]+)\/close$/);
     if (position) return `memecoin-position:${position[1]}:close`;
     if (path === "/v1/flashback/start") return "flashback:start";
@@ -508,7 +449,8 @@ export function BotsWorkspace({
         body: JSON.stringify(payload),
       }, undefined, durableAction ? 40_000 : undefined);
       const isTopUp = payload.action === "topup" && /^\/v1\/bots\/\d+\/actions$/.test(path);
-      if (!isTopUp) onNotice(response.message || "Your changes were saved.");
+      const isCompound = payload.action === "compound" && /^\/v1\/bots\/\d+\/actions$/.test(path);
+      if (!isTopUp && !isCompound) onNotice(response.message || "Your changes were saved.");
       // The parent owns the desk snapshot. Apply an authoritative response
       // there rather than reaching across component scope; only responses
       // without a usable projection are reconciled in the background. The
@@ -551,6 +493,16 @@ export function BotsWorkspace({
           });
         }
       }
+      if (payload.action === "compound") {
+        const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
+        if (botAction) {
+          setCompoundErrors((current) => ({
+            ...current,
+            [`bot:${botAction[1]}:compound:${String(payload.percent)}`]:
+              "The compounding change could not be confirmed. Refresh the bot state before trying again.",
+          }));
+        }
+      }
       setReviewError(
         payload.action === "close"
           ? "Close status is not confirmed yet. Refresh the bot state before retrying."
@@ -568,7 +520,25 @@ export function BotsWorkspace({
   };
   const updateCompound = async (percent: number) => {
     const botId = selected?.id;
-    if (!botId || isActionPending(`bot:${botId}:compound`) || selected.compound_percent === percent) return;
+    const actionKey = botId ? `bot:${botId}:compound:${percent}` : "";
+    if (!botId || isActionPending(actionKey)) return;
+    setCompoundErrors((current) => {
+      if (!current[actionKey]) return current;
+      const next = { ...current };
+      delete next[actionKey];
+      return next;
+    });
+    if (selected.compound_percent === percent) {
+      setCompoundFeedback({
+        context: "existing",
+        botId,
+        product: selected.product,
+        percent,
+      });
+      return;
+    }
+    const revision = (compoundRequestRevision.current[botId] || 0) + 1;
+    compoundRequestRevision.current[botId] = revision;
     const hadOverride = Object.prototype.hasOwnProperty.call(compoundOverrides, botId);
     const previous = compoundOverrides[botId] ?? selected.compound_percent;
     setCompoundOverrides((current) => ({ ...current, [botId]: percent }));
@@ -576,7 +546,17 @@ export function BotsWorkspace({
       action: "compound",
       percent,
     });
-    if (saved) return;
+    if (saved) {
+      if (compoundRequestRevision.current[botId] !== revision) return;
+      setCompoundFeedback({
+        context: "existing",
+        botId,
+        product: selected.product,
+        percent,
+      });
+      return;
+    }
+    if (compoundRequestRevision.current[botId] !== revision) return;
     setCompoundOverrides((current) => {
       if (hadOverride) return { ...current, [botId]: previous };
       const next = { ...current };
@@ -827,6 +807,7 @@ export function BotsWorkspace({
           className="back-action"
           onClick={() => {
             setReview(false);
+            setCompoundFeedback(null);
             setView("fleet");
           }}
         >
@@ -882,12 +863,23 @@ export function BotsWorkspace({
               [50, "Split gains", "Half returns to your balance; half stays in bot capital."],
               [100, "Recompound gains", "Net profit stays in the bot as capital."],
             ].map(([percent, title, description]) => (
-              <button key={percent} type="button" role="radio" aria-checked={initialCompoundPercent === percent} tabIndex={initialCompoundPercent === percent ? 0 : -1} className={initialCompoundPercent === percent ? "active" : ""} onClick={() => setInitialCompoundPercent(percent as number)}>
+              <button key={percent} type="button" role="radio" aria-checked={initialCompoundPercent === percent} tabIndex={initialCompoundPercent === percent ? 0 : -1} className={initialCompoundPercent === percent ? "active" : ""} onClick={() => {
+                const selectedPercent = percent as number;
+                setInitialCompoundPercent(selectedPercent);
+                setCompoundFeedback({ context: "create", product, percent: selectedPercent });
+              }}>
                 <strong>{percent}% · {title}</strong><small>{description}</small>
               </button>
             ))}
           </div>
         </fieldset>
+        {compoundFeedback?.context === "create" && (
+          <CompoundSelectionDialog
+            product={compoundFeedback.product}
+            percent={compoundFeedback.percent}
+            onClose={() => setCompoundFeedback(null)}
+          />
+        )}
         <button
           className="primary-action"
           disabled={
@@ -951,6 +943,7 @@ export function BotsWorkspace({
                   });
                   if (created) {
                     setReview(false);
+                    setCompoundFeedback(null);
                     setView("fleet");
                   }
                 }}
@@ -969,7 +962,6 @@ export function BotsWorkspace({
       const paused = selected.state === "paused";
       const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
       const isClosing = selected.state === "closing";
-      const selectedEntryPresentation = botEntryPresentation(botSchedules[selected.id], scheduleNow);
       const topUpAmount = Number(amount);
       const availableBalance = Number.isFinite(data.wallet.available) ? Math.max(0, data.wallet.available) : 0;
       const configuredMinimum = Number(data.min_bot_investment_usd);
@@ -977,7 +969,7 @@ export function BotsWorkspace({
     return (
       <DeskLocalized>
       <div className="bot-detail">
-        <button className="back-action" onClick={() => setView("fleet")}>
+        <button className="back-action" onClick={() => { setCompoundFeedback(null); setView("fleet"); }}>
           <StateIcon name="arrow-left" /> Fleet overview
         </button>
         <GradientPanel className="detail-hero">
@@ -1004,16 +996,6 @@ export function BotsWorkspace({
             <strong>{money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
           </GradientPanel>
         </div>
-        <GradientPanel
-          className="bot-entry-schedule"
-          role="timer"
-          aria-live="off"
-          aria-label={`Next entry: ${selectedEntryPresentation.title}. ${selectedEntryPresentation.detail}`}
-        >
-          <span>Next entry</span>
-          <strong>{selectedEntryPresentation.title}</strong>
-          <small>{selectedEntryPresentation.detail}</small>
-        </GradientPanel>
         {selected.product === "memecoin" && (
           <GradientPanel className="compound-panel memecoin-market-panel">
             <span className="eyebrow">LIVE MARKET CHART</span>
@@ -1062,14 +1044,26 @@ export function BotsWorkspace({
                       selected.compound_percent === percent ? "active" : ""
                     }
                     key={percent}
-                    aria-disabled={isActionPending(`bot:${selected.id}:compound`)}
+                    disabled={isActionPending(`bot:${selected.id}:compound:${percent}`)}
+                    aria-busy={isActionPending(`bot:${selected.id}:compound:${percent}`)}
                     onClick={() => void updateCompound(percent)}
                   >
                     {percent}%
                   </button>
                 ))}
               </div>
+              {[0, 50, 100].map((percent) => {
+                const error = compoundErrors[`bot:${selected.id}:compound:${percent}`];
+                return error ? <p key={percent} className="security-feedback" role="alert">{error}</p> : null;
+              })}
             </GradientPanel>
+          )}
+          {compoundFeedback?.context === "existing" && compoundFeedback.botId === selected.id && (
+            <CompoundSelectionDialog
+              product={compoundFeedback.product}
+              percent={compoundFeedback.percent}
+              onClose={() => setCompoundFeedback(null)}
+            />
           )}
           <div className="detail-actions">
             {!isClosing && <>
@@ -1265,7 +1259,6 @@ export function BotsWorkspace({
             const hasSettledPnl = isSynthetic
               ? Boolean(latestSyntheticSettlement)
               : recentMemecoinRuns.length > 0 || Boolean(latestMemecoinSettlement);
-            const entryPresentation = botEntryPresentation(botSchedules[bot.id], scheduleNow);
             const rawSettlementMarket = latestSyntheticSettlement?.market || latestMemecoinSettlement?.symbol || "";
             // Contract and mint identifiers are audit data, not primary customer
             // copy. The API supplies approved aliases for both the qualified id
@@ -1313,16 +1306,6 @@ export function BotsWorkspace({
                   </strong>
                   {latestSettlement && <small>{formatSettlementExitReason(settlementReason, latestSettlementPnl)}</small>}
                 </div>
-              </div>
-              <div
-                className="bot-entry-schedule"
-                role="timer"
-                aria-live="off"
-                aria-label={`Next entry: ${entryPresentation.title}. ${entryPresentation.detail}`}
-              >
-                <span>Next entry</span>
-                <strong>{entryPresentation.title}</strong>
-                <small>{entryPresentation.detail}</small>
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
