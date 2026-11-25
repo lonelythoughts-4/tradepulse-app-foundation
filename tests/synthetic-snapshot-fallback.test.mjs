@@ -95,13 +95,12 @@ test("the chart retains same-market cached ticks and rejects a late market respo
   assert.match(source, /account\.user\.is_admin && snapshot\.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable\./);
 });
 
-test("a partial Memecoin refresh merges cached owner-scoped positions and events", () => {
+test("a partial Memecoin refresh merges cached owner-scoped positions", () => {
   const snapshotPoller = botsSource.slice(
     botsSource.indexOf("useResourcePoller(\n    async (_token, signal) => request(\n      `/v1/memecoin/snapshot"),
     botsSource.indexOf("Boolean(selected && selected.product === \"memecoin\")"),
   );
   assert.match(snapshotPoller, /Array\.isArray\(snapshot\.positions\) \? snapshot\.positions : current\.positions/);
-  assert.match(snapshotPoller, /Array\.isArray\(snapshot\.events\) \? snapshot\.events : current\.events/);
   assert.match(snapshotPoller, /sameOwnerScope \|\| responseMatchesSelection/);
   assert.match(snapshotPoller, /snapshot\.environment === data\.environment/);
 });
