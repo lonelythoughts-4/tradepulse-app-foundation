@@ -7104,9 +7104,21 @@ function LiveTradePulse() {
   const reloadDashboard = async (): Promise<void> => {
     await load();
   };
+  const dashboardRefreshRef = useRef(load);
+  dashboardRefreshRef.current = load;
   sessionValidationRef.current = (environment) => {
     void load(environment);
   };
+  useEffect(() => {
+    if (tab !== "Bots" || !data || !isDocumentVisible) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void dashboardRefreshRef.current(webEnvironment);
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(timer);
+  }, [data?.user.id, isDocumentVisible, tab, webEnvironment]);
   useEffect(() => {
     if (!telegramIdentityPending) return;
     const timer = window.setInterval(() => {

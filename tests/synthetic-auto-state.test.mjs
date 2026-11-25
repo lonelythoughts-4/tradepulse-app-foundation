@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "components", "workspaces", "synthetic-workspace.tsx"), "utf8");
 const botsSource = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
+const shellSource = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
 const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
 
 test("funded Synthetic is Auto-managed without a Manual mode switch", () => {
@@ -33,6 +34,12 @@ test("the fleet keeps Auto order, latest settlement, and Memecoin customer-net s
   assert.match(botsSource, /"ACTIVE AUTO ORDER"/);
   assert.match(botsSource, /"LATEST SETTLEMENT"/);
   assert.match(botsSource, /"RECENT CUSTOMER NET"/);
+});
+
+test("the fleet refreshes settlement projections while its tab is visible", () => {
+  assert.match(shellSource, /if \(tab !== "Bots" \|\| !data \|\| !isDocumentVisible\) return/);
+  assert.match(shellSource, /dashboardRefreshRef\.current\(webEnvironment\)/);
+  assert.match(shellSource, /window\.setInterval\(refresh, 30_000\)/);
 });
 
 test("Synthetic shows recent canonical settlements separately from open positions", () => {
