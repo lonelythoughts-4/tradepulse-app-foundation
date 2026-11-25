@@ -7,24 +7,27 @@ const source = await readFile(
   "utf8",
 );
 
-test("funded Memecoin bots link from the fleet to authorization inside the Memecoin market panel", () => {
-  assert.match(source, /bot\.state === "awaiting_authorization" && <span className="memecoin-fleet-prompt">Funded, but not active\./);
-  assert.match(source, /\{bot\.state === "awaiting_authorization" \? "Review setup" : "Open detail"\}/);
-
-  const marketPanel = source.indexOf('<GradientPanel className="compound-panel memecoin-market-panel">');
-  const authorizationPanel = source.indexOf("Authorize your funded Memecoin bot");
-  const liveMarketPanel = source.indexOf("LIVE MEMECOIN MARKET");
-  const marketPanelEnd = source.indexOf("</GradientPanel>", marketPanel);
-  assert.ok(marketPanel >= 0);
-  assert.ok(authorizationPanel > marketPanel && authorizationPanel < liveMarketPanel);
-  assert.ok(liveMarketPanel < marketPanelEnd, "authorization controls should share the Memecoin panel with its market chart");
-  assert.equal(source.includes("Up to the last 8 account engine records; quote-modeled, not exchange fills."), false);
+test("Memecoin creation collects risk acknowledgement and starts Auto with Trench enabled", () => {
+  assert.match(source, /checked=\{memecoinRiskAcknowledged\}/);
+  assert.match(source, /live_risk_acknowledged: memecoinRiskAcknowledged/);
+  assert.match(source, /ON AFTER CREATION/);
+  assert.match(source, /TRENCH MODE <b>ON · CORE TOKENS INCLUDED<\/b>/);
+  assert.match(source, /100% OF ALLOCATION, INCLUDING TOP-UPS/);
+  assert.match(source, /Slot #1 is scheduled 4–5 minutes after activation/);
 });
 
-test("first authorization requires explicit risk acceptance and keeps Auto opt-in", () => {
-  assert.match(source, /checked=\{Boolean\(acceptedMemecoinAuthorizations\[selected\.id\]\)\}/);
-  assert.match(source, /accepted: awaitingAuthorization && Boolean\(acceptedMemecoinAuthorizations\[selected\.id\]\)/);
-  assert.match(source, /Automatic entries are off by default\./);
-  assert.match(source, /awaitingAuthorization \? \(memecoinAutoEnabled \? "Authorize and enable Auto" : "Authorize bot"\)/);
-  assert.match(source, /awaitingAuthorization && !acceptedMemecoinAuthorizations\[selected\.id\]/);
+test("Memecoin workspace retains monitoring and account actions without strategy/order controls", () => {
+  assert.match(source, /LIVE MARKET CHART/);
+  assert.match(source, /Close position/);
+  assert.match(source, /Pause bot/);
+  assert.match(source, /Resume bot/);
+  assert.match(source, /Top up allocation/);
+  assert.match(source, /\[0, 50, 100\]/);
+  assert.match(source, /Close bot/);
+  assert.doesNotMatch(source, /Review manual order/);
+  assert.doesNotMatch(source, /Long & Short manual entry/);
+  assert.doesNotMatch(source, /Browse eligible markets/);
+  assert.doesNotMatch(source, /Include Trench Mode/);
+  assert.doesNotMatch(source, /Automatic entries/);
+  assert.doesNotMatch(source, /Authorize your funded Memecoin bot/);
 });

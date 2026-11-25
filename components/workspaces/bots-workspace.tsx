@@ -29,6 +29,7 @@ function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
 const memecoinNames: Record<string, string> = {
   DOGE: "Dogecoin", SHIB: "Shiba Inu", PEPE: "Pepe", WIF: "dogwifhat", BONK: "Bonk",
 };
+const MEMECOIN_CORE_ASSETS = ["DOGE", "SHIB", "PEPE", "WIF", "BONK"];
 const memecoinLogos: Record<string, string> = {
   DOGE: "/icons/crypto/doge.svg", SHIB: "/icons/crypto/shib.svg", PEPE: "/icons/crypto/pepe.svg",
   WIF: "/icons/crypto/wif.png", BONK: "/icons/crypto/bonk.svg",
@@ -65,24 +66,6 @@ function remainingStopLabel(mark: number, stop: number, direction: string) {
   return distance <= 0.005 ? "Stop crossed" : `Stop ${distance.toFixed(2)}% away`;
 }
 
-type MemecoinEvent = { id: string; kind: string; created_at: number; payload?: Record<string, unknown> };
-type DisplayMemecoinEvent = MemecoinEvent & { reviewCount?: number };
-
-function compactMemecoinEvents(events: MemecoinEvent[]) {
-  const compacted: DisplayMemecoinEvent[] = [];
-  for (const event of events.slice(-12)) {
-    const isHold = event.kind === "strategy_decision" && event.payload?.decision === "hold";
-    const priorHoldIndex = isHold ? compacted.findIndex((item) => item.kind === "strategy_decision" && item.payload?.decision === "hold") : -1;
-    if (priorHoldIndex >= 0) {
-      const prior = compacted[priorHoldIndex];
-      compacted[priorHoldIndex] = { ...event, reviewCount: Number(prior.reviewCount || 1) + 1 };
-    } else {
-      compacted.push({ ...event, reviewCount: isHold ? 1 : undefined });
-    }
-  }
-  return compacted.slice(-4);
-}
-
 function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
   event.preventDefault();
@@ -93,12 +76,6 @@ function handleBotChoiceKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     : (index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + choices.length) % choices.length;
   choices[next].focus();
   choices[next].click();
-}
-
-function createMemecoinOrderIdempotencyKey(userId: number, botId: string) {
-  const nonce = globalThis.crypto?.randomUUID?.()
-    ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `memecoin:${userId}:${botId}:${nonce}`;
 }
 
 export function BotsWorkspace({
@@ -136,6 +113,7 @@ export function BotsWorkspace({
   const [amount, setAmount] = useState("20");
   const [review, setReview] = useState(false);
   const [syntheticRiskAcknowledged, setSyntheticRiskAcknowledged] = useState(false);
+  const [memecoinRiskAcknowledged, setMemecoinRiskAcknowledged] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(initialBotId);
   // Pending state is scoped to the action and its resource. A slow request on
   // one bot must never make another bot, position, or Flashback control look
@@ -162,27 +140,8 @@ export function BotsWorkspace({
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
   const [closedBotIds, setClosedBotIds] = useState<string[]>([]);
   const [memecoinMarket, setMemecoinMarket] = useState("DOGE");
-  const [memecoinAssets, setMemecoinAssets] = useState<string[]>(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
-  const [memecoinLeverage, setMemecoinLeverage] = useState(3);
-  const [memecoinCadence, setMemecoinCadence] = useState(300);
-  const [memecoinAutoEnabled, setMemecoinAutoEnabled] = useState(false);
-  const [includeTrench, setIncludeTrench] = useState(false);
-  const [acceptedMemecoinAuthorizations, setAcceptedMemecoinAuthorizations] = useState<Record<string, boolean>>({});
-  const [memecoinAssetCategories, setMemecoinAssetCategories] = useState<Record<string, string>>({
-    DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap",
-  });
-  const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; category?: string; venue?: string; chain?: string; chain_label?: string; token_address?: string; eligible?: boolean }>>([]);
-  const [memecoinInsights, setMemecoinInsights] = useState<Record<string, { available?: boolean; completed_positions?: number; participant_count?: number; positive_position_rate?: number }>>({});
-  const [basketPickerOpen, setBasketPickerOpen] = useState(false);
-  const [basketPickerLoading, setBasketPickerLoading] = useState(false);
-  const [basketPickerError, setBasketPickerError] = useState("");
-  const [basketQuery, setBasketQuery] = useState("");
-  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ symbol?: string; bot_id?: number | null; environment?: string; partial?: boolean; points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }>; events?: MemecoinEvent[] }>({});
-  const [memecoinOrder, setMemecoinOrder] = useState<{
-    direction: "long" | "short";
-    amount: string;
-    idempotencyKey: string;
-  } | null>(null);
+  const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; chain_label?: string }>>([]);
+  const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ symbol?: string; bot_id?: number | null; environment?: string; partial?: boolean; points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }> }>({});
   useEffect(() => {
     setSelectedId(initialBotId);
     setView(initialBotId ? "detail" : initialView);
@@ -332,16 +291,7 @@ export function BotsWorkspace({
   );
   const refreshMemecoinCatalog = useCallback(async () => {
     const response = await request("/v1/memecoin/catalog");
-    const assets = Array.isArray(response.assets)
-      ? response.assets.filter((asset: { eligible?: boolean; symbol?: string }) => Boolean(asset.eligible) && Boolean(asset.symbol))
-      : [];
-    setMemecoinCatalog(assets);
-    setMemecoinAssetCategories((current) => ({
-      ...current,
-      ...Object.fromEntries(assets
-        .filter((asset: { category?: string }) => ["bluechip", "midcap", "microcap"].includes(String(asset.category)))
-        .map((asset: { symbol: string; category?: string }) => [asset.symbol, String(asset.category)])),
-    }));
+    setMemecoinCatalog(Array.isArray(response.assets) ? response.assets : []);
   }, [request]);
   useEffect(() => {
     setCompoundOverrides((current) => {
@@ -359,60 +309,11 @@ export function BotsWorkspace({
   }, [data.bots]);
   useEffect(() => {
     if (!selected || selected.product !== "memecoin") return;
-    setMemecoinAssets(["DOGE", "SHIB", "PEPE", "WIF", "BONK"]);
-    setMemecoinLeverage(3);
-    setMemecoinCadence(300);
-    setMemecoinAutoEnabled(false);
-    setIncludeTrench(false);
-    setMemecoinAssetCategories({ DOGE: "bluechip", SHIB: "bluechip", PEPE: "midcap", WIF: "midcap", BONK: "midcap" });
-    const encoded = data.memecoin?.authorization?.settings_json;
-    if (!encoded) return;
-    try {
-      const settings = JSON.parse(encoded) as Record<string, unknown>;
-      const assets = Array.isArray(settings.assets)
-        ? settings.assets.map((item) => {
-            const value = String(item).trim();
-            return value.length > 20 ? value : value.toUpperCase();
-          }).filter(Boolean)
-        : [];
-      if (assets.length) setMemecoinAssets(assets);
-      if (settings.asset_categories && typeof settings.asset_categories === "object") {
-        setMemecoinAssetCategories((current) => ({ ...current, ...Object.fromEntries(
-          Object.entries(settings.asset_categories as Record<string, unknown>)
-            .filter(([, category]) => ["bluechip", "midcap", "microcap"].includes(String(category)))
-            .map(([asset, category]) => [asset, String(category)]),
-        ) }));
-      }
-      if ([1, 3, 5, 10].includes(Number(settings.leverage))) setMemecoinLeverage(Number(settings.leverage));
-      if ([60, 300, 900].includes(Number(settings.cadence_seconds))) setMemecoinCadence(Number(settings.cadence_seconds));
-      if (typeof settings.auto_enabled === "boolean") setMemecoinAutoEnabled(settings.auto_enabled);
-      if (typeof settings.include_trench === "boolean") setIncludeTrench(settings.include_trench);
-    } catch {
-      // An older authorization record should not prevent the default controls
-      // from rendering or change the customer's existing allocation.
-    }
-  }, [selected?.id, selected?.product, data.memecoin?.authorization?.settings_json]);
-  useEffect(() => {
-    if (!selected || selected.product !== "memecoin") return;
     void refreshMemecoinCatalog().catch((error) => {
       // A label refresh cannot interrupt the existing market or order view.
       logDeskFailure("bots.memecoin-catalog", error);
     });
   }, [selected?.id, selected?.product, refreshMemecoinCatalog]);
-  const openBasketPicker = async () => {
-    setBasketPickerOpen(true);
-    setBasketPickerError("");
-    setBasketQuery("");
-    setBasketPickerLoading(true);
-    try {
-      await refreshMemecoinCatalog();
-    } catch (error) {
-      logDeskFailure("bots.memecoin-catalog", error);
-      setBasketPickerError("unavailable");
-    } finally {
-      setBasketPickerLoading(false);
-    }
-  };
   const memecoinMarketLabel = (symbol: string) => {
     const catalogueName = memecoinCatalog.find((asset) => asset.symbol === symbol)?.name;
     return catalogueName || memecoinNames[symbol.toUpperCase()] || "Memecoin market";
@@ -426,16 +327,6 @@ export function BotsWorkspace({
       title: approvedName || "Market label is being verified",
     };
   };
-  const memecoinInsightLabel = (symbol: string) => {
-    const insight = memecoinInsights[symbol];
-    if (!insight?.available) return "Performance data will appear after enough trades have settled to protect user privacy.";
-    return `All-time settled mainnet result: ${insight.positive_position_rate}% of ${insight.completed_positions} completed wallet-funded positions closed positive across ${insight.participant_count} participants. Historical results are not a forecast.`;
-  };
-  useEffect(() => {
-    if (memecoinAssets.length && !memecoinAssets.includes(memecoinMarket)) {
-      setMemecoinMarket(memecoinAssets[0]);
-    }
-  }, [memecoinAssets, memecoinMarket]);
   useResourcePoller(
     async (_token, signal) => request(
       `/v1/memecoin/snapshot?bot_id=${selected?.id}&symbol=${memecoinMarket}`,
@@ -453,7 +344,6 @@ export function BotsWorkspace({
           String(snapshot.bot_id) === String(selected?.id) && snapshot.environment === data.environment;
         const canApplyOwnerData = sameOwnerScope || responseMatchesSelection;
         const positions = Array.isArray(snapshot.positions) ? snapshot.positions : current.positions;
-        const events = Array.isArray(snapshot.events) ? snapshot.events : current.events;
         return {
           ...current,
           bot_id: snapshot.bot_id,
@@ -463,7 +353,6 @@ export function BotsWorkspace({
           candles: sameMarket && current.candles?.length ? current.candles : snapshot.candles || [],
           latest: sameMarket && current.latest ? current.latest : snapshot.latest,
           positions: canApplyOwnerData ? positions : [],
-          events: canApplyOwnerData ? events : [],
         };
       });
     },
@@ -473,30 +362,11 @@ export function BotsWorkspace({
     (error) => logDeskFailure("bots.memecoin-snapshot", error),
     "Bots",
   );
-  useEffect(() => {
-    if (!selected || selected.product !== "memecoin" || !memecoinAssets.length) return;
-    let cancelled = false;
-    const query = memecoinAssets.map((symbol) => `symbol=${encodeURIComponent(symbol)}`).join("&");
-    void request(`/v1/memecoin/insights?${query}`)
-      .then((response) => {
-        if (cancelled || !Array.isArray(response.insights)) return;
-        setMemecoinInsights(Object.fromEntries(response.insights
-          .filter((item: { symbol?: string }) => Boolean(item.symbol))
-          .map((item: { symbol: string; available?: boolean; completed_positions?: number; participant_count?: number; positive_position_rate?: number }) => [item.symbol, item])));
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        logDeskFailure("bots.memecoin-insights", error);
-        setMemecoinInsights({});
-      });
-    return () => { cancelled = true; };
-  }, [selected?.id, selected?.product, memecoinAssets, request]);
   const actionKeyFor = (path: string, payload: Record<string, unknown>) => {
     const botAction = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
     if (botAction) return `bot:${botAction[1]}:${String(payload.action || "action")}`;
     const position = path.match(/^\/v1\/memecoin\/positions\/([^/]+)\/close$/);
     if (position) return `memecoin-position:${position[1]}:close`;
-    if (path === "/v1/memecoin/orders") return `memecoin-order:${String(payload.bot_id || "new")}`;
     if (path === "/v1/flashback/start") return "flashback:start";
     if (path === "/v1/flashback/direction/start") return "flashback:direction:start";
     if (path === "/v1/flashback/reveal") return `flashback:reveal:${String(payload.session_id || "current")}`;
@@ -507,10 +377,9 @@ export function BotsWorkspace({
   const run = async (path: string, payload: Record<string, unknown>) => {
     const actionKey = actionKeyFor(path, payload);
     if (isActionPending(actionKey)) return false;
-    // Authorization persists a funded risk disclosure and the customer's
-    // strategy controls in one transaction. Give that durable result enough
-    // time to return instead of surfacing a browser abort as a refusal.
-    const durableAction = path === "/v1/bots" || (path === `/v1/bots/${selected.id}/actions` && payload.action === "authorize");
+    // Bot creation moves allocation and activation together, so wait for its
+    // durable result rather than surfacing a browser abort as a refusal.
+    const durableAction = path === "/v1/bots";
     setReviewError("");
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
@@ -528,9 +397,7 @@ export function BotsWorkspace({
         onActionResult(path, payload, response);
       }
       // The immediate mutation result is used first, so this control never
-      // waits behind a screen-wide reload. A funded authorization also gets a
-      // quiet follow-up read: it is the durable source of truth if a proxy or
-      // an earlier desk snapshot arrives out of order.
+      // waits behind a screen-wide reload.
       if (durableAction || !hasAuthoritativeResult) {
         void reload().catch((error) => logDeskFailure("bots.dashboard-reconcile", error));
       }
@@ -879,7 +746,7 @@ export function BotsWorkspace({
           disabled={
             Number(amount) < 20 || Number(amount) > data.wallet.available
           }
-          onClick={() => { setReviewError(""); setSyntheticRiskAcknowledged(false); setReview(true); }}
+          onClick={() => { setReviewError(""); setSyntheticRiskAcknowledged(false); setMemecoinRiskAcknowledged(false); setReview(true); }}
         >
           Review allocation <ChevronRight />
         </button>
@@ -903,10 +770,20 @@ export function BotsWorkspace({
                 <span>
                   COMPOUNDING <b>{initialCompoundPercent}%</b>
                 </span>
-                {product === "memecoin" && <span>STATUS <b>AUTHORIZATION REQUIRED</b></span>}
+                {product === "memecoin" && <span>AUTO EXECUTION <b>ON AFTER CREATION</b></span>}
+                {product === "memecoin" && <span>TRADING CAPACITY <b>100% OF ALLOCATION, INCLUDING TOP-UPS</b></span>}
+                {product === "memecoin" && <span>TRENCH MODE <b>ON · CORE TOKENS INCLUDED</b></span>}
                 {product === "synthetic" && <span>AUTO EXECUTION <b>{data.environment === "mainnet" ? "ON AFTER CREATION" : "NOT AVAILABLE IN TESTNET"}</b></span>}
               </div>
-              {product === "memecoin" && <p>Results use live market data and settle within this Memecoin allocation.</p>}
+              {product === "memecoin" && <>
+                <p>Auto uses live market data and the full bot allocation as daily P&amp;L capacity. The simulation rolls a +2% to +4% daily win target or a −1% daily loss stop against that allocation. Trench launches can rug, freeze, or lose value rapidly; quote and liquidity checks cannot prevent every loss.</p>
+                <p>Slot #1 is scheduled 4–5 minutes after activation if a market passes the existing execution checks. Future top-ups are included automatically.</p>
+                <label className="toggle-row">
+                  <span>I understand and accept the Memecoin Auto and Trench Mode risks, including automated trading with my full allocation and the possibility of rapid losses.</span>
+                  <input type="checkbox" checked={memecoinRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setMemecoinRiskAcknowledged(event.target.checked)} />
+                  <i aria-hidden="true" />
+                </label>
+              </>}
               {product === "synthetic" && data.environment === "mainnet" && <label className="toggle-row">
                 <span>I understand Synthetic is a game simulation using simulated index prices, not real exchange trades. Auto uses 100% of this allocation as 1:1 simulated trade margin. Daily outcomes are rolled independently per player: 80% win target (+2% to +4%) or 20% loss cap (−1%).</span>
                 <input type="checkbox" checked={syntheticRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setSyntheticRiskAcknowledged(event.target.checked)} />
@@ -916,13 +793,14 @@ export function BotsWorkspace({
               {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
               <button
                 className="primary-action"
-                disabled={isActionPending("bot:create") || (product === "synthetic" && data.environment === "mainnet" && !syntheticRiskAcknowledged)}
+                disabled={isActionPending("bot:create") || (product === "synthetic" && data.environment === "mainnet" && !syntheticRiskAcknowledged) || (product === "memecoin" && !memecoinRiskAcknowledged)}
                 aria-busy={isActionPending("bot:create")}
                 onClick={async () => {
                   const created = await run("/v1/bots", {
                     product,
                     amount: Number(amount),
                     compound_percent: initialCompoundPercent,
+                    ...(product === "memecoin" ? { live_risk_acknowledged: memecoinRiskAcknowledged } : {}),
                     ...(product === "synthetic" && data.environment === "mainnet" ? { live_risk_acknowledged: syntheticRiskAcknowledged } : {}),
                   });
                   if (created) {
@@ -945,23 +823,6 @@ export function BotsWorkspace({
       const paused = selected.state === "paused";
       const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
       const isClosing = selected.state === "closing";
-      const selectedMemecoinCategories = new Set(memecoinAssets.map((asset) => memecoinAssetCategories[asset] || "microcap"));
-      const baseCadenceCategories = [...selectedMemecoinCategories].filter((category) => category !== "microcap");
-      const cadenceCategories = baseCadenceCategories.length ? baseCadenceCategories : [...selectedMemecoinCategories];
-      const permittedCadences = [60, 300, 900].filter((value) => (
-        cadenceCategories.every((category) => (
-          category === "bluechip" ? value === 60 || value === 300 : category === "midcap" ? value === 300 : value === 900
-        ))
-      ));
-      const permittedLeverage = Math.min(...[...selectedMemecoinCategories].map((category) => category === "bluechip" ? 10 : category === "midcap" ? 5 : 3), includeTrench ? 3 : 10);
-      const savedCadence = permittedCadences.includes(memecoinCadence) ? memecoinCadence : (permittedCadences.includes(300) ? 300 : permittedCadences[0]);
-      const savedLeverage = Math.min(memecoinLeverage, permittedLeverage);
-      const selectedMarketCategory = memecoinAssetCategories[memecoinMarket] || "microcap";
-      const manualCadence = selectedMarketCategory === "microcap" ? 900 : savedCadence;
-      const filteredBasketAssets = memecoinCatalog.filter((asset) => {
-        const label = `${asset.symbol} ${asset.name || ""} ${asset.category || ""}`.toLowerCase();
-        return label.includes(basketQuery.trim().toLowerCase());
-      });
     return (
       <DeskLocalized>
       <div className="bot-detail">
@@ -974,7 +835,7 @@ export function BotsWorkspace({
             <h2>{selected.name}</h2>
             <span className={`status-chip ${paused || awaitingAuthorization || isClosing ? "paused" : "running"}`}>
               <i />
-              {isClosing ? "closing protected positions" : awaitingAuthorization ? "authorization required" : paused ? "paused" : "active"}
+              {isClosing ? "closing protected positions" : awaitingAuthorization ? "activation pending" : paused ? "paused" : "active"}
             </span>
           </div>
         </GradientPanel>
@@ -994,71 +855,10 @@ export function BotsWorkspace({
         </div>
         {selected.product === "memecoin" && (
           <GradientPanel className="compound-panel memecoin-market-panel">
-            {!isClosing && <section className="memecoin-authorization" aria-label="Memecoin bot authorization and strategy controls">
-            {awaitingAuthorization ? (
-              <>
-                <div className="memecoin-authorization-heading">
-                  <h3>Authorize your funded Memecoin bot</h3>
-                  <span className="status-chip paused"><i />Not active</span>
-                </div>
-                <p>Only your Memecoin allocation is at risk. Results use live market data and settle within that allocation. Trench Mode checks fresh launches only after a same-network DEX quote and liquidity review; it cannot prevent rugs, taxes, freezes, or rapid loss.</p>
-                <div className="activity-row" role="status">
-                  <div className="activity-info">
-                    <strong>Automatic entries are off by default.</strong>
-                    <small>Choose the markets and risk controls below. Turn Automatic entries on if you want the bot to open positions after authorization; otherwise, you can place manual orders separately.</small>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <span className="eyebrow">MEMECOIN STRATEGY CONTROLS</span>
-                <p>These controls apply to future automatic entries. Existing positions keep their recorded risk limits; manual orders always require a separate review.</p>
-              </>
-            )}
-            <span className="eyebrow">STRATEGY BASKET</span>
-            <div className="segment-control" role="group" aria-label="Strategy basket">
-              {["DOGE", "SHIB", "PEPE", "WIF", "BONK"].map((symbol) => (
-                <button type="button" key={symbol} aria-pressed={memecoinAssets.includes(symbol)} disabled={memecoinAssets.length === 1 && memecoinAssets.includes(symbol)} className={memecoinAssets.includes(symbol) ? "active" : ""} onClick={() => setMemecoinAssets((current) => current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol])}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{symbol}</span></button>
-              ))}
-            </div>
-            <button type="button" className="small-action" onClick={() => void openBasketPicker()}>
-              Browse eligible markets <ChevronRight />
-            </button>
-            <span className="eyebrow">LEVERAGE</span>
-            <div className="segment-control" role="radiogroup" aria-label="Leverage" onKeyDown={handleBotChoiceKeyDown}>
-              {[1, 3, 5, 10].filter((value) => value <= permittedLeverage).map((value) => <button type="button" role="radio" aria-checked={savedLeverage === value} tabIndex={savedLeverage === value ? 0 : -1} key={value} className={savedLeverage === value ? "active" : ""} onClick={() => setMemecoinLeverage(value)}>{value}×</button>)}
-            </div>
-            <span className="eyebrow">DECISION CADENCE</span>
-            <div className="segment-control" role="radiogroup" aria-label="Decision cadence" onKeyDown={handleBotChoiceKeyDown}>
-              {permittedCadences.map((value) => <button type="button" role="radio" aria-checked={savedCadence === value} tabIndex={savedCadence === value ? 0 : -1} key={value} className={savedCadence === value ? "active" : ""} onClick={() => setMemecoinCadence(value)}>{value === 60 ? "1m" : value === 300 ? "5m" : "15m"}</button>)}
-            </div>
-            <div className="memecoin-authorization-actions">
-              <button type="button" className={memecoinAutoEnabled ? "small-action active" : "small-action"} aria-label="Automatic Memecoin entries" aria-pressed={memecoinAutoEnabled} onClick={() => setMemecoinAutoEnabled((current) => !current)}>Automatic entries: {memecoinAutoEnabled ? "On" : "Off"}</button>
-              <button type="button" className={includeTrench ? "small-action active" : "small-action"} aria-label="Include Trench Mode" aria-pressed={includeTrench} disabled={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap")} title={includeTrench && memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") ? "Remove new-launch markets before turning Trench Mode off." : undefined} onClick={() => setIncludeTrench((current) => !current)}>Include Trench Mode: {includeTrench ? "On" : "Off"}</button>
-            </div>
-            {awaitingAuthorization && (
-              <label className="memecoin-authorization-consent">
-                <input
-                  type="checkbox"
-                  checked={Boolean(acceptedMemecoinAuthorizations[selected.id])}
-                  onChange={(event) => setAcceptedMemecoinAuthorizations((current) => ({ ...current, [selected.id]: event.target.checked }))}
-                />
-                <span>I have reviewed the funded Memecoin Bot Beta risks above and want to authorize this bot.</span>
-              </label>
-            )}
-            <button
-              className="primary-action"
-              disabled={isActionPending(`bot:${selected.id}:authorize`) || memecoinAssets.length === 0 || (awaitingAuthorization && !acceptedMemecoinAuthorizations[selected.id])}
-              aria-busy={isActionPending(`bot:${selected.id}:authorize`)}
-              onClick={() => run(`/v1/bots/${selected.id}/actions`, { action: "authorize", accepted: awaitingAuthorization && Boolean(acceptedMemecoinAuthorizations[selected.id]), settings: { basket: "eligible_strategy", assets: memecoinAssets, auto_enabled: memecoinAutoEnabled, include_trench: includeTrench, cadence_seconds: savedCadence, leverage: savedLeverage } })}
-            >
-              {isActionPending(`bot:${selected.id}:authorize`) ? "Saving…" : awaitingAuthorization ? (memecoinAutoEnabled ? "Authorize and enable Auto" : "Authorize bot") : "Save strategy controls"} <StateIcon name="check" />
-            </button>
-            </section>}
-            <span className="eyebrow">LIVE MEMECOIN MARKET</span>
+            <span className="eyebrow">LIVE MARKET CHART</span>
             <div className="segment-control" role="radiogroup" aria-label="Live Memecoin market" onKeyDown={handleBotChoiceKeyDown}>
-              {memecoinAssets.map((symbol) => (
-                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} title={memecoinInsightLabel(symbol)} aria-label={`${memecoinMarketLabel(symbol)}. ${memecoinInsightLabel(symbol)}`} onClick={() => setMemecoinMarket(symbol)}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{memecoinMarketLabel(symbol)}</span></button>
+              {MEMECOIN_CORE_ASSETS.map((symbol) => (
+                <button type="button" role="radio" aria-checked={memecoinMarket === symbol} tabIndex={memecoinMarket === symbol ? 0 : -1} className={memecoinMarket === symbol ? "active" : ""} key={symbol} aria-label={memecoinMarketLabel(symbol)} onClick={() => setMemecoinMarket(symbol)}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} />{memecoinMarketLabel(symbol)}</span></button>
               ))}
             </div>
             <MarketChart points={memecoinSnapshot.points || []} ohlcCandles={memecoinSnapshot.candles} market={`${memecoinMarketLabel(memecoinMarket)} / USDT`} sourceLabel={memecoinSnapshot.latest?.source === "kraken" || memecoinSnapshot.latest?.source === "kraken_rest" ? "Kraken 1-minute" : "1-minute"} />
@@ -1085,54 +885,6 @@ export function BotsWorkspace({
                 })}
               </div>
             )}
-              {(memecoinSnapshot.events || []).length > 0 && <div className="support-ticket-list">
-              {compactMemecoinEvents(memecoinSnapshot.events || []).map((event) => {
-                const reason = typeof event.payload?.reason === "string" ? event.payload.reason : "";
-                const available = reason.match(/(\$[\d,.]+) remains available/i)?.[1];
-                const isAllocationHold = event.kind === "strategy_rejected" && /insufficient memecoin allocation/i.test(reason);
-                const isQuoteDelay = event.kind === "strategy_rejected" && /stale|fresh market price|market feed/i.test(reason);
-                const decision = typeof event.payload?.decision === "string" ? event.payload.decision : "";
-                const eventSymbol = typeof event.payload?.symbol === "string" ? event.payload.symbol : "";
-                const label = isQuoteDelay
-                  ? "Price check paused entry"
-                  : isAllocationHold
-
-                    ? "Allocation hold"
-                    : event.kind === "strategy_decision" && decision === "opened"
-                      ? "Automatic entry opened"
-                      : event.kind === "strategy_decision" && decision === "hold"
-                        ? event.reviewCount && event.reviewCount > 1 ? `No trade opened · ${event.reviewCount} recent checks` : "No trade opened"
-                        : event.kind.replaceAll("_", " ");
-                const detail = isQuoteDelay
-                  ? "No position was opened. The bot will retry at its next scheduled decision after it receives a current quote."
-                  : isAllocationHold
-                    ? `${available ? `${available} is free, but ` : ""}the next full-sized position needs more. No position was opened.`
-                    : event.kind === "strategy_decision" && decision === "opened"
-                      ? `${eventSymbol ? `${memecoinMarketLabel(eventSymbol)} entry recorded. ` : ""}Position safeguards are active.`
-                      : event.kind === "strategy_decision" && decision === "hold"
-                        ? event.reviewCount && event.reviewCount > 1 ? "No selected market met the strategy rules in these recent checks. The next review will replace this summary." : "No selected market met the strategy rules in this review."
-                        : reason || "Strategy review recorded.";
-                return <div className="activity-row" key={event.id}>
-                  <div className="activity-info">
-                    <strong>{label}</strong>
-                    <small>{detail} · {new Date(event.created_at * 1000).toLocaleTimeString()}</small>
-                  </div>
-                </div>;
-              })}
-              </div>}
-              {selected.state === "running" && (
-                <button
-                  className="small-action"
-                  disabled={isActionPending(`memecoin-order:${selected.id}`)}
-                  onClick={() => setMemecoinOrder({
-                    direction: "long",
-                    amount: "20",
-                    idempotencyKey: createMemecoinOrderIdempotencyKey(data.user.id, selected.id),
-                  })}
-                >
-                  Review manual order <ChevronRight />
-                </button>
-              )}
             </GradientPanel>
           )}
           {!isClosing && (
@@ -1184,9 +936,9 @@ export function BotsWorkspace({
                 {isActionPending(`bot:${selected.id}:topup`) ? "Updating…" : "Top up allocation"} <Plus />
               </button>
             </>}
-          {!isClosing && <button
+          {!isClosing && !awaitingAuthorization && <button
             className="primary-action"
-            disabled={awaitingAuthorization || isActionPending(`bot:${selected.id}:toggle`)}
+            disabled={isActionPending(`bot:${selected.id}:toggle`)}
             onClick={() =>
               run(`/v1/bots/${selected.id}/actions`, { action: "toggle" })
             }
@@ -1205,50 +957,6 @@ export function BotsWorkspace({
                 {isClosing ? "Finish closing bot" : "Close bot"} <X />
               </button>
           </div>
-          {memecoinOrder && (
-            <AccessibleDialog label="Review Memecoin order" onClose={() => setMemecoinOrder(null)} dismissible={!isActionPending(`memecoin-order:${selected.id}`)}>
-              <span className="eyebrow">MANUAL MEMECOIN ORDER</span>
-              <h2>Review order</h2>
-              <p>Manual orders use the same fresh-price, liquidity, position, and settlement safeguards as automatic entries.</p>
-              <div className="segment-control" role="radiogroup" aria-label="Memecoin order direction" onKeyDown={handleBotChoiceKeyDown}>
-                {(["long", "short"] as const).map((direction) => <button type="button" role="radio" aria-checked={memecoinOrder.direction === direction} tabIndex={memecoinOrder.direction === direction ? 0 : -1} key={direction} className={memecoinOrder.direction === direction ? "active" : ""} onClick={() => setMemecoinOrder((current) => current ? { ...current, direction } : current)}>{direction === "long" ? "Long" : "Short"}</button>)}
-              </div>
-              <div className="amount-input">
-                <span>$</span>
-                <input value={memecoinOrder.amount} onChange={(event) => setMemecoinOrder((current) => current ? { ...current, amount: event.target.value.replace(/[^0-9.]/g, "") } : current)} inputMode="decimal" aria-label="Memecoin order margin" />
-              </div>
-              <div className="fact-block">
-                <span>MARKET <b>{memecoinMarketLabel(memecoinMarket)}</b></span>
-                <span>LEVERAGE <b>{savedLeverage}×</b></span>
-                <span>CADENCE <b>{manualCadence === 60 ? "1 MINUTE" : manualCadence === 300 ? "5 MINUTES" : "15 MINUTES"}</b></span>
-                <span>FUNDING <b>WALLET ALLOCATION</b></span>
-              </div>
-              {reviewError && <p className="security-feedback" role="alert">{reviewError}</p>}
-              <button
-                className="primary-action"
-                disabled={isActionPending(`memecoin-order:${selected.id}`) || Number(memecoinOrder.amount) <= 0}
-                aria-busy={isActionPending(`memecoin-order:${selected.id}`)}
-                onClick={async () => {
-                  const placed = await run("/v1/memecoin/orders", {
-                    action: "order",
-                    bot_id: selected.id,
-                    symbol: memecoinMarket,
-                    direction: memecoinOrder.direction,
-                    amount: Number(memecoinOrder.amount),
-                    leverage: savedLeverage,
-                    cadence_seconds: manualCadence,
-                    funding_source: "wallet",
-                    idempotency_key: memecoinOrder.idempotencyKey,
-                    settings: { include_trench: includeTrench },
-                  });
-                  if (placed) setMemecoinOrder(null);
-                }}
-              >
-                {isActionPending(`memecoin-order:${selected.id}`) ? "Submitting…" : "Confirm order"} <StateIcon name="check" />
-              </button>
-              <button className="ghost-action" disabled={isActionPending(`memecoin-order:${selected.id}`)} onClick={() => setMemecoinOrder(null)}>Go back</button>
-            </AccessibleDialog>
-          )}
           {closeReview && (
             <AccessibleDialog label={`Close ${selected.name}`} onClose={() => setCloseReview(false)} dismissible={!isActionPending(`bot:${selected.id}:close`)}>
               <span className="eyebrow">FINAL REVIEW</span>
@@ -1266,39 +974,6 @@ export function BotsWorkspace({
                 if (closed) setCloseReview(false);
               }}>{isActionPending(`bot:${selected.id}:close`) ? "Closing…" : isClosing ? "Continue closing bot" : "Close bot"} <X /></button>
               <button className="ghost-action" disabled={isActionPending(`bot:${selected.id}:close`)} onClick={() => setCloseReview(false)}>Go back</button>
-            </AccessibleDialog>
-          )}
-          {basketPickerOpen && (
-            <AccessibleDialog label="Choose eligible strategy markets" onClose={() => setBasketPickerOpen(false)} dismissible={!basketPickerLoading}>
-              <span className="eyebrow">TRADABLE STRATEGY BASKET</span>
-              <h2>Choose eligible markets</h2>
-              <p>Only markets currently passing TradeMemo eligibility checks appear here. A selected market is checked again for a fresh price, liquidity, and risk limits before any order opens.</p>
-              <div className="amount-input">
-                <input value={basketQuery} onChange={(event) => setBasketQuery(event.target.value)} placeholder="Search eligible markets" aria-label="Search eligible strategy markets" autoComplete="off" />
-              </div>
-              {memecoinAssets.length > 0 && <>
-                <span className="eyebrow">SELECTED</span>
-                <div className="segment-control" role="list" aria-label="Selected strategy markets">
-                  {memecoinAssets.map((symbol) => <button type="button" role="listitem" key={symbol} className="active" disabled={memecoinAssets.length === 1} onClick={() => setMemecoinAssets((current) => current.filter((item) => item !== symbol))}><span className="memecoin-choice-label"><MemecoinMark symbol={symbol} compact />{memecoinMarketLabel(symbol)}</span> <X /></button>)}
-                </div>
-              </>}
-              {basketPickerLoading && <div className="activity-row" role="status"><div className="activity-info"><strong>Loading eligible markets</strong><small>Checking the current executable catalogue.</small></div></div>}
-              {basketPickerError && <div role="status"><button type="button" className="small-action" onClick={() => void openBasketPicker()}>Reload markets</button></div>}
-              {!basketPickerLoading && !basketPickerError && <>
-                <span className="eyebrow">AVAILABLE NOW</span>
-                {filteredBasketAssets.length ? <div className="support-ticket-list">
-                  {filteredBasketAssets.map((asset) => {
-                    const chosen = memecoinAssets.includes(asset.symbol);
-                    const category = asset.category || "market";
-                    return <div className="activity-row" key={asset.symbol}>
-                      <div className="activity-info"><strong><MemecoinMark symbol={asset.symbol} compact /> {asset.name || memecoinMarketLabel(asset.symbol)}</strong><small>{asset.chain_label ? `${asset.chain_label} · ` : ""}{asset.symbol} · {category}{asset.venue ? ` · ${asset.venue}` : ""}</small></div>
-                      <button type="button" className={chosen ? "small-action active" : "small-action"} disabled={chosen && memecoinAssets.length === 1} aria-pressed={chosen} onClick={() => setMemecoinAssets((current) => chosen ? current.filter((item) => item !== asset.symbol) : [...current, asset.symbol])}>{chosen ? "Selected" : "Add"}</button>
-                    </div>;
-                  })}
-                </div> : <div className="activity-row"><div className="activity-info"><strong>No eligible markets match</strong><small>Try a symbol or market name from the current catalogue.</small></div></div>}
-              </>}
-              {memecoinAssets.some((asset) => (memecoinAssetCategories[asset] || "microcap") === "microcap") && !includeTrench && <p className="security-feedback" role="status">Enable Trench Mode before saving a basket that includes a new-launch market.</p>}
-              <button type="button" className="primary-action" onClick={() => setBasketPickerOpen(false)} disabled={basketPickerLoading}>Done <StateIcon name="check" /></button>
             </AccessibleDialog>
           )}
         </div>
@@ -1329,7 +1004,7 @@ export function BotsWorkspace({
       {displayBots.length ? (
         <div className="fleet-bot-grid">
           {displayBots.map((bot) => {
-            const status = bot.state.replace(/_/g, " ");
+            const status = bot.state === "awaiting_authorization" ? "activation pending" : bot.state.replace(/_/g, " ");
             const statusTone = bot.state === "running" ? "running" : "paused";
             const isSynthetic = bot.product === "synthetic";
             const syntheticExecution = bot.state === "closing"
@@ -1417,15 +1092,14 @@ export function BotsWorkspace({
                 <span className="compound-chip">
                   {isSynthetic ? hasSettledPnl ? `${settledPnl >= 0 ? "ALL SETTLED P&L +" : "ALL SETTLED P&L −"}${money(Math.abs(settledPnl))}` : "NO SETTLED POSITIONS" : `COMPOUND ${bot.compound_percent}%`}
                 </span>
-                {bot.state === "awaiting_authorization" && <span className="memecoin-fleet-prompt">Funded, but not active. Review setup to start the bot.</span>}
                 <button
-                  className={bot.state === "awaiting_authorization" ? "primary-action" : "small-action"}
+                  className="small-action"
                   onClick={() => {
                     setSelectedId(bot.id);
                     setView("detail");
                   }}
                 >
-                  {bot.state === "awaiting_authorization" ? "Review setup" : "Open detail"} <ChevronRight />
+                  Open detail <ChevronRight />
                 </button>
               </div>
             </GradientPanel>
