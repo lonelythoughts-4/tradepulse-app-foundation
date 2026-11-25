@@ -35,6 +35,18 @@ test("the fleet keeps Auto order, latest settlement, and Memecoin customer-net s
   assert.match(botsSource, /"RECENT CUSTOMER NET"/);
 });
 
+test("Synthetic shows recent canonical settlements separately from open positions", () => {
+  assert.match(source, /function SyntheticSettlementList/);
+  assert.match(source, /const recent = settlements\.slice\(0, 5\)/);
+  assert.match(source, /settlement\.user_net_pnl_usd/);
+  assert.match(source, /formatSettlementExitReason\(reasonValue, netPnl\)/);
+  assert.match(source, /Recent closed trades/);
+  assert.match(source, /View full history/);
+  assert.match(source, /<SyntheticPositionList[\s\S]*?<SyntheticSettlementList/);
+  assert.match(source, /response\.position\.status === "closed"[\s\S]*?recent_settlements/);
+  assert.match(shellSource, /onViewActivity=\{\(\) => \{\s+setWalletEntry\("activity"\);\s+setTab\("Wallet"\);/);
+});
+
 test("Auto settings and status have a dedicated responsive group", () => {
   assert.match(source, /<section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title"/);
   assert.match(source, /className="synthetic-auto-state" role="status" aria-live="polite"/);

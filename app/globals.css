@@ -191,17 +191,47 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
   text-align: right;
 }
 .synthetic-signal-section,
-.synthetic-position-section {
+.synthetic-position-section,
+.synthetic-settlement-section {
   min-width: 0;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+.synthetic-settlement-title-region,
+.synthetic-settlement-action-region {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.synthetic-settlement-title-region {
+  flex-wrap: wrap;
+}
+.synthetic-settlement-row .activity-info strong {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.synthetic-settlement-row .activity-info small {
+  line-height: 1.5;
+}
+.synthetic-settlement-action-region .small-action {
+  min-height: 44px;
+  white-space: nowrap;
 }
 .synthetic-empty-state {
   margin: 8px 0 0;
   color: var(--tp-supporting-text);
   font-size: 12px;
   line-height: 1.5;
+}
+@media (max-width: 520px) {
+  .synthetic-settlement-section .synthetic-section-heading {
+    align-items: flex-start;
+  }
+  .synthetic-settlement-action-region {
+    flex: 0 0 auto;
+  }
 }
 .synthetic-pilot [role="tabpanel"] {
   min-width: 0;

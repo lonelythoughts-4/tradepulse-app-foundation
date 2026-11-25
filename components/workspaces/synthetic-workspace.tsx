@@ -10,6 +10,7 @@ import { reconcileSyntheticTicks } from "../../lib/synthetic-ticks";
 import { contractReasonLabel, contractTypeLabel, normaliseManualContractType } from "../../lib/synthetic-contract-terms";
 import { liveNetPnlLabel } from "../../lib/synthetic-position-pnl";
 import { syntheticQuoteStatus } from "../../lib/synthetic-quote-status";
+import { formatSettlementExitReason } from "../../lib/settlement-label";
 import { logDeskFailure } from "../../lib/desk-api";
 import { useResourcePoller } from "./use-resource-poller";
 import { ChevronRight, ProductPnlSummary, type ProductPnlSummaryData } from "./shared-ui";
@@ -22,9 +23,10 @@ type SyntheticSnapshots = Record<string, Snapshot | undefined>;
 type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots" | "ledger" | "memecoin" | "synthetic">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; onViewActivity: () => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
+const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
 const capacityValue = (value: number | undefined, pending: boolean, fallback?: number) => {
   if (pending) return "Checking";
   const amount = typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -143,7 +145,51 @@ function SyntheticPositionList({ positions, pending, pendingFor, onClose }: {
   </section>;
 }
 
-export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, request, store }: SyntheticWorkspaceProps) {
+function SyntheticSettlementList({ settlements, onViewActivity }: {
+  settlements: NonNullable<NonNullable<Account["synthetic"]>["recent_settlements"]>;
+  onViewActivity: () => void;
+}) {
+  const recent = settlements.slice(0, 5);
+  return <section className="synthetic-settlement-section" aria-labelledby="synthetic-settlements-title">
+    <div className="synthetic-section-heading">
+      <div className="synthetic-settlement-title-region">
+        <h3 id="synthetic-settlements-title">Recent closed trades</h3>
+        <span>{recent.length === 5 ? "Latest 5" : `${recent.length} shown`}</span>
+      </div>
+      <div className="synthetic-settlement-action-region">
+        <button type="button" className="small-action" onClick={onViewActivity}>View full history</button>
+      </div>
+    </div>
+    {!recent.length
+      ? <p className="synthetic-empty-state" role="status">Closed trades will appear here after a Synthetic position settles.</p>
+      : recent.map((settlement) => {
+        const netPnl = settlement.user_net_pnl_usd;
+        const hasNetPnl = typeof netPnl === "number" && Number.isFinite(netPnl);
+        const pnlLabel = hasNetPnl
+          ? signedMoney(netPnl)
+          : "Net P&L unavailable";
+        const modeValue = String(settlement.mode || "").toLowerCase();
+        const mode = modeValue === "auto" ? "automatic" : modeValue === "manual" ? "manual" : "execution mode unavailable";
+        const reasonValue = String(settlement.close_reason || "");
+        const derivedReason = /^(game_|auto_daily_)/i.test(reasonValue);
+        const exitReason = hasNetPnl || !derivedReason
+          ? formatSettlementExitReason(reasonValue, netPnl)
+          : "Exit reason unavailable";
+        const margin = settlement.margin_usd;
+        const marginLabel = typeof margin === "number" && Number.isFinite(margin)
+          ? `Margin ${money(margin)}`
+          : "Margin unavailable";
+        return <div className="activity-row synthetic-settlement-row" key={settlement.id || `${settlement.market}-${settlement.closed_at}`}>
+          <div className="activity-info">
+            <strong>{settlement.market || "Synthetic market"} · {String(settlement.direction || "—").toUpperCase()} · {mode} · closed</strong>
+            <small>{marginLabel} · P&amp;L <b className={hasNetPnl && netPnl > 0 ? "up" : hasNetPnl && netPnl < 0 ? "down" : ""}>{pnlLabel}</b> · {exitReason}</small>
+          </div>
+        </div>;
+      })}
+  </section>;
+}
+
+export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, onViewActivity, request, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
   const marketRef = useRef(market);
   const resourceKey = syntheticResourceKey(environment, market);
@@ -274,7 +320,29 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     try {
       const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }, environment, durableAction ? 40_000 : undefined));
       if (response.position || (path === "/v1/synthetic/actions" && payload.action === "open")) setHasStartedTradeThisSession(true);
-      if (response.position) update((current) => current ? { ...current, positions: [response.position, ...current.positions.filter((item) => item.id !== response.position.id)] } : current);
+      if (response.position) {
+        update((current) => current ? { ...current, positions: [response.position, ...current.positions.filter((item) => item.id !== response.position.id)] } : current);
+        if (response.position.status === "closed" && response.position.id) {
+          onDashboardPatch((current) => {
+            if (!current) return current;
+            const previous = current.synthetic?.recent_settlements || [];
+            const settlement = {
+              id: String(response.position.id),
+              market: response.position.market,
+              mode: response.position.mode,
+              direction: response.position.direction,
+              margin_usd: response.position.margin_usd,
+              user_net_pnl_usd: response.position.user_net_pnl_usd,
+              close_reason: response.position.close_reason,
+              closed_at: response.position.closed_at,
+            };
+            const recent_settlements = [settlement, ...previous.filter((item) => item.id !== settlement.id)]
+              .sort((left, right) => Number(right.closed_at || 0) - Number(left.closed_at || 0))
+              .slice(0, 8);
+            return { ...current, synthetic: { ...current.synthetic, recent_settlements } };
+          });
+        }
+      }
       const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
       if (bot && payload.action === "topup") onDashboardPatch((current) => current ? { ...current, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet, bots: current.bots.map((item) => item.id === bot[1] ? { ...item, ...(response.bot || {}) } : item) } : current);
       onNotice(response.message || "Your changes were saved."); return true;
@@ -334,6 +402,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         <SyntheticSignalList signals={signals} />
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       <SyntheticPositionList positions={snapshot.positions} pending={snapshotPending || snapshot.positions_stale === true} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
+      <SyntheticSettlementList settlements={account.synthetic?.recent_settlements || []} onViewActivity={onViewActivity} />
       {account.user.is_admin && snapshot.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable. Open and close requests are checked against the current server state.</p>}
     </div>
   </div>
