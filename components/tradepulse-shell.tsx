@@ -8018,10 +8018,6 @@ function LiveTradePulse() {
               onDashboardPatch={updateDashboard}
               onNotice={setNotice}
               onPickStrategy={openBotStrategyPicker}
-              onViewActivity={() => {
-                setWalletEntry("activity");
-                setTab("Wallet");
-              }}
               request={request}
               store={deskStore}
             />

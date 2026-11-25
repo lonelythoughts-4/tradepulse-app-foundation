@@ -198,8 +198,7 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
-.synthetic-settlement-title-region,
-.synthetic-settlement-action-region {
+.synthetic-settlement-title-region {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -215,10 +214,6 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
 .synthetic-settlement-row .activity-info small {
   line-height: 1.5;
 }
-.synthetic-settlement-action-region .small-action {
-  min-height: 44px;
-  white-space: nowrap;
-}
 .synthetic-empty-state {
   margin: 8px 0 0;
   color: var(--tp-supporting-text);
@@ -228,9 +223,6 @@ html[data-theme="light"] .choice-grid button small,html[data-theme="light"] .cho
 @media (max-width: 520px) {
   .synthetic-settlement-section .synthetic-section-heading {
     align-items: flex-start;
-  }
-  .synthetic-settlement-action-region {
-    flex: 0 0 auto;
   }
 }
 .synthetic-pilot [role="tabpanel"] {

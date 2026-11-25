@@ -48,10 +48,9 @@ test("Synthetic shows recent canonical settlements separately from open position
   assert.match(source, /settlement\.user_net_pnl_usd/);
   assert.match(source, /formatSettlementExitReason\(reasonValue, netPnl\)/);
   assert.match(source, /Recent closed trades/);
-  assert.match(source, /View full history/);
+  assert.doesNotMatch(source, /View full history|synthetic-settlement-action-region/);
   assert.match(source, /<SyntheticPositionList[\s\S]*?<SyntheticSettlementList/);
   assert.match(source, /response\.position\.status === "closed"[\s\S]*?recent_settlements/);
-  assert.match(shellSource, /onViewActivity=\{\(\) => \{\s+setWalletEntry\("activity"\);\s+setTab\("Wallet"\);/);
 });
 
 test("Auto settings and status have a dedicated responsive group", () => {

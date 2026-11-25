@@ -23,7 +23,7 @@ type SyntheticSnapshots = Record<string, Snapshot | undefined>;
 type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots" | "ledger" | "memecoin" | "synthetic">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; onViewActivity: () => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; store: DeskStore };
 const markets: Market[] = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"];
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
@@ -145,9 +145,8 @@ function SyntheticPositionList({ positions, pending, pendingFor, onClose }: {
   </section>;
 }
 
-function SyntheticSettlementList({ settlements, onViewActivity }: {
+function SyntheticSettlementList({ settlements }: {
   settlements: NonNullable<NonNullable<Account["synthetic"]>["recent_settlements"]>;
-  onViewActivity: () => void;
 }) {
   const recent = settlements.slice(0, 5);
   return <section className="synthetic-settlement-section" aria-labelledby="synthetic-settlements-title">
@@ -155,9 +154,6 @@ function SyntheticSettlementList({ settlements, onViewActivity }: {
       <div className="synthetic-settlement-title-region">
         <h3 id="synthetic-settlements-title">Recent closed trades</h3>
         <span>{recent.length === 5 ? "Latest 5" : `${recent.length} shown`}</span>
-      </div>
-      <div className="synthetic-settlement-action-region">
-        <button type="button" className="small-action" onClick={onViewActivity}>View full history</button>
       </div>
     </div>
     {!recent.length
@@ -189,7 +185,7 @@ function SyntheticSettlementList({ settlements, onViewActivity }: {
   </section>;
 }
 
-export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, onViewActivity, request, store }: SyntheticWorkspaceProps) {
+export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, request, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
   const marketRef = useRef(market);
   const resourceKey = syntheticResourceKey(environment, market);
@@ -402,7 +398,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
         <SyntheticSignalList signals={signals} />
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       <SyntheticPositionList positions={snapshot.positions} pending={snapshotPending || snapshot.positions_stale === true} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
-      <SyntheticSettlementList settlements={account.synthetic?.recent_settlements || []} onViewActivity={onViewActivity} />
+      <SyntheticSettlementList settlements={account.synthetic?.recent_settlements || []} />
       {account.user.is_admin && snapshot.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable. Open and close requests are checked against the current server state.</p>}
     </div>
   </div>
