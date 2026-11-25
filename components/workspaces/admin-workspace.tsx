@@ -296,10 +296,10 @@ export function AdminWorkspace({
   const autouserFileRef = useRef<HTMLInputElement>(null);
   const [withdrawalReview, setWithdrawalReview] = useState<{
     row: AdminOverview["withdrawals"][number];
-    action: "approve" | "reject";
+    action: "approve" | "reject" | "mark_paid";
     environment: "mainnet" | "testnet";
   } | null>(null);
-  const [withdrawalPending, setWithdrawalPending] = useState(false);
+  const [withdrawalPendingKey, setWithdrawalPendingKey] = useState<string | null>(null);
   const withdrawalSubmitting = useRef(false);
   const [withdrawalError, setWithdrawalError] = useState("");
   const scheduleReconcile = () => {
@@ -343,13 +343,18 @@ export function AdminWorkspace({
     setWithdrawalReview(null);
     setWithdrawalError("");
   }, [environment]);
-  const reviewWithdrawal = (row: AdminOverview["withdrawals"][number], action: "approve" | "reject") => {
+  const reviewWithdrawal = (row: AdminOverview["withdrawals"][number], action: "approve" | "reject" | "mark_paid") => {
+    if (withdrawalSubmitting.current) return;
     setWithdrawalError("");
     setWithdrawalReview({ row: { ...row }, action, environment });
   };
   const reviewedWithdrawal = withdrawalReview && admin.withdrawals.find((row) => row.id === withdrawalReview.row.id);
-  const canReviewWithdrawal = (status: string, action: "approve" | "reject") =>
-    status === "pending_admin_release" || (action === "reject" && status === "approved");
+  const canReviewWithdrawal = (status: string, action: "approve" | "reject" | "mark_paid") =>
+    action === "approve"
+      ? status === "pending_admin_release"
+      : action === "reject"
+        ? status === "pending_admin_release" || status === "approved"
+        : environment === "mainnet" && (status === "pending_admin_release" || status === "approved");
   const withdrawalReviewCurrent = Boolean(withdrawalReview && reviewedWithdrawal &&
     withdrawalReview.environment === environment && canReviewWithdrawal(reviewedWithdrawal.status, withdrawalReview.action) &&
     (["user_id", "amount_usd", "asset", "chain", "address"] as const).every((key) => reviewedWithdrawal[key] === withdrawalReview.row[key]));
@@ -357,23 +362,29 @@ export function AdminWorkspace({
     if (!withdrawalReview || withdrawalSubmitting.current || !withdrawalReviewCurrent ||
       (withdrawalReview.action === "approve" && !withdrawalReview.row.address?.trim())) return;
     withdrawalSubmitting.current = true;
-    setWithdrawalPending(true);
+    setWithdrawalPendingKey(`${withdrawalReview.row.id}:${withdrawalReview.action}`);
     setWithdrawalError("");
     try {
       await request(`/v1/admin/withdrawals/${withdrawalReview.row.id}`, {
         method: "POST",
         body: JSON.stringify({ action: withdrawalReview.action }),
       }, environment);
-      onNotice(withdrawalReview.action === "approve" ? "Withdrawal approved and logged." : "Withdrawal rejected.");
+      onNotice(
+        withdrawalReview.action === "approve"
+          ? "Withdrawal accepted. The automatic payout will send its card after network confirmation."
+          : withdrawalReview.action === "reject"
+            ? "Withdrawal rejected."
+            : "Withdrawal marked paid; the card was queued if community cards are enabled.",
+      );
       setWithdrawalReview(null);
       scheduleReconcile();
     } catch (error) {
       logDeskFailure("admin.withdrawal-review", error);
-      setWithdrawalError("");
+      setWithdrawalError(error instanceof Error && error.message ? error.message : "The withdrawal could not be updated.");
       scheduleReconcile();
     } finally {
       withdrawalSubmitting.current = false;
-      setWithdrawalPending(false);
+      setWithdrawalPendingKey(null);
     }
   };
   useEffect(() => {
@@ -1684,10 +1695,17 @@ export function AdminWorkspace({
         </div>
       </details>
       {withdrawalReview && (
-        <AccessibleDialog label={withdrawalReview.action === "approve" ? "Review withdrawal approval" : "Review withdrawal rejection"}
-          onClose={() => setWithdrawalReview(null)} dismissible={!withdrawalPending}>
+        <AccessibleDialog
+          label={withdrawalReview.action === "approve" ? "Review withdrawal acceptance" : withdrawalReview.action === "reject" ? "Review withdrawal rejection" : "Record withdrawal payment"}
+          onClose={() => setWithdrawalReview(null)} dismissible={!withdrawalPendingKey}>
           <span className="eyebrow">ADMIN / FINAL CROSS-CHECK</span>
-          <h2>{withdrawalReview.action === "approve" ? "Approve this withdrawal?" : "Reject this withdrawal?"}</h2>
+          <h2>
+            {withdrawalReview.action === "approve"
+              ? "Accept this withdrawal?"
+              : withdrawalReview.action === "reject"
+                ? "Reject this withdrawal?"
+                : "Has this payout already been sent?"}
+          </h2>
           <div className="fact-block">
             <span>ENVIRONMENT <b>{withdrawalReview.environment.toUpperCase()}</b></span>
             <span>USER <b>{withdrawalReview.row.user_id}</b></span>
@@ -1697,16 +1715,30 @@ export function AdminWorkspace({
           </div>
           <div className="mono-review">
             <span>DESTINATION</span><code>{withdrawalReview.row.address || "Destination unavailable — approval is blocked."}</code>
-            <span>REFERENCE</span><code>{withdrawalReview.row.id}</code>
+            <span>REQUEST ID</span><code>{withdrawalReview.row.id}</code>
           </div>
           {!withdrawalReviewCurrent && <p role="status">Checking the latest withdrawal queue before confirming this request.</p>}
+          {withdrawalReview.action === "approve" && (
+            <p>The automatic payout starts after acceptance. No admin transaction reference is needed; its card is queued after network confirmation.</p>
+          )}
+          {withdrawalReview.action === "mark_paid" && (
+            <p>Only use this after you have sent the payout yourself. This records payment and queues the withdrawal card; it does not send funds.</p>
+          )}
           {withdrawalError && <p role="alert">{withdrawalError}</p>}
-          <button className={withdrawalReview.action === "approve" ? "primary-action" : "danger-action"}
-            disabled={withdrawalPending || !withdrawalReviewCurrent || (withdrawalReview.action === "approve" && !withdrawalReview.row.address?.trim())}
+          <button className={withdrawalReview.action === "reject" ? "danger-action" : "primary-action"}
+            disabled={Boolean(withdrawalPendingKey) || !withdrawalReviewCurrent ||
+              (withdrawalReview.action === "approve" && !withdrawalReview.row.address?.trim())}
+            aria-busy={Boolean(withdrawalPendingKey)}
             onClick={() => void confirmWithdrawalReview()}>
-            {withdrawalPending ? "Submitting…" : withdrawalReview.action === "approve" ? "Confirm approval" : "Confirm rejection"}
+            {withdrawalPendingKey
+              ? "Submitting…"
+              : withdrawalReview.action === "approve"
+                ? "Accept & start payout"
+                : withdrawalReview.action === "reject"
+                  ? "Confirm rejection"
+                  : "Mark paid & queue card"}
           </button>
-          <button className="ghost-action" disabled={withdrawalPending} onClick={() => setWithdrawalReview(null)}>Go back</button>
+          <button className="ghost-action" disabled={Boolean(withdrawalPendingKey)} onClick={() => setWithdrawalReview(null)}>Go back</button>
         </AccessibleDialog>
       )}
       {recoveryReview && (
@@ -1790,7 +1822,7 @@ export function AdminWorkspace({
           <h2>High-friction review</h2>
           {admin.withdrawals.length ? (
             admin.withdrawals.map((row) => (
-              <div className="admin-row" key={row.id}>
+              <div className="admin-row withdrawal-review-row" key={row.id}>
                 <div>
                   <strong>
                     {money(row.amount_usd)} {row.asset} / {row.chain}
@@ -1799,20 +1831,34 @@ export function AdminWorkspace({
                     USER {row.user_id} / {row.status}
                   </small>
                 </div>
-                <button
-                  className="small-action"
-                  disabled={!canReviewWithdrawal(row.status, "approve") || withdrawalPending}
-                  onClick={() => reviewWithdrawal(row, "approve")}
-                >
-                  Approve
-                </button>
-                <button
-                  className="small-action"
-                  disabled={!canReviewWithdrawal(row.status, "reject") || withdrawalPending}
-                  onClick={() => reviewWithdrawal(row, "reject")}
-                >
-                  Reject
-                </button>
+                <div className="withdrawal-review-actions">
+                  <button
+                    className="small-action"
+                    disabled={!canReviewWithdrawal(row.status, "approve") || withdrawalPendingKey === `${row.id}:approve`}
+                    aria-busy={withdrawalPendingKey === `${row.id}:approve`}
+                    onClick={() => reviewWithdrawal(row, "approve")}
+                  >
+                    {withdrawalPendingKey === `${row.id}:approve` ? "Accepting…" : "Accept"}
+                  </button>
+                  <button
+                    className="small-action"
+                    disabled={!canReviewWithdrawal(row.status, "reject") || withdrawalPendingKey === `${row.id}:reject`}
+                    aria-busy={withdrawalPendingKey === `${row.id}:reject`}
+                    onClick={() => reviewWithdrawal(row, "reject")}
+                  >
+                    {withdrawalPendingKey === `${row.id}:reject` ? "Rejecting…" : "Reject"}
+                  </button>
+                  {environment === "mainnet" && canReviewWithdrawal(row.status, "mark_paid") && (
+                    <button
+                      className="small-action"
+                      disabled={withdrawalPendingKey === `${row.id}:mark_paid`}
+                      aria-busy={withdrawalPendingKey === `${row.id}:mark_paid`}
+                      onClick={() => reviewWithdrawal(row, "mark_paid")}
+                    >
+                      {withdrawalPendingKey === `${row.id}:mark_paid` ? "Recording…" : "Mark paid"}
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           ) : (
