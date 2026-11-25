@@ -47,13 +47,15 @@ test("a dashboard outage does not send an existing browser session to sign-in", 
   const request = shellSource.slice(shellSource.indexOf("const request = useCallback"), shellSource.indexOf("const noticeCenter"));
   const load = shellSource.slice(shellSource.indexOf("const load = async"), shellSource.indexOf("const reloadDashboard"));
   const dashboardRequest = load.indexOf('request("/v1/dashboard"');
-  const catchStart = load.indexOf("} catch {", dashboardRequest);
+  const catchStart = load.indexOf("} catch (error) {", dashboardRequest);
   const catchEnd = load.indexOf("} finally", catchStart);
   const loadCatch = load.slice(catchStart, catchEnd);
   assert.match(request, /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{[\s\S]*?setSessionHandoffRequired\(true\)/);
   assert.ok(dashboardRequest >= 0);
   assert.ok(catchStart >= 0);
-  assert.match(loadCatch, /catch \{\s+setNotice\(""\);\s+return false;/);
+  assert.match(load, /request\("\/v1\/dashboard", \{\}, targetEnvironment, 15_000\)/);
+  assert.match(loadCatch, /if \(checkingSession && !dashboardAuthenticationRejectedRef\.current\) \{[\s\S]*?The desk is taking longer than expected\. Try again\./);
+  assert.match(shellSource, /status=\{notice \|\| "Opening your desk…"\}/);
   assert.doesNotMatch(loadCatch, /setSessionHandoffRequired\(true\)/);
   assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?void load\(\);/);
   assert.match(shellSource, /if \(!sessionBootstrapComplete \|\| loading\) \{\s+return <DeskLoading status="Checking your saved session…"/);
