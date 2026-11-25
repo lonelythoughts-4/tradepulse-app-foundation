@@ -1,4 +1,4 @@
-import type { AvatarId } from "./shared-ui";
+import type { AvatarId, ProductPnlSummaryData } from "./shared-ui";
 
 export type WorkspaceDashboard = {
   user: {
@@ -119,6 +119,7 @@ export type WorkspaceDashboard = {
     health?: { status?: string; assets?: number; latest_tick_at?: number | null };
     metrics?: { capacity_usd?: number; reserved_capacity_usd?: number; remaining_capacity_usd?: number; enabled?: boolean; paused?: boolean; close_only?: boolean };
     market_labels?: Record<string, string>;
+    pnl_summary?: ProductPnlSummaryData | null;
     recent_settlements?: Array<{ id?: string; bot_id?: number; symbol?: string; direction?: string; realized_pnl?: number; close_reason?: string; closed_at?: number }>;
   };
   synthetic?: {

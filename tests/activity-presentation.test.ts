@@ -139,6 +139,23 @@ test("activity views display the API's canonical signed amount without inferring
   assert.doesNotMatch(wallet, /data\.engine\.map\(\(entry\) => \(\{/);
 });
 
+test("keeps Memecoin P&L in its bot workspace instead of the dashboard", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const bots = await readFile(
+    new URL("../components/workspaces/bots-workspace.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(shell, /ProductPnlSummary product="Memecoin"/);
+  assert.match(
+    bots,
+    /ProductPnlSummary product="Memecoin" summary=\{data\.memecoin\?\.pnl_summary\}/,
+  );
+});
+
 test("withdrawal failures show the safe API reason when one is available", async () => {
   const wallet = await readFile(
     new URL("../components/workspaces/wallet-workspace.tsx", import.meta.url),

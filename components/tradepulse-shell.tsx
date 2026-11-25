@@ -18,7 +18,6 @@ import { AccountWorkspace } from "./workspaces/account-workspace";
 import { HelpWorkspace } from "./workspaces/help-workspace";
 import { AdminWorkspace } from "./workspaces/admin-workspace";
 import { ProtectionWorkspace } from "./workspaces/protection-workspace";
-import { ProductPnlSummary, type ProductPnlSummaryData } from "./workspaces/shared-ui";
 import { getWorkspacePresencePlan } from "./workspaces/workspace-motion";
 import {
   useDocumentVisibility,
@@ -2706,14 +2705,12 @@ function BotsScreen({
 
 export function Dashboard({
   bots,
-  memecoinPnlSummary,
   model,
   onManage,
   onViewActivity,
   onOpenBot,
 }: {
   bots: Bot[];
-  memecoinPnlSummary?: ProductPnlSummaryData | null;
   model?: VisualDeskModel;
   onManage?: () => void;
   onViewActivity?: () => void;
@@ -2724,7 +2721,6 @@ export function Dashboard({
     <div className="dashboard-grid">
       <BalanceHero wallet={model?.wallet} />
       <StatChips fleet={bots} tier={model?.tier} alerts={model?.alerts} />
-      <ProductPnlSummary product="Memecoin" summary={memecoinPnlSummary} />
       <section className="bots-section reveal-card">
         <div className="section-heading">
           <div>
@@ -7802,7 +7798,6 @@ function LiveTradePulse() {
               poll={(signal) => request("/v1/dashboard", { signal })}
               onPollError={() => setNotice("")}
               bots={visualBots}
-              memecoinPnlSummary={data.memecoin?.pnl_summary}
               model={visualModel}
               onManage={() => {
                 openBotFleet();
