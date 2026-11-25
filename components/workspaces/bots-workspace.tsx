@@ -784,7 +784,7 @@ export function BotsWorkspace({
                 </label>
               </>}
               {product === "synthetic" && data.environment === "mainnet" && <label className="toggle-row">
-                <span>I understand Synthetic is a game simulation using simulated index prices, not real exchange trades. Auto uses 100% of this allocation as 1:1 simulated trade margin.</span>
+                <span>All SYN markets run on an internal model-generated index price feed and do not execute trades on an external financial exchange. Auto allocates 100% of your bot&apos;s funded balance as 1:1 margin per position, keeping position sizing straightforward and free from leverage amplification.</span>
                 <input type="checkbox" checked={syntheticRiskAcknowledged} disabled={isActionPending("bot:create")} onChange={(event) => setSyntheticRiskAcknowledged(event.target.checked)} />
                 <i aria-hidden="true" />
               </label>}
