@@ -5499,7 +5499,7 @@ function MarketChart({
     if (!pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointers.current.size === 1 && dragStart.current?.pointerId === event.pointerId) {
-      const plotWidth = Math.max(1, (priceSvgRef.current?.getBoundingClientRect().width || 660) * (560 / 660));
+      const plotWidth = Math.max(1, priceSvgRef.current?.getBoundingClientRect().width || 560);
       const travelledPoints = Math.round(((dragStart.current.x - event.clientX) / plotWidth) * visibleCount);
       setOffset(Math.max(0, Math.min(maxOffset, dragStart.current.offset + travelledPoints)));
       return;
@@ -5570,6 +5570,14 @@ function MarketChart({
     .map((value, index) => `${index ? "L" : "M"} ${(index / Math.max(rsi.length - 1, 1)) * chartWidth} ${42 - (value / 100) * 34}`)
     .join(" ");
   const visibleTimes = [0, Math.floor((candles.length - 1) / 2), candles.length - 1];
+  const priceLabelPositions = priceLabels.map((label, index) => ({
+    label,
+    top: ((10 + ((chartHeight - 20) * index) / 4) / chartHeight) * 100,
+  }));
+  const priceAxisWidth = Math.min(
+    116,
+    Math.max(48, Math.ceil(Math.max(...priceLabels.map((label) => formatMarketPrice(label).length)) * 5.2)),
+  );
   return (
     <div
       ref={chartRef}
@@ -5588,11 +5596,11 @@ function MarketChart({
       <div className={`market-chart-status ${feedError ? "market-chart-status-stale" : ""}`} role="status">
         {feedError ? "Feed reconnecting" : `Showing ${sourceLabel || "1-minute"} candles`}
       </div>
-      <div className="market-chart-main">
-        <svg ref={priceSvgRef} viewBox="0 0 660 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
+      <div className="market-chart-main" style={{ gridTemplateColumns: `minmax(0, 1fr) ${priceAxisWidth}px` }}>
+        <svg ref={priceSvgRef} viewBox="0 0 560 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
           {priceLabels.map((label, index) => {
             const lineY = 10 + ((chartHeight - 20) * index) / 4;
-            return <g key={label}><path d={`M0 ${lineY}H560`} className="market-grid-line" /><text x="570" y={lineY + 3} className="market-axis-label">{formatMarketPrice(label)}</text></g>;
+            return <g key={`${label}-${index}`}><path d={`M0 ${lineY}H560`} className="market-grid-line" /></g>;
           })}
           {Array.from({ length: 7 }, (_, index) => <path key={index} d={`M${(chartWidth * index) / 6} 0V204`} className="market-grid-line market-grid-vertical" />)}
           {candles.length === 1 && <path d={`M0 ${y(candles[0].close)}H${chartWidth}`} stroke={accent} strokeWidth="1.35" strokeDasharray="4 4" opacity="0.9" />}
@@ -5610,6 +5618,11 @@ function MarketChart({
             </g>;
           })}
         </svg>
+        <div className="market-price-axis" aria-hidden="true">
+          {priceLabelPositions.map(({ label, top }, index) => (
+            <span key={`${label}-${index}`} style={{ top: `${top}%` }}>{formatMarketPrice(label)}</span>
+          ))}
+        </div>
       </div>
       <div className="market-rsi">
         <span>RSI (14)</span>

@@ -55,7 +55,7 @@ function SyntheticQuoteStatus({ environment, error, market, store }: { environme
 
 const MemoizedQuoteStatus = memo(SyntheticQuoteStatus);
 
-function SyntheticMarketData({ account, environment, executionLabel, market, marketChart: MarketChart, snapshot, store }: {
+function SyntheticMarketData({ account, environment, executionLabel, market, marketChart: MarketChart, snapshot, store, syntheticAutoOn }: {
   account: Account;
   environment: "mainnet" | "testnet";
   executionLabel: string;
@@ -63,6 +63,7 @@ function SyntheticMarketData({ account, environment, executionLabel, market, mar
   marketChart: SyntheticWorkspaceProps["marketChart"];
   snapshot: Snapshot;
   store: DeskStore;
+  syntheticAutoOn: boolean;
 }) {
   const quotes = useDeskSelector(store, selectQuotes);
   const quote = quotes?.[syntheticResourceKey(environment, market)];
@@ -85,11 +86,11 @@ function SyntheticMarketData({ account, environment, executionLabel, market, mar
   const syntheticCapital = account.bots.find((bot) => bot.product === "synthetic")?.capital_usd || 0;
   return <>
     <MarketChartView points={points} market={market} />
-    <div className="wallet-stat-grid">
+    <div className="wallet-stat-grid synthetic-market-stats">
       <div><span className="eyebrow">LAST TICK</span><strong>{Number.isFinite(lastTick) && lastTick > 0 ? lastTick.toFixed(5) : "Connecting"}</strong></div>
       <div><span className="eyebrow">UNASSIGNED</span><strong>{money(account.wallet.available)}</strong></div>
       <div><span className="eyebrow">ALLOCATION</span><strong>{money(syntheticCapital)}</strong></div>
-      <div><span className="eyebrow">EXECUTION</span><strong>{executionLabel}</strong></div>
+      <div><span className="eyebrow">EXECUTION</span><strong className={`synthetic-execution-value ${syntheticAutoOn ? "is-running" : ""}`}>{executionLabel}</strong></div>
     </div>
     {(snapshot.history_stale || currentQuote?.history_stale) ? <p role="status">Chart history is delayed. Showing the last verified ticks and current quote.</p> : (snapshot.history_available === false || currentQuote?.history_available === false) && <p role="status">Chart history is delayed. The latest available quote is shown.</p>}
   </>;
@@ -315,7 +316,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     </div>
     {environment === "testnet" && account.user.is_admin && <p className="synthetic-environment-note">Admin test environment · Virtual funds only.</p>}
     <div id="synthetic-market-snapshot" aria-label={market + " market snapshot"}>
-      <MemoizedSyntheticMarketData account={account} environment={environment} executionLabel={executionLabel} market={market} marketChart={MarketChart} snapshot={snapshot} store={store} />
+      <MemoizedSyntheticMarketData account={account} environment={environment} executionLabel={executionLabel} market={market} marketChart={MarketChart} snapshot={snapshot} store={store} syntheticAutoOn={syntheticAutoOn} />
       <ProductPnlSummary product="Synthetic" summary={account.synthetic?.pnl_summary} />
       {environment === "mainnet" ? <>
         <section className="synthetic-auto-panel" aria-labelledby="synthetic-auto-title">

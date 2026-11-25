@@ -714,6 +714,31 @@ input::placeholder, textarea::placeholder { color: var(--tp-supporting-text); op
   to { background-color: rgba(2,4,8,.62); }
 }
 
+.market-chart-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: stretch;
+  gap: 8px;
+}
+.market-price-axis {
+  position: relative;
+  min-width: 0;
+  height: 210px;
+  color: var(--tp-supporting-text);
+  font: 8px var(--font-jetbrains-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+.market-price-axis span {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .market-price-axis { height: 180px; }
+}
+
 @keyframes tp-dialog-panel-in {
   from { opacity: 0; transform: translateY(12px) scale(.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }

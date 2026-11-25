@@ -107,6 +107,7 @@ const watchableDepositStatuses = new Set([
   "confirming",
   "pending_dust",
 ]);
+const WALLET_ACTIVITY_PAGE_SIZE = 8;
 const retryableDepositWatchStatuses = new Set([408, 429, 500, 502, 503, 504]);
 
 async function requestDepositWatch(
@@ -282,6 +283,7 @@ function WalletWorkspaceBody({
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "deposit" | "withdraw" | "bot"
   >("all");
+  const [activityPageIndex, setActivityPageIndex] = useState(0);
   const [selectedActivityEntry, setSelectedActivityEntry] =
     useState<LiveDashboard["ledger"][number] | null>(null);
   const depositStatus = intent?.status.toLowerCase() || "";
@@ -457,6 +459,11 @@ function WalletWorkspaceBody({
       kind.includes("bot") || kind.includes("trade") || kind.includes("engine")
     );
   });
+  const sortedActivity = [...data.ledger].sort((a, b) => b.created_at - a.created_at);
+  const activityPageCount = Math.max(1, Math.ceil(sortedActivity.length / WALLET_ACTIVITY_PAGE_SIZE));
+  const activityPage = Math.min(activityPageIndex, activityPageCount - 1);
+  const activityStart = activityPage * WALLET_ACTIVITY_PAGE_SIZE;
+  const activityPageRows = sortedActivity.slice(activityStart, activityStart + WALLET_ACTIVITY_PAGE_SIZE);
   const createRoute = async (allowParallel = false) => {
     if (routeCreateInFlight.current || !asset || !chain) return;
     const selectedRoute = depositRoutes.find(
@@ -1405,10 +1412,8 @@ function WalletWorkspaceBody({
           tabIndex={0}
         >
           <GradientPanel className="ledger-card">
-            {data.ledger.length ? (
-              [...data.ledger]
-                .sort((a, b) => b.created_at - a.created_at)
-                .map((entry, index) => {
+            {sortedActivity.length ? (
+              activityPageRows.map((entry, index) => {
                   const amount = entry.amount_usd;
                   const isNonFinancial = isNonFinancialActivity(entry.kind);
                   const presentation = describeActivity(entry);
@@ -1450,6 +1455,37 @@ function WalletWorkspaceBody({
             )}
           </GradientPanel>
         </div>
+        {activityPageCount > 1 && (
+          <nav className="wallet-activity-pagination" aria-label={t("Activity")}>
+            <span>{t("Showing {start}–{end} of {count} recent events", {
+              start: activityStart + 1,
+              end: Math.min(activityStart + WALLET_ACTIVITY_PAGE_SIZE, sortedActivity.length),
+              count: sortedActivity.length,
+            })}</span>
+            <div>
+              <button
+                type="button"
+                className="small-action"
+                disabled={activityPage === 0}
+                onClick={() => setActivityPageIndex((current) => Math.max(0, Math.min(current, activityPageCount - 1) - 1))}
+              >
+                {t("Previous page")}
+              </button>
+              <span aria-current="page">{t("Page {current} of {total}", {
+                current: activityPage + 1,
+                total: activityPageCount,
+              })}</span>
+              <button
+                type="button"
+                className="small-action"
+                disabled={activityPage >= activityPageCount - 1}
+                onClick={() => setActivityPageIndex((current) => Math.min(activityPageCount - 1, current + 1))}
+              >
+                {t("Next page")}
+              </button>
+            </div>
+          </nav>
+        )}
         {selectedActivityEntry && (
           <ActivityDetailDialog
             entry={selectedActivityEntry}

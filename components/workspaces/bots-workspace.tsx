@@ -890,9 +890,34 @@ export function BotsWorkspace({
           Review allocation <ChevronRight />
         </button>
         {review && (
-          <AccessibleDialog label="Confirm allocation" onClose={() => setReview(false)} dismissible={!isActionPending("bot:create")}>
-              <span className="eyebrow">FINAL REVIEW</span>
-              <h2>Confirm allocation</h2>
+          <AccessibleDialog
+            label={product === "synthetic" ? "Review Synthetic allocation" : "Confirm allocation"}
+            onClose={() => setReview(false)}
+            className={product === "synthetic" ? "synthetic-auto-review-modal" : ""}
+            dismissible={!isActionPending("bot:create")}
+          >
+              {product === "synthetic" ? (
+                <div className="synthetic-review-heading">
+                  <div>
+                    <h2>Review Synthetic allocation</h2>
+                    <p>{data.environment === "mainnet" ? "Automatic execution starts after this allocation is created." : "Automatic execution is unavailable in the admin test environment."}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="modal-close"
+                    aria-label="Close Synthetic allocation review"
+                    disabled={isActionPending("bot:create")}
+                    onClick={() => setReview(false)}
+                  >
+                    <X />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span className="eyebrow">FINAL REVIEW</span>
+                  <h2>Confirm allocation</h2>
+                </>
+              )}
               <div className="fact-block">
                 <span>
                   PRODUCT <b>{productLabel}</b>
@@ -948,7 +973,11 @@ export function BotsWorkspace({
                   }
                 }}
               >
-                {isActionPending("bot:create") ? `Creating ${productLabel} automation…` : "Create automation"} <Zap />
+                {isActionPending("bot:create")
+                  ? `Creating ${productLabel} automation…`
+                  : product === "synthetic"
+                    ? data.environment === "mainnet" ? "Create Synthetic Auto" : "Create Synthetic bot"
+                    : "Create automation"} <Zap />
               </button>
               <button className="ghost-action" disabled={isActionPending("bot:create")} onClick={() => setReview(false)}>
                 Go back
