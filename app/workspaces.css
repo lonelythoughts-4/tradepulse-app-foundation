@@ -158,6 +158,21 @@
   padding-top: 8px;
 }
 
+.synthetic-auto-panel {
+  container: synthetic-auto / inline-size;
+}
+
+@container synthetic-auto (max-width: 520px) {
+  .synthetic-auto-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .synthetic-auto-state {
+    justify-content: flex-start;
+  }
+}
+
 .protection-terms p {
   color: var(--tp-supporting-text);
   font-size: 11px;

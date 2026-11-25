@@ -139,6 +139,19 @@ test("activity views display the API's canonical signed amount without inferring
   assert.doesNotMatch(wallet, /data\.engine\.map\(\(entry\) => \(\{/);
 });
 
+test("activity detail titles retain the market-specific presentation", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const dialogStart = shell.indexOf("export function ActivityDetailDialog");
+  const dialogEnd = shell.indexOf("\nfunction ", dialogStart + 1);
+  const dialog = shell.slice(dialogStart, dialogEnd);
+
+  assert.match(dialog, /<h2>\{describeActivity\(entry\)\.title\}<\/h2>/);
+  assert.doesNotMatch(dialog, /activityLabel\(entry\.kind/);
+});
+
 test("keeps Memecoin P&L in its bot workspace instead of the dashboard", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),

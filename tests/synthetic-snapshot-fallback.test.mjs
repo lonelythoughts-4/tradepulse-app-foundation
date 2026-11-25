@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "components", "workspaces", "synthetic-workspace.tsx"), "utf8");
+const workspacesCss = fs.readFileSync(path.join(root, "app", "workspaces.css"), "utf8");
 const botsSource = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
 const flashbackWorkspace = fs.readFileSync(path.join(root, "components", "workspaces", "flashback-workspace.tsx"), "utf8");
 const shellSource = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
@@ -38,6 +39,8 @@ test("Synthetic uses the full allocation and keeps risk acknowledgement in bot c
   assert.match(source, /Auto locked margin/);
   assert.match(source, /execution\?\.(auto_locked_usd)/);
   assert.match(source, /Auto evaluates shared signals using 100% of your funded Synthetic allocation/);
+  assert.match(workspacesCss, /\.synthetic-auto-panel\s*\{\s*container:\s*synthetic-auto\s*\/\s*inline-size/);
+  assert.match(workspacesCss, /@container synthetic-auto \(max-width: 520px\)[\s\S]*?\.synthetic-auto-heading[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*?\.synthetic-auto-state[\s\S]*?justify-content:\s*flex-start/);
   assert.doesNotMatch(source, /LIVE-RISK ACKNOWLEDGEMENT|live_disclosure_accepted === false|Set aside for Auto|Auto amount per order/);
   assert.doesNotMatch(source, /\/v1\/synthetic\/disclosure/);
   assert.doesNotMatch(source, /latestAuto|autoActivityTitle|autoActivityDetail/);
@@ -54,10 +57,11 @@ test("a dashboard outage does not send an existing browser session to sign-in", 
   assert.ok(dashboardRequest >= 0);
   assert.ok(catchStart >= 0);
   assert.match(load, /request\("\/v1\/dashboard", \{\}, targetEnvironment, 15_000\)/);
-  assert.match(loadCatch, /if \(checkingSession && !dashboardAuthenticationRejectedRef\.current\) \{[\s\S]*?The desk is taking longer than expected\. Try again\./);
+  assert.match(loadCatch, /if \(checkingSession && !dashboardAuthenticationRejectedRef\.current\) \{[\s\S]*?The desk is temporarily unavailable\./);
   assert.match(shellSource, /status=\{notice \|\| "Opening your desk…"\}/);
+  assert.doesNotMatch(shellSource, /onRetry/);
   assert.doesNotMatch(loadCatch, /setSessionHandoffRequired\(true\)/);
-  assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?void load\(\);/);
+  assert.match(shellSource, /if \(!sessionHandoffRequired\) \{\s+return \(\s+<DeskLoading[\s\S]*?busy=\{false\}/);
   assert.match(shellSource, /if \(!sessionBootstrapComplete \|\| loading\) \{\s+return <DeskLoading status="Checking your saved session…"/);
   assert.match(shellSource, /<BrowserBotHandoff onComplete=/);
   assert.doesNotMatch(shellSource, /Your saved session has not been cleared/);

@@ -103,7 +103,7 @@ test("Telegram Mini Apps recover to secure handoff after bridge detection or ses
   assert.doesNotMatch(handoff, /state === "error"/);
   assert.match(load, /if \(checkingSession && telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*return false;\s*\}/);
   assert.ok(load.indexOf("if (checkingSession && telegramContext && !telegramInitData())") < load.indexOf('request("/v1/dashboard"'));
-  assert.match(loader, /onRetry && \([\s\S]*?<button[^>]*>[\s\S]*?Try again/);
+  assert.doesNotMatch(loader, /onRetry|Try again/);
 });
 
 test("an endpoint-specific 401 validates the dashboard before asking the user to sign in again", async () => {

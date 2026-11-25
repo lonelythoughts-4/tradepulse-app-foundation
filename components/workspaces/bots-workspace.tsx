@@ -23,7 +23,7 @@ function BotProductCard({ name, description, selected, onClick }: { name: string
   return <DeskLocalized><button className={`product-card ${selected ? "selected" : ""}`} onClick={onClick}><span><strong>{name}</strong><small>{description}</small></span><ChevronRight /></button></DeskLocalized>;
 }
 function EmptyBots({ onLaunch }: { onLaunch?: () => void }) {
-  return <DeskLocalized><GradientPanel className="empty-bots"><img src="/illustrations/empty-bots.png" alt="No bots running" className="illustration-empty-bots pointer-events-none select-none" draggable={false} decoding="async" loading="eager" /><span className="eyebrow">YOUR BOT FLEET</span><h2>Set up your first automation</h2><p>Choose Memecoin or Synthetic Indices when at least $20 is available.</p><button className="primary-action" onClick={onLaunch}>Choose a strategy <ChevronRight size={14} /></button></GradientPanel></DeskLocalized>;
+  return <DeskLocalized><GradientPanel className="empty-bots"><img src="/illustrations/empty-bots.png" alt="No bots running" className="illustration-empty-bots pointer-events-none select-none" draggable={false} decoding="async" loading="eager" /><span className="eyebrow">YOUR BOT FLEET</span><h2>Set up your first automation</h2><p>Choose Memecoin or Synthetic Indices when at least $20 is available.</p><button className="empty-bots-action" onClick={onLaunch}>Choose a strategy <ChevronRight size={14} /></button></GradientPanel></DeskLocalized>;
 }
 
 const memecoinNames: Record<string, string> = {

@@ -1283,7 +1283,7 @@ export function ActivityDetailDialog({ entry, onClose }: { entry: LiveDashboard[
   return <DeskLocalized><AccessibleDialog className="account-modal" label="Activity details" onClose={onClose}>
     <button className="modal-close" type="button" onClick={onClose} aria-label="Close activity details"><X size={16} /></button>
     <span className="eyebrow">ACTIVITY DETAILS</span>
-    <h2>{activityLabel(entry.kind, entry.status, amount)}</h2>
+    <h2>{describeActivity(entry).title}</h2>
     <p>{describeActivity(entry).summary}</p>
     <div className="fact-block">
       <span>{isFlashbackLock ? "ENTRY LOCKED" : isNonFinancial ? "BALANCE CHANGE" : "RESULT"} <b className={isNonFinancial ? undefined : activityAmountTone(amount)}>{isFlashbackLock ? money(entry.amount_usd) : isNonFinancial ? "No balance change" : activityAmountDisplay(amount)}</b></span>
@@ -7064,8 +7064,8 @@ function LiveTradePulse() {
       if (checkingSession && !dashboardAuthenticationRejectedRef.current) {
         setNotice(
           error instanceof Error && error.name === "TimeoutError"
-            ? "The desk is taking longer than expected. Try again."
-            : "The desk could not be opened. Check your connection and try again.",
+            ? "The desk is temporarily unavailable."
+            : "The desk could not connect.",
         );
       } else {
         setNotice("");
@@ -7453,10 +7453,6 @@ function LiveTradePulse() {
         return (
           <DeskLoading
             status="Opening your desk…"
-            onRetry={() => {
-              setNotice("");
-              void load();
-            }}
           />
         );
       }
@@ -7470,10 +7466,7 @@ function LiveTradePulse() {
       return (
         <DeskLoading
           status={notice || "Opening your desk…"}
-          onRetry={() => {
-            setNotice("");
-            void load();
-          }}
+          busy={false}
         />
       );
     }
@@ -7484,10 +7477,7 @@ function LiveTradePulse() {
       return (
         <DeskLoading
           status={notice || "Opening your desk…"}
-          onRetry={() => {
-            setNotice("");
-            void load();
-          }}
+          busy={false}
         />
       );
     }
