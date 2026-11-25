@@ -57,6 +57,65 @@ type BotTopUpFeedback =
   | { kind: "below-minimum"; minimum: number; available: number }
   | { kind: "over-available"; available: number };
 
+type BotNextEntry = {
+  state: string;
+  bot_state?: string;
+  entry_at?: number;
+  window_opens_at?: number;
+};
+
+function countdownClock(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  return [hours, minutes, remainder].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function botEntryPresentation(schedule: BotNextEntry | undefined, now: number) {
+  if (!schedule) return { title: "Loading next entry schedule", detail: "Schedule is checked with the bot engine." };
+  if (schedule.state === "paused" || (schedule.state === "not_running" && schedule.bot_state === "paused")) {
+    return { title: "Bot paused", detail: "Resume the bot to schedule its next entry." };
+  }
+  if (schedule.state === "not_running") {
+    const state = (schedule.bot_state || "not running").replace(/_/g, " ");
+    return { title: `Bot ${state}`, detail: "A next entry is scheduled only while the bot is running." };
+  }
+  if (schedule.state === "not_available") return { title: "Timer unavailable in this workspace", detail: "Entry schedules are available in mainnet." };
+  if (schedule.state === "awaiting_engine_schedule") return { title: "No next entry scheduled", detail: "The bot engine has not published an unused entry slot." };
+  const entryAt = schedule.entry_at;
+  const windowOpensAt = schedule.window_opens_at;
+  if (schedule.state !== "scheduled"
+    || typeof entryAt !== "number"
+    || !Number.isFinite(entryAt)
+    || typeof windowOpensAt !== "number"
+    || !Number.isFinite(windowOpensAt)) {
+    return { title: "Schedule unavailable", detail: "The bot engine schedule could not be loaded." };
+  }
+  const entryTime = new Date(entryAt * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  });
+  if (now < windowOpensAt) {
+    return {
+      title: `Window opens in ${countdownClock(windowOpensAt - now)}`,
+      detail: `Entry scheduled for ${entryTime}.`,
+    };
+  }
+  if (now < entryAt) {
+    return {
+      title: `Pre-entry open · ${countdownClock(entryAt - now)} to entry`,
+      detail: `Entry scheduled for ${entryTime}; quote and risk checks run at the slot.`,
+    };
+  }
+  return {
+    title: "Entry slot due",
+    detail: `Awaiting quote and risk checks · scheduled ${entryTime}.`,
+  };
+}
+
 function remainingTargetLabel(mark: number, target: number, direction: string) {
   const distance = direction.toLowerCase() === "short"
     ? ((mark - target) / mark) * 100
@@ -145,6 +204,8 @@ export function BotsWorkspace({
   const [allocationDeltas, setAllocationDeltas] = useState<Record<string, number>>({});
   const [stateOverrides, setStateOverrides] = useState<Record<string, string>>({});
   const [closedBotIds, setClosedBotIds] = useState<string[]>([]);
+  const [botSchedules, setBotSchedules] = useState<Record<string, BotNextEntry>>({});
+  const [scheduleNow, setScheduleNow] = useState(() => Date.now() / 1000);
   const [memecoinMarket, setMemecoinMarket] = useState("DOGE");
   const [memecoinCatalog, setMemecoinCatalog] = useState<Array<{ symbol: string; name?: string; chain_label?: string }>>([]);
   const [memecoinSnapshot, setMemecoinSnapshot] = useState<{ symbol?: string; bot_id?: number | null; environment?: string; partial?: boolean; points?: MarketPoint[]; candles?: MarketCandle[]; latest?: { source?: string }; positions?: Array<{ id: string; symbol: string; direction: string; status: string; margin_usd: number; entry_price: number; mark_price?: number; unrealized_pnl?: number; realized_pnl?: number; close_reason?: string; stop_loss_price?: number; take_profit_price?: number; execution_type?: "automatic" | "manual"; idempotency_key?: string }> }>({});
@@ -163,6 +224,11 @@ export function BotsWorkspace({
   const selected =
     displayBots.find((bot) => bot.id === selectedId) || displayBots[0];
   const runningStrategies = displayBots.filter((bot) => bot.state === "running");
+  const scheduleBotSnapshot = JSON.stringify(displayBots.map((bot) => ({
+    id: bot.id,
+    state: bot.state,
+    capital_usd: bot.capital_usd,
+  })));
   const latestFlashback = data.flashback || null;
   const flashbackSessions = (data.flashback_sessions || (latestFlashback ? [latestFlashback] : []))
     .filter((session) => session.product_version === "market-direction-v1");
@@ -272,6 +338,54 @@ export function BotsWorkspace({
     setFlashbackClockOffset(serverNow - clientNow);
     setFlashbackNow(clientNow);
   }, [data.server_time]);
+  useEffect(() => {
+    if (view !== "fleet" && view !== "detail") return;
+    const tick = () => setScheduleNow(Date.now() / 1000);
+    tick();
+    const countdown = window.setInterval(tick, 1_000);
+    return () => window.clearInterval(countdown);
+  }, [view]);
+  useEffect(() => {
+    if (view !== "fleet" && view !== "detail") return;
+    let active = true;
+    let inFlight = false;
+    const bots = JSON.parse(scheduleBotSnapshot) as Array<{
+      id: string;
+      state: string;
+      capital_usd: number;
+    }>;
+    const refresh = async () => {
+      if (inFlight || !bots.length) return;
+      inFlight = true;
+      const results = await Promise.all(bots.map(async (bot) => {
+        try {
+          const schedule = await request(
+            `/v1/bots/${bot.id}/next-entry`,
+            {},
+            data.environment === "testnet" ? "testnet" : "mainnet",
+          ) as BotNextEntry;
+          return [bot.id, schedule] as const;
+        } catch (error) {
+          logDeskFailure("bots.next-entry-schedule", error);
+          return [bot.id, { state: "unavailable" }] as const;
+        }
+      }));
+      if (active) {
+        setBotSchedules((current) => {
+          const next = { ...current };
+          for (const [botId, schedule] of results) next[botId] = schedule;
+          return next;
+        });
+      }
+      inFlight = false;
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [data.environment, request, scheduleBotSnapshot, view]);
   useEffect(() => {
     if (view !== "flashback" || !activeCountdownSession) return;
     const tick = () => setFlashbackNow(Date.now());
@@ -855,6 +969,7 @@ export function BotsWorkspace({
       const paused = selected.state === "paused";
       const awaitingAuthorization = selected.product === "memecoin" && selected.state === "awaiting_authorization";
       const isClosing = selected.state === "closing";
+      const selectedEntryPresentation = botEntryPresentation(botSchedules[selected.id], scheduleNow);
       const topUpAmount = Number(amount);
       const availableBalance = Number.isFinite(data.wallet.available) ? Math.max(0, data.wallet.available) : 0;
       const configuredMinimum = Number(data.min_bot_investment_usd);
@@ -889,6 +1004,16 @@ export function BotsWorkspace({
             <strong>{money(Number(selected.hwm_usd ?? selected.capital_usd))}</strong>
           </GradientPanel>
         </div>
+        <GradientPanel
+          className="bot-entry-schedule"
+          role="timer"
+          aria-live="off"
+          aria-label={`Next entry: ${selectedEntryPresentation.title}. ${selectedEntryPresentation.detail}`}
+        >
+          <span>Next entry</span>
+          <strong>{selectedEntryPresentation.title}</strong>
+          <small>{selectedEntryPresentation.detail}</small>
+        </GradientPanel>
         {selected.product === "memecoin" && (
           <GradientPanel className="compound-panel memecoin-market-panel">
             <span className="eyebrow">LIVE MARKET CHART</span>
@@ -1140,6 +1265,7 @@ export function BotsWorkspace({
             const hasSettledPnl = isSynthetic
               ? Boolean(latestSyntheticSettlement)
               : recentMemecoinRuns.length > 0 || Boolean(latestMemecoinSettlement);
+            const entryPresentation = botEntryPresentation(botSchedules[bot.id], scheduleNow);
             const rawSettlementMarket = latestSyntheticSettlement?.market || latestMemecoinSettlement?.symbol || "";
             // Contract and mint identifiers are audit data, not primary customer
             // copy. The API supplies approved aliases for both the qualified id
@@ -1187,6 +1313,16 @@ export function BotsWorkspace({
                   </strong>
                   {latestSettlement && <small>{formatSettlementExitReason(settlementReason, latestSettlementPnl)}</small>}
                 </div>
+              </div>
+              <div
+                className="bot-entry-schedule"
+                role="timer"
+                aria-live="off"
+                aria-label={`Next entry: ${entryPresentation.title}. ${entryPresentation.detail}`}
+              >
+                <span>Next entry</span>
+                <strong>{entryPresentation.title}</strong>
+                <small>{entryPresentation.detail}</small>
               </div>
               <div className="fleet-bot-actions">
                 <span className="compound-chip">
