@@ -27,13 +27,15 @@ test("a closing bot keeps a retry action and shows product-specific close steps"
   assert.match(botsSource, /Existing positions remain protected while the bot finishes closing them at executable market prices/);
 });
 
-test("the fleet keeps Auto order, latest settlement, and Memecoin customer-net summaries", () => {
-  assert.match(botsSource, /data\.synthetic\?\.open_positions\?\.find\(\(position\) => position\.mode === "auto"\)/);
+test("the fleet shows Synthetic and Memecoin recent customer-net summaries", () => {
+  assert.doesNotMatch(botsSource, /ACTIVE AUTO ORDER|No Auto order open|autoPosition/);
+  assert.match(botsSource, /const recentSyntheticSettlements = isSynthetic[\s\S]*?\(data\.synthetic\?\.recent_settlements \|\| \[\]\)\.slice\(0, 8\)/);
+  assert.match(botsSource, /settlement\.user_net_pnl_usd \?\? settlement\.realized_pnl_usd/);
+  assert.match(botsSource, /const recentSyntheticCustomerNet = recentSyntheticNetAmounts\.reduce/);
   assert.match(botsSource, /data\.synthetic\?\.recent_settlements\?\.\[0\]/);
   assert.match(botsSource, /data\.memecoin\?\.recent_settlements\?\.find/);
-  assert.match(botsSource, /"ACTIVE AUTO ORDER"/);
-  assert.match(botsSource, /"LATEST SETTLEMENT"/);
   assert.match(botsSource, /"RECENT CUSTOMER NET"/);
+  assert.match(botsSource, /"LATEST SETTLEMENT"/);
 });
 
 test("the fleet refreshes settlement projections while its tab is visible", () => {

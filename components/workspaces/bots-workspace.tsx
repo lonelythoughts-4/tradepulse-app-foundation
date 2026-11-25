@@ -1265,10 +1265,16 @@ export function BotsWorkspace({
               : bot.state === "running" && Number(bot.capital_usd || 0) > 0
                 ? "Auto on"
                 : "Waiting for funding";
-            const autoPosition = isSynthetic
-              ? data.synthetic?.open_positions?.find((position) => position.mode === "auto")
-              : undefined;
             const realizedSynthetic = Number(data.synthetic?.realized_pnl_usd || 0);
+            const recentSyntheticSettlements = isSynthetic
+              ? (data.synthetic?.recent_settlements || []).slice(0, 8)
+              : [];
+            const recentSyntheticNetAmounts = recentSyntheticSettlements
+              .map((settlement) => settlement.user_net_pnl_usd ?? settlement.realized_pnl_usd)
+              .filter((amount): amount is number => typeof amount === "number" && Number.isFinite(amount));
+            const recentSyntheticCustomerNet = recentSyntheticNetAmounts.reduce((total, amount) => total + amount, 0);
+            const hasRecentSyntheticCustomerNet = recentSyntheticSettlements.length > 0
+              && recentSyntheticNetAmounts.length === recentSyntheticSettlements.length;
             const latestSyntheticSettlement = isSynthetic ? data.synthetic?.recent_settlements?.[0] : undefined;
             const latestMemecoinSettlement = !isSynthetic
               ? data.memecoin?.recent_settlements?.find((position) => Number(position.bot_id) === Number(bot.id))
@@ -1326,9 +1332,17 @@ export function BotsWorkspace({
                   <strong>{isSynthetic ? syntheticExecution : `${bot.compound_percent}%`}</strong>
                 </div>
                 <div>
-                  <span>{isSynthetic ? "ACTIVE AUTO ORDER" : "LATEST SETTLEMENT"}</span>
-                  <strong className={isSynthetic ? (autoPosition ? "up" : "down") : statusTone === "running" ? "up" : "down"}>
-                    {isSynthetic ? autoPosition ? `${autoPosition.market} · ${String(autoPosition.direction || "").toUpperCase()} · ${money(Number(autoPosition.margin_usd || 0))}` : "No Auto order open" : latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions"}
+                  <span>{isSynthetic ? "RECENT CUSTOMER NET" : "LATEST SETTLEMENT"}</span>
+                  <strong className={isSynthetic
+                    ? hasRecentSyntheticCustomerNet
+                      ? recentSyntheticCustomerNet < 0 ? "down" : "up"
+                      : ""
+                    : statusTone === "running" ? "up" : "down"}>
+                    {isSynthetic
+                      ? hasRecentSyntheticCustomerNet
+                        ? `${recentSyntheticCustomerNet >= 0 ? "+" : "−"}${money(Math.abs(recentSyntheticCustomerNet))}`
+                        : recentSyntheticSettlements.length ? "Net P&L unavailable" : "No settled positions"
+                      : latestSettlement ? `${settlementMarket} · ${String(settlementDirection || "").toUpperCase()} · ${latestSettlementPnl >= 0 ? "+" : "−"}${money(Math.abs(latestSettlementPnl))}` : "No settled positions"}
                   </strong>
                 </div>
                 <div>

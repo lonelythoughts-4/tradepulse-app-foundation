@@ -126,7 +126,7 @@ export type WorkspaceDashboard = {
     execution_mode?: "MANUAL" | "AUTO";
     open_positions?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; entry_price?: number; stop_price?: number; take_price?: number; contract_expires_at?: number }>;
     realized_pnl_usd?: number;
-    recent_settlements?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; user_net_pnl_usd?: number; realized_pnl_usd?: number; close_reason?: string; closed_at?: number }>;
+    recent_settlements?: Array<{ id?: string; market?: string; mode?: string; direction?: string; margin_usd?: number; user_net_pnl_usd?: number | null; realized_pnl_usd?: number | null; close_reason?: string; closed_at?: number }>;
   };
   flashback_rules?: {
     version?: string;
