@@ -2568,10 +2568,10 @@ function BotDetail({
         </div>
       </GradientPanel>
       <div className="detail-actions">
-        <button className="primary-action" onClick={onToggle}>
-          {paused ? "Resume bot" : "Pause bot"} <Zap />
-        </button>
-        <button className="danger-action" onClick={() => setClose(true)}>
+        {paused && <button className="primary-action" onClick={onToggle}>
+          Resume bot <Zap />
+        </button>}
+        <button className="danger-action bot-close-action" onClick={() => setClose(true)}>
           Close bot <X />
         </button>
       </div>
@@ -4522,42 +4522,42 @@ const activationProgress: Record<LanguageCode, (step: number) => string> = {
 const activationStories: Record<LanguageCode, Array<[string, string]>> = {
   en: [
     ["Your TradeMemo desk", "See your wallet, Memecoin, Synthetic, and account activity in one place."],
-    ["You stay in control", "Choose each allocation. Pause, resume, or close automation at any time."],
+    ["You stay in control", "Choose each allocation. Resume paused automation or close it at any time."],
     ["Check every transfer", "Confirm the network, address, and amount. Digital assets and automated trading can lose value. Results are not guaranteed."],
   ],
   ru: [
     ["Ваш кабинет TradeMemo", "Просматривайте кошелёк, Memecoin, Synthetic и активность аккаунта в одном месте."],
-    ["Вы всё контролируете", "Выбирайте распределение средств. Приостанавливайте, возобновляйте или останавливайте автоматизацию."],
+    ["Вы всё контролируете", "Выбирайте распределение средств. Возобновляйте приостановленную автоматизацию или закрывайте её."],
     ["Проверяйте каждый перевод", "Проверьте сеть, адрес и сумму. Цифровые активы и автоматическая торговля могут привести к убыткам."],
   ],
   hi: [
     ["आपका TradeMemo डेस्क", "वॉलेट, Memecoin, Synthetic और खाते की गतिविधि एक जगह देखें।"],
-    ["नियंत्रण आपके पास है", "हर आवंटन चुनें। ऑटोमेशन को कभी भी रोकें, फिर शुरू करें या बंद करें।"],
+    ["नियंत्रण आपके पास है", "हर आवंटन चुनें। रुके हुए ऑटोमेशन को फिर शुरू करें या बंद करें।"],
     ["हर ट्रांसफ़र जाँचें", "नेटवर्क, पता और राशि की पुष्टि करें। डिजिटल संपत्ति और ऑटोमेटेड ट्रेडिंग में नुकसान हो सकता है।"],
   ],
   es: [
     ["Tu espacio TradeMemo", "Consulta tu cartera, Memecoin, Synthetic y la actividad de tu cuenta en un solo lugar."],
-    ["Tú mantienes el control", "Elige cada asignación. Pausa, reanuda o cierra la automatización cuando quieras."],
+    ["Tú mantienes el control", "Elige cada asignación. Reanuda la automatización pausada o ciérrala cuando quieras."],
     ["Comprueba cada transferencia", "Confirma la red, la dirección y el importe. Los activos digitales y el trading automatizado pueden perder valor."],
   ],
   it: [
     ["Il tuo desk TradeMemo", "Consulta portafoglio, Memecoin, Synthetic e attività dell'account in un unico posto."],
-    ["Il controllo è tuo", "Scegli ogni allocazione. Puoi sospendere, riprendere o chiudere l'automazione in qualsiasi momento."],
+    ["Il controllo è tuo", "Scegli ogni allocazione. Puoi riprendere l'automazione sospesa o chiuderla in qualsiasi momento."],
     ["Controlla ogni trasferimento", "Verifica rete, indirizzo e importo. Gli asset digitali e il trading automatico possono perdere valore."],
   ],
   zh: [
     ["您的 TradeMemo 工作台", "在一个位置查看钱包、Memecoin、Synthetic 和账户活动。"],
-    ["操作由您掌控", "自行选择每项配置。可随时暂停、恢复或关闭自动化。"],
+    ["操作由您掌控", "自行选择每项配置。可恢复已暂停的自动化或随时关闭。"],
     ["核对每笔转账", "确认网络、地址和金额。数字资产和自动交易可能造成损失。"],
   ],
   ja: [
     ["TradeMemo デスク", "ウォレット、Memecoin、Synthetic、アカウントの動きを一か所で確認できます。"],
-    ["操作はいつでも自分で管理", "配分を選び、自動化をいつでも一時停止・再開・終了できます。"],
+    ["操作はいつでも自分で管理", "配分を選び、停止中の自動化を再開、またはいつでも終了できます。"],
     ["送金内容を必ず確認", "ネットワーク、アドレス、金額を確認してください。デジタル資産と自動取引には損失のリスクがあります。"],
   ],
   ro: [
     ["Spațiul tău TradeMemo", "Vezi portofelul, Memecoin, Synthetic și activitatea contului într-un singur loc."],
-    ["Tu deții controlul", "Alegi fiecare alocare. Poți opri, relua sau închide automatizarea oricând."],
+    ["Tu deții controlul", "Alegi fiecare alocare. Poți relua automatizarea întreruptă sau o poți închide oricând."],
     ["Verifică fiecare transfer", "Confirmă rețeaua, adresa și suma. Activele digitale și tranzacționarea automată pot genera pierderi."],
   ],
 };

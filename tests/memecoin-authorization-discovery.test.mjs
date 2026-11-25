@@ -21,11 +21,13 @@ test("Memecoin creation collects risk acknowledgement and starts Auto with Trenc
 test("Memecoin workspace retains monitoring and account actions without strategy/order controls", () => {
   assert.match(source, /LIVE MARKET CHART/);
   assert.match(source, /Close position/);
-  assert.match(source, /Pause bot/);
+  assert.doesNotMatch(source, /Pause bot/);
   assert.match(source, /Resume bot/);
+  assert.match(source, /action: "resume"/);
   assert.match(source, /Top up allocation/);
   assert.match(source, /\[0, 50, 100\]/);
   assert.match(source, /Close bot/);
+  assert.match(source, /className="danger-action bot-close-action"/);
   assert.doesNotMatch(source, /Review manual order/);
   assert.doesNotMatch(source, /Long & Short manual entry/);
   assert.doesNotMatch(source, /Browse eligible markets/);

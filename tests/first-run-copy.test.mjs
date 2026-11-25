@@ -11,7 +11,8 @@ test("first-run copy names the products and keeps users in control", () => {
     assert.match(source, /Memecoin/);
     assert.match(source, /Synthetic/);
   }
-  assert.match(shell, /Pause, resume, or close automation at any time\./);
+  assert.match(shell, /Resume paused automation or close it at any time\./);
+  assert.doesNotMatch(shell, /Pause, resume, or close automation at any time\./);
 });
 
 test("first-run copy does not expose implementation or roadmap notes", () => {

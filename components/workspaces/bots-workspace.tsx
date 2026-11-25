@@ -936,21 +936,17 @@ export function BotsWorkspace({
                 {isActionPending(`bot:${selected.id}:topup`) ? "Updating…" : "Top up allocation"} <Plus />
               </button>
             </>}
-          {!isClosing && !awaitingAuthorization && <button
+          {paused && !isClosing && !awaitingAuthorization && <button
             className="primary-action"
-            disabled={isActionPending(`bot:${selected.id}:toggle`)}
+            disabled={isActionPending(`bot:${selected.id}:resume`)}
             onClick={() =>
-              run(`/v1/bots/${selected.id}/actions`, { action: "toggle" })
+              run(`/v1/bots/${selected.id}/actions`, { action: "resume" })
             }
           >
-            {paused ? "Resume bot" : "Pause bot"}{" "}
-            <StateSwapIcon
-              name={paused ? "play" : "pause"}
-              swapKey={paused ? "bot-resume" : "bot-pause"}
-            />
+            Resume bot <StateSwapIcon name="play" swapKey="bot-resume" />
           </button>}
             <button
-                className="danger-action"
+                className="danger-action bot-close-action"
                 disabled={isActionPending(`bot:${selected.id}:close`)}
                 onClick={() => { setReviewError(""); setCloseReview(true); }}
               >
