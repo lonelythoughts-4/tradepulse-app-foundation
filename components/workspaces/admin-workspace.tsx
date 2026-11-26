@@ -156,6 +156,15 @@ export type AdminOverview = {
     status: "queued" | "delivering" | "completed";
     created_at: number;
   }>;
+  user_metrics: {
+    bot_started: number;
+    web_started: number;
+    deposits_detected: { count: number; amount_usd: number };
+    withdrawals_processed: { count: number; amount_usd: number };
+    investors: { users: number; amount_usd: number };
+    memecoin: { users: number; amount_usd: number };
+    synthetic: { users: number; amount_usd: number };
+  };
   sweeps_enabled: boolean;
 };
 
@@ -1535,6 +1544,26 @@ export function AdminWorkspace({
           {isAdminActionPending("sweeps:toggle") ? "Updating…" : "Toggle sweeps"}
         </button>
       </div>
+      <details className="admin-table admin-statistics" aria-labelledby="admin-statistics-title">
+        <summary className="signer-control-reserve-summary">
+          <div className="signer-control-header">
+            <div className="signer-control-title">
+              <h3 id="admin-statistics-title">Adoption &amp; funding statistics</h3>
+              <p>Recorded launches and canonical {environment} financial totals.</p>
+            </div>
+            <span className="signer-control-status">Expand</span>
+          </div>
+        </summary>
+        <div className="admin-statistics-grid">
+          <div className="admin-statistic"><span>Bot started</span><strong>{admin.user_metrics?.bot_started ?? 0}</strong><small>unique users</small></div>
+          <div className="admin-statistic"><span>Web App started</span><strong>{admin.user_metrics?.web_started ?? 0}</strong><small>unique users</small></div>
+          <div className="admin-statistic"><span>Deposits detected</span><strong>{admin.user_metrics?.deposits_detected?.count ?? 0}</strong><small>{money(admin.user_metrics?.deposits_detected?.amount_usd ?? 0)}</small></div>
+          <div className="admin-statistic"><span>Withdrawals processed</span><strong>{admin.user_metrics?.withdrawals_processed?.count ?? 0}</strong><small>{money(admin.user_metrics?.withdrawals_processed?.amount_usd ?? 0)}</small></div>
+          <div className="admin-statistic"><span>Investors</span><strong>{admin.user_metrics?.investors?.users ?? 0}</strong><small>{money(admin.user_metrics?.investors?.amount_usd ?? 0)} deposited</small></div>
+          <div className="admin-statistic"><span>Memecoin users</span><strong>{admin.user_metrics?.memecoin?.users ?? 0}</strong><small>{money(admin.user_metrics?.memecoin?.amount_usd ?? 0)} allocated</small></div>
+          <div className="admin-statistic"><span>Synthetic users</span><strong>{admin.user_metrics?.synthetic?.users ?? 0}</strong><small>{money(admin.user_metrics?.synthetic?.amount_usd ?? 0)} allocated</small></div>
+        </div>
+      </details>
       <section className="admin-table signer-control" aria-labelledby="signer-control-title">
         <div className="signer-control-header">
           <div className="signer-control-title">

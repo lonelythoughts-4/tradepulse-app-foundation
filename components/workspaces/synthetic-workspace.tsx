@@ -391,11 +391,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     || snapshot.positions.length > 0
     || hasStartedTradeThisSession;
   const shouldShowStrategyPicker = environment === "mainnet" && account.bots.length === 0 && !hasTradeHistory && !snapshotPending;
-  const dailyGoalUsd = snapshot.execution?.daily_goal_usd;
-  const dailyNetUsd = Number(snapshot.execution?.daily_net_pnl_usd || 0);
-  const dailyTargetLabel = snapshot.execution?.daily_outcome === "loss"
-    ? `${money(-Number(snapshot.execution?.daily_loss_target_usd || 0))} loss limit`
-    : `${money(Number(dailyGoalUsd || 0))} goal`;
   const dailyExecutionPause = !snapshot.partial && snapshot.execution?.daily_loss_target_reached
     ? "Auto entries are paused for today because the protective daily loss limit was reached."
     : !snapshot.partial && snapshot.execution?.daily_goal_reached
@@ -427,9 +422,6 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           </div>
           <div className="synthetic-auto-capacity" aria-label="Auto available and locked margin"><span>Auto available <b>{capacityValue(snapshot.execution?.auto_available_usd, snapshotPending)}</b></span><span>Auto locked margin <b>{capacityValue(snapshot.execution?.auto_locked_usd, snapshotPending)}</b></span></div>
           {shouldShowStrategyPicker && <button type="button" className="primary-action synthetic-strategy-entry" onClick={onPickStrategy}>Pick a strategy <ChevronRight size={14} /></button>}
-          {syntheticAutoOn && typeof dailyGoalUsd === "number" && Number.isFinite(dailyGoalUsd) && <p className="synthetic-auto-hint" role="status">
-            Daily Auto progress: {money(dailyNetUsd)} net ({money(Number(snapshot.execution?.daily_settled_net_pnl_usd || 0))} settled + {money(Number(snapshot.execution?.daily_open_net_pnl_usd || 0))} live) of {dailyTargetLabel}.
-          </p>}
           {syntheticAutoOn && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">{dailyExecutionPause}</p>}
         </section>
         <SyntheticSignalList signals={signals} />
