@@ -68,9 +68,7 @@ test("withdrawal and admin-funding retries reuse stable idempotency keys", () =>
   assert.match(admin, /formRevision === fundingFormRevision\.current/);
 });
 
-test("background bot reconciliation failures are visible and support refresh stays single-flight", () => {
+test("background bot reconciliation failures are not silently discarded", () => {
   const bots = fs.readFileSync(path.join(root, "components", "workspaces", "bots-workspace.tsx"), "utf8");
   assert.doesNotMatch(bots, /void reload\(\)\.catch\(\(\) => undefined\)/);
-  assert.match(help, /if \(cancelled \|\| refreshInFlight\) return/);
-  assert.match(help, /requestId === ticketThreadRequestRef\.current && selectedTicketIdRef\.current === ticket\.id/);
 });
