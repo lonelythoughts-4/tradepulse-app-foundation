@@ -5,6 +5,7 @@ import { DeskLocalized } from "../desk-language";
 import { logDeskFailure } from "../../lib/desk-api";
 import {
   GradientPanel,
+  Send,
   StateIcon,
 } from "./shared-ui";
 

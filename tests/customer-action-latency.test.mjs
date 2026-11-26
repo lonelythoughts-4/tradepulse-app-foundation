@@ -12,6 +12,7 @@ const wallet = fs.readFileSync(path.join(root, "components", "workspaces", "wall
 const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
 
 test("Help directs general support questions to the administrator on Telegram", () => {
+  assert.match(help, /import \{[\s\S]*?\bSend\b[\s\S]*?\} from "\.\/shared-ui"/);
   assert.match(help, /href="https:\/\/t\.me\/thetessaractadmin"/);
   assert.match(help, /target="_blank"[\s\S]*?rel="noopener noreferrer"/);
   assert.match(help, /Message @thetessaractadmin on Telegram/);
