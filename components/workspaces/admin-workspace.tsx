@@ -1568,7 +1568,7 @@ export function AdminWorkspace({
           <p role="status">No verified statistics are available; totals are not being shown as zero.</p>
         ) : (
           <div className="admin-statistics-grid">
-            <div className="admin-statistic"><span>Bot started</span><strong>{admin.user_metrics.bot_started}</strong><small>unique customer accounts</small></div>
+            <div className="admin-statistic"><span>Bot started</span><strong>{admin.user_metrics.bot_started}</strong><small>unique customers since reset</small></div>
             <div className="admin-statistic"><span>Web App started</span><strong>{admin.user_metrics.web_started}</strong><small>unique customers since reset</small></div>
             <div className="admin-statistic"><span>Settled deposits</span><strong>{admin.user_metrics.deposits_settled.count}</strong><small>{money(admin.user_metrics.deposits_settled.amount_usd)}</small></div>
             <div className="admin-statistic"><span>Completed withdrawals</span><strong>{admin.user_metrics.withdrawals_completed.count}</strong><small>{money(admin.user_metrics.withdrawals_completed.amount_usd)}</small></div>
