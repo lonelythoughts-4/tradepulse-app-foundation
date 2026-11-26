@@ -22,7 +22,11 @@ export class DeskApiError extends Error {
   }
 }
 
-export const DASHBOARD_REQUEST_TIMEOUT_MS = 8_000;
+// A confirmed browser handoff must outlive the same first-party proxy window
+// that is allowed to complete the dashboard response.  Eight seconds made a
+// valid session look unauthenticated whenever the server finished just after
+// the client aborted its request, sending the person straight back to auth.
+export const DASHBOARD_REQUEST_TIMEOUT_MS = 20_000;
 // A recovered browser session must not be abandoned after one congested
 // database read. Keep this bounded so a genuinely unavailable service still
 // exposes a manual retry, but absorb the short connection drain after a burst.
