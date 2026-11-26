@@ -10,21 +10,24 @@ const desk = fs.readFileSync(path.join(root, "components", "workspaces", "desk-w
 const admin = fs.readFileSync(path.join(root, "components", "workspaces", "admin-workspace.tsx"), "utf8");
 const wallet = fs.readFileSync(path.join(root, "components", "workspaces", "wallet-workspace.tsx"), "utf8");
 const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
+const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
 
 test("Help directs general support questions to the administrator on Telegram", () => {
   assert.match(help, /import \{[\s\S]*?\bSend\b[\s\S]*?\} from "\.\/shared-ui"/);
   assert.match(help, /href="https:\/\/t\.me\/thetessaractadmin"/);
   assert.match(help, /target="_blank"[\s\S]*?rel="noopener noreferrer"/);
-  assert.match(help, /Message @thetessaractadmin on Telegram/);
+  assert.match(help, /Message us on Telegram/);
+  assert.match(help, /className="flow-card support-contact-panel"/);
   assert.match(help, /Need a hand with your account, bots, deposits, or anything else\?/);
   assert.match(help, /Never share passwords, login codes, recovery phrases, or private keys\./);
   assert.doesNotMatch(help, /\/v1\/support\/tickets|Support request details|SUPPORT THREAD/);
+  assert.match(styles, /@media\(min-width:700px\)\{\.account-screen>\.support-contact-panel\{grid-column:1\/-1\}\}/);
 });
 
 test("Help Telegram support copy is translated in all supported app languages", () => {
   const i18n = fs.readFileSync(path.join(root, "lib", "desk-i18n.ts"), "utf8");
   assert.match(i18n, /"Need a hand with your account, bots, deposits, or anything else\? Message us directly on Telegram\.": \[[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+\]/);
-  assert.match(i18n, /"Message @thetessaractadmin on Telegram": \[[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+\]/);
+  assert.match(i18n, /"Message us on Telegram": \[[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+\]/);
 });
 
 test("alert actions have independent pending keys and reconcile returned state", () => {

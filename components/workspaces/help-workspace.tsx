@@ -195,7 +195,7 @@ export function HelpWorkspace({
           <p>No recovery cases submitted.</p>
         )}
       </GradientPanel>
-      <GradientPanel className="flow-card">
+      <GradientPanel className="flow-card support-contact-panel">
         <span className="eyebrow">SUPPORT</span>
         <h2>Need help with something else?</h2>
         <p>Need a hand with your account, bots, deposits, or anything else? Message us directly on Telegram.</p>
@@ -205,7 +205,7 @@ export function HelpWorkspace({
           target="_blank"
           rel="noopener noreferrer"
         >
-          Message @thetessaractadmin on Telegram <StateIcon name="arrow-up-right" />
+          Message us on Telegram <StateIcon name="arrow-up-right" />
         </a>
         <small className="support-contact-safety">Never share passwords, login codes, recovery phrases, or private keys.</small>
       </GradientPanel>
