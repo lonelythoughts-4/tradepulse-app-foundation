@@ -22,11 +22,18 @@ export class DeskApiError extends Error {
   }
 }
 
+export const DASHBOARD_REQUEST_TIMEOUT_MS = 8_000;
+export const DASHBOARD_MAX_TRANSIENT_RETRIES = 1;
+
 export function isRetryableDashboardReadError(error: unknown): boolean {
   return (
     (error instanceof DeskApiError && error.status === 503) ||
     (error instanceof Error && (error.name === "TimeoutError" || error.name === "NetworkError"))
   );
+}
+
+export function shouldRetryDashboardRead(error: unknown, retriesSoFar: number): boolean {
+  return retriesSoFar < DASHBOARD_MAX_TRANSIENT_RETRIES && isRetryableDashboardReadError(error);
 }
 
 export function logDeskFailure(operation: string, error: unknown): void {

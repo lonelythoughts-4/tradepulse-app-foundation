@@ -4,9 +4,11 @@ import styles from "./desk-loading.module.css";
 export function DeskLoading({
   status = "Opening your desk…",
   busy = true,
+  onRetry,
 }: {
   status?: string;
   busy?: boolean;
+  onRetry?: () => void;
 }) {
   return (
     <main className={styles.screen} aria-label="TradeMemo" aria-busy={busy}>
@@ -17,6 +19,11 @@ export function DeskLoading({
         </svg>
         <h1 className={styles.name}>Trade<span>Memo</span></h1>
         <p className={styles.status} role="status">{status}</p>
+        {onRetry && (
+          <button type="button" className={styles.retry} onClick={onRetry}>
+            Retry connection
+          </button>
+        )}
       </div>
     </main>
   );

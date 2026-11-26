@@ -44,7 +44,11 @@ import {
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
 import { translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
-import { DeskApiError, isRetryableDashboardReadError } from "../lib/desk-api";
+import {
+  DASHBOARD_REQUEST_TIMEOUT_MS,
+  DeskApiError,
+  shouldRetryDashboardRead,
+} from "../lib/desk-api";
 import {
   readDashboardSnapshot,
   readSessionCacheScope,
@@ -6828,6 +6832,7 @@ function LiveTradePulse() {
   const liveDeskEnabled = data?.features?.live_desk_enabled !== false;
   const verifiedDashboardRef = useRef(false);
   const activeDashboardSnapshotScopeRef = useRef<string | null>(null);
+  const optimisticSnapshotHydratedRef = useRef(false);
   const updateDashboard = useCallback((update: LiveDashboard | null | ((current: LiveDashboard | null) => LiveDashboard | null)) => {
     const current = deskStore.getState().resources.dashboard as LiveDashboard | null;
     const next = typeof update === "function"
@@ -6837,6 +6842,7 @@ function LiveTradePulse() {
     if (next && verifiedDashboardRef.current) persistDashboardSnapshot(next);
     if (!next) {
       verifiedDashboardRef.current = false;
+      optimisticSnapshotHydratedRef.current = false;
       clearDashboardSnapshot(activeDashboardSnapshotScopeRef.current);
       clearDashboardSnapshot();
       activeDashboardSnapshotScopeRef.current = null;
@@ -6890,6 +6896,7 @@ function LiveTradePulse() {
         return;
       }
       const cachedDashboard = dashboardFromSnapshot(snapshot);
+      optimisticSnapshotHydratedRef.current = true;
       activeDashboardSnapshotScopeRef.current = scope;
       authenticatedUserRef.current = cachedDashboard.user.id;
       languageRef.current = cachedDashboard.user.language_code || "en";
@@ -7256,7 +7263,7 @@ function LiveTradePulse() {
     if (activeLoad?.environment === targetEnvironment) return activeLoad.promise;
     const performLoad = async () => {
     const languageRevisionAtRequest = languageRevisionRef.current;
-    const checkingSession = !data;
+    const checkingSession = !data && !optimisticSnapshotHydratedRef.current;
     const telegramContext = !telegramHandoffSessionRef.current && (
       openedInsideTelegram()
       || (checkingSession && await detectTelegramLaunch())
@@ -7275,22 +7282,21 @@ function LiveTradePulse() {
         return false;
       }
       setTelegramIdentityPending(false);
-      // Keep the first-load wait bounded so a slow API produces a retry state
-      // instead of leaving the user on an indefinite full-screen loader.
+      // Bound automatic retries so a transient API failure cannot strand
+      // first-time visitors on the full-screen loader.
       let next: Record<string, any> | null = null;
       let retryCount = 0;
       while (!next) {
         try {
-          next = await request("/v1/dashboard", {}, targetEnvironment, 15_000);
+          next = await request("/v1/dashboard", {}, targetEnvironment, DASHBOARD_REQUEST_TIMEOUT_MS);
         } catch (error) {
           if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
             return false;
           }
-          if (!isRetryableDashboardReadError(error)) throw error;
+          if (!shouldRetryDashboardRead(error, retryCount)) throw error;
           setNotice("");
-          const retryDelay = Math.min(8_000, 1_000 * (2 ** Math.min(retryCount, 3)));
           retryCount += 1;
-          await new Promise<void>((resolve) => window.setTimeout(resolve, retryDelay));
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
           if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
             return false;
           }
@@ -7336,9 +7342,11 @@ function LiveTradePulse() {
     } catch (error) {
       if (checkingSession && !dashboardAuthenticationRejectedRef.current) {
         setNotice(
-          error instanceof Error && error.name === "TimeoutError"
-            ? "The desk is temporarily unavailable."
-            : "The desk could not connect.",
+          error instanceof DeskApiError && error.status === 503
+            ? "The desk is temporarily busy. Please retry."
+            : error instanceof Error && error.name === "TimeoutError"
+              ? "The desk is taking longer than expected. Please retry."
+              : "The desk could not connect. Check your connection and retry.",
         );
       } else {
         setNotice("");
@@ -7746,6 +7754,7 @@ function LiveTradePulse() {
         <DeskLoading
           status={notice || "Opening your desk…"}
           busy={false}
+          onRetry={notice && !sessionHandoffRequired ? () => { void load(); } : undefined}
         />
       );
     }
@@ -7757,6 +7766,7 @@ function LiveTradePulse() {
         <DeskLoading
           status={notice || "Opening your desk…"}
           busy={false}
+          onRetry={notice ? () => { void load(); } : undefined}
         />
       );
     }

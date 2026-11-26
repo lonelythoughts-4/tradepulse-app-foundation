@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { DeskApi, DeskApiError, isRetryableDashboardReadError, logDeskFailure } from "../lib/desk-api.ts";
+import {
+  DASHBOARD_MAX_TRANSIENT_RETRIES,
+  DASHBOARD_REQUEST_TIMEOUT_MS,
+  DeskApi,
+  DeskApiError,
+  isRetryableDashboardReadError,
+  logDeskFailure,
+  shouldRetryDashboardRead,
+} from "../lib/desk-api.ts";
 
 test("dashboard retry classification excludes authorization and permanent server failures", () => {
   const timeout = new Error("");
@@ -15,6 +23,17 @@ test("dashboard retry classification excludes authorization and permanent server
   assert.equal(isRetryableDashboardReadError(network), true);
   assert.equal(isRetryableDashboardReadError(new DeskApiError("", 401)), false);
   assert.equal(isRetryableDashboardReadError(new DeskApiError("", 500)), false);
+});
+
+test("dashboard startup retries are bounded and requests fail promptly", () => {
+  const timeout = new Error("");
+  timeout.name = "TimeoutError";
+
+  assert.equal(DASHBOARD_REQUEST_TIMEOUT_MS, 8_000);
+  assert.equal(DASHBOARD_MAX_TRANSIENT_RETRIES, 1);
+  assert.equal(shouldRetryDashboardRead(timeout, 0), true);
+  assert.equal(shouldRetryDashboardRead(timeout, 1), false);
+  assert.equal(shouldRetryDashboardRead(new DeskApiError("", 401), 0), false);
 });
 
 test("API errors retain diagnostics without exposing customer-facing error copy", async () => {
@@ -140,15 +159,22 @@ test("the language rollback preserves locale without exposing API error copy", a
   assert.match(shell, /setNotice\(""\);\s*throw error;/);
 });
 
-test("dashboard retries transient reads while preserving the 401 handoff", async () => {
+test("dashboard retries are bounded, expose manual recovery, and preserve the 401 handoff", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const loading = await readFile(
+    new URL("../components/desk-loading.tsx", import.meta.url),
     "utf8",
   );
 
   assert.match(shell, /if \(response\.status === 401\) \{/);
   assert.match(shell, /setSessionHandoffRequired\(true\)/);
-  assert.match(shell, /if \(!isRetryableDashboardReadError\(error\)\) throw error;/);
+  assert.match(shell, /if \(!shouldRetryDashboardRead\(error, retryCount\)\) throw error;/);
+  assert.match(shell, /DASHBOARD_REQUEST_TIMEOUT_MS/);
+  assert.match(shell, /onRetry=\{notice \? \(\) => \{ void load\(\); \} : undefined\}/);
+  assert.match(loading, /Retry connection/);
 });
 
 test("saved browser dashboards hydrate before background auth and never bypass Telegram proof", async () => {
@@ -165,6 +191,8 @@ test("saved browser dashboards hydrate before background auth and never bypass T
   assert.match(shell, /updateDashboard\(cachedDashboard\);\s*setLoading\(false\);\s*setSessionBootstrapComplete\(true\)/);
   assert.match(shell, /if \(next && verifiedDashboardRef\.current\) persistDashboardSnapshot\(next\)/);
   assert.match(shell, /if \(response\.status === 401\) \{[\s\S]*?updateDashboard\(null\);[\s\S]*?setSessionHandoffRequired\(true\)/);
+  assert.match(shell, /optimisticSnapshotHydratedRef\.current = true;\s*activeDashboardSnapshotScopeRef\.current = scope/);
+  assert.match(shell, /const checkingSession = !data && !optimisticSnapshotHydratedRef\.current/);
 });
 
 test("withdrawal errors use the safe server message when available", async () => {

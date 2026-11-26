@@ -57,6 +57,22 @@
   line-height: 1.5;
 }
 
+.retry {
+  min-height: 44px;
+  margin-top: 20px;
+  padding: 10px 16px;
+  border: 1px solid var(--tp-accent, #e8b650);
+  border-radius: 7px;
+  color: #070b12;
+  background: var(--tp-accent, #e8b650);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.retry:hover { filter: brightness(1.06); }
+.retry:focus-visible { outline: 2px solid #f4efe3; outline-offset: 3px; }
+
 .screen ::selection { background: #e8b650; color: #070b12; }
 
 @keyframes pulse-trace {
