@@ -37,14 +37,14 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.match(activityView, /View settlement.*View event/);
 });
 
-test("Dashboard avoids an immediate duplicate projection poll and refreshes every seven seconds", () => {
+test("Dashboard avoids an immediate duplicate projection poll and refreshes at a sustainable interval", () => {
   const pollerStart = dashboardSource.indexOf("useResourcePoller(");
   const pollerEnd = dashboardSource.indexOf("\n  );", pollerStart);
   assert.notEqual(pollerStart, -1);
   assert.notEqual(pollerEnd, -1);
 
   const pollerCall = dashboardSource.slice(pollerStart, pollerEnd);
-  assert.match(pollerCall, /,\s*7_000,\s*true,/);
+  assert.match(pollerCall, /,\s*30_000,\s*true,/);
   assert.match(pollerCall, /"Dashboard"/);
   assert.match(pollerCall, /"Dashboard",\s*false/);
 });

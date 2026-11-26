@@ -5138,6 +5138,18 @@ function openedInsideTelegram() {
     telegramWebApp()?.platform,
   );
 }
+function mayHaveDelayedTelegramBridge() {
+  if (typeof window === "undefined") return false;
+  // A standard browser has no reason to wait for a bridge it cannot receive.
+  // Keep the bounded wait only when Telegram has already left a launch clue,
+  // including the early WebApp shell some mobile clients inject before initData.
+  const userAgent = navigator.userAgent || "";
+  return Boolean(
+    telegramWebApp()
+    || /Telegram/i.test(userAgent)
+    || hasTelegramWebAppLaunchParams(window.location.search, window.location.hash),
+  );
+}
 async function detectTelegramLaunch() {
   // Some Telegram mobile WebViews use a standard browser user agent and add
   // their bridge just after the React shell starts. Give that bridge a short,
@@ -7267,7 +7279,7 @@ function LiveTradePulse() {
     const checkingSession = !data && !optimisticSnapshotHydratedRef.current;
     const telegramContext = !telegramHandoffSessionRef.current && (
       openedInsideTelegram()
-      || (checkingSession && await detectTelegramLaunch())
+      || (checkingSession && mayHaveDelayedTelegramBridge() && await detectTelegramLaunch())
     );
     setTelegramLaunchContext(telegramContext);
     if (checkingSession) setLoading(true);

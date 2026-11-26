@@ -32,7 +32,7 @@ test("Telegram launch parameters identify a Mini App before its signed data arri
   assert.equal(hasTelegramWebAppLaunchParams("?campaign=summer", ""), false);
 });
 
-test("a delayed Telegram bridge is detected before the desk chooses browser handoff", async () => {
+test("only a probable Telegram launch waits for a delayed bridge before browser-session bootstrap", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -42,10 +42,11 @@ test("a delayed Telegram bridge is detected before the desk chooses browser hand
     "utf8",
   );
   assert.match(shell, /hasTelegramWebAppLaunchParams\(\s*window\.location\.search,\s*window\.location\.hash/);
+  assert.match(shell, /function mayHaveDelayedTelegramBridge\(\)/);
   assert.match(shell, /async function detectTelegramLaunch\(\)/);
   assert.match(shell, /for \(let attempt = 0; attempt < 50; attempt \+= 1\)/);
   assert.match(shell, /if \(openedInsideTelegram\(\)\) return true;/);
-  assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(\s*openedInsideTelegram\(\)\s*\|\| \(checkingSession && await detectTelegramLaunch\(\)\)\s*\);/);
+  assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(\s*openedInsideTelegram\(\)\s*\|\| \(checkingSession && mayHaveDelayedTelegramBridge\(\) && await detectTelegramLaunch\(\)\)\s*\);/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
   const loadStart = shell.indexOf("const load = async");
   const dashboardRequest = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, DASHBOARD_REQUEST_TIMEOUT_MS)', loadStart);
