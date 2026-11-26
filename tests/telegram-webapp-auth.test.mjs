@@ -48,12 +48,12 @@ test("a delayed Telegram bridge is detected before the desk chooses browser hand
   assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(\s*openedInsideTelegram\(\)\s*\|\| \(checkingSession && await detectTelegramLaunch\(\)\)\s*\);/);
   assert.match(shell, /telegramWebApp\(\)\?\.platform/);
   const loadStart = shell.indexOf("const load = async");
-  const dashboardRequest = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, 15_000)', loadStart);
-  assert.notEqual(dashboardRequest, -1, "initial load should validate the existing browser session");
-  assert.doesNotMatch(
+  const dashboardRequest = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, DASHBOARD_REQUEST_TIMEOUT_MS)', loadStart);
+  assert.notEqual(dashboardRequest, -1, "initial load should request the dashboard after Telegram handoff checks");
+  assert.match(
     shell.slice(loadStart, dashboardRequest),
-    /if \(telegramContext && !telegramInitData\(\)\)\s*\{/,
-    "a missing fresh initData value must not skip the secure browser-session check",
+    /if \(checkingSession && telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*return false;\s*\}/,
+    "a Mini App without fresh signed initData must use the secure handoff before loading customer data",
   );
   assert.match(shell, /<BrowserBotHandoff onComplete=/);
   assert.match(shell, /const telegramContext = !telegramHandoffSessionRef\.current && \(/);
@@ -86,10 +86,6 @@ test("Telegram Mini Apps recover to secure handoff after bridge detection or ses
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
   );
-  const loader = await readFile(
-    new URL("../components/desk-loading.tsx", import.meta.url),
-    "utf8",
-  );
   const handoffStart = shell.indexOf("function BrowserBotHandoff");
   const handoffEnd = shell.indexOf("\nfunction ", handoffStart + 1);
   const handoff = shell.slice(handoffStart, handoffEnd);
@@ -103,7 +99,7 @@ test("Telegram Mini Apps recover to secure handoff after bridge detection or ses
   assert.doesNotMatch(handoff, /state === "error"/);
   assert.match(load, /if \(checkingSession && telegramContext && !telegramInitData\(\)\) \{\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*return false;\s*\}/);
   assert.ok(load.indexOf("if (checkingSession && telegramContext && !telegramInitData())") < load.indexOf('request("/v1/dashboard"'));
-  assert.doesNotMatch(loader, /onRetry|Try again/);
+  assert.match(shell, /onRetry=\{notice \? \(\) => \{ void load\(\); \} : undefined\}/);
 });
 
 test("an endpoint-specific 401 validates the dashboard before asking the user to sign in again", async () => {
@@ -118,7 +114,7 @@ test("an endpoint-specific 401 validates the dashboard before asking the user to
 
   assert.match(
     request,
-    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard"\) \{[\s\S]*?updateDashboard\(null\);[\s\S]*?setTelegramIdentityPending\(false\);[\s\S]*?setTelegramLaunchContext\(false\);[\s\S]*?setSessionHandoffRequired\(true\);[\s\S]*?setSessionBootstrapComplete\(true\);[\s\S]*?\} else \{[\s\S]*?sessionValidationRef\.current\?\.\(targetEnvironment\);[\s\S]*?\}\s*throw new DeskApiError/,
+    /if \(response\.status === 401\) \{\s*if \(path === "\/v1\/dashboard" \|\| path === "\/v1\/auth\/miniapp\/verify"\) \{[\s\S]*?updateDashboard\(null\);[\s\S]*?setTelegramIdentityPending\(false\);[\s\S]*?setTelegramLaunchContext\(false\);[\s\S]*?setSessionHandoffRequired\(true\);[\s\S]*?setSessionBootstrapComplete\(true\);[\s\S]*?\} else \{[\s\S]*?sessionValidationRef\.current\?\.\(targetEnvironment\);[\s\S]*?\}\s*throw new DeskApiError/,
   );
   assert.doesNotMatch(shell, /Reconnect your TradeMemo session/);
 });
