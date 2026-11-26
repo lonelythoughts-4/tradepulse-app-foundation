@@ -6,8 +6,9 @@ test("the live referral desk explains the commission source and downline levels"
   const source = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
-  );
+  ).then((value) => value.replace(/\s+/g, " "));
 
   assert.match(source, /not from their deposited capital or gross trading profit/i);
   assert.match(source, /people invited by your referral chain/i);
+  assert.doesNotMatch(source, /referral&apos;s profitable trade — not from/i);
 });

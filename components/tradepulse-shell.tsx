@@ -5897,7 +5897,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
             <h2>Referral earning rates</h2>
             <p className="referral-fee-explanation">
               Your commission comes from the eligible performance fee on a
-              referral&apos;s profitable trade — not from their deposited capital
+              referral&apos;s profitable trade, not from their deposited capital
               or gross trading profit. It is recorded when that fee settles.
               The levels below also apply to people invited by your referral
               chain.
