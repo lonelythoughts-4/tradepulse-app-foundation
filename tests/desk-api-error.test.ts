@@ -151,6 +151,22 @@ test("dashboard retries transient reads while preserving the 401 handoff", async
   assert.match(shell, /if \(!isRetryableDashboardReadError\(error\)\) throw error;/);
 });
 
+test("saved browser dashboards hydrate before background auth and never bypass Telegram proof", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const cacheHydration = shell.indexOf("const snapshot = readDashboardSnapshot(window.localStorage, scope)");
+  const dashboardLoad = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, 15_000)');
+
+  assert.ok(cacheHydration >= 0);
+  assert.ok(dashboardLoad > cacheHydration);
+  assert.match(shell, /openedInsideTelegram\(\)\s*\|\|\s*\/Telegram\/i\.test\(userAgent\)\s*\|\|\s*hasTelegramWebAppLaunchParams/);
+  assert.match(shell, /updateDashboard\(cachedDashboard\);\s*setLoading\(false\);\s*setSessionBootstrapComplete\(true\)/);
+  assert.match(shell, /if \(next && verifiedDashboardRef\.current\) persistDashboardSnapshot\(next\)/);
+  assert.match(shell, /if \(response\.status === 401\) \{[\s\S]*?updateDashboard\(null\);[\s\S]*?setSessionHandoffRequired\(true\)/);
+});
+
 test("withdrawal errors use the safe server message when available", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),

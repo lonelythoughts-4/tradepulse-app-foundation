@@ -45,6 +45,13 @@ import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
 import { translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
 import { DeskApiError, isRetryableDashboardReadError } from "../lib/desk-api";
+import {
+  readDashboardSnapshot,
+  readSessionCacheScope,
+  removeDashboardSnapshot,
+  writeDashboardSnapshot,
+  type DashboardSnapshot,
+} from "../lib/dashboard-session-cache";
 import { DeskLanguageProvider, DeskLocalized, useDeskLanguage } from "./desk-language";
 import {
   DESK_THEME_STORAGE_KEY,
@@ -4917,6 +4924,74 @@ export type LiveDashboard = {
   flashback_sessions?: NonNullable<LiveDashboard["flashback"]>[];
 };
 
+function dashboardFromSnapshot(snapshot: DashboardSnapshot): LiveDashboard {
+  const languageCode = Object.keys(activationCopy)
+    .find((code): code is LanguageCode => code === snapshot.user.language_code) || "en";
+  const avatarId = avatarOptions.find((option) => option.id === snapshot.user.avatar_id)?.id || null;
+  return {
+    user: {
+      ...snapshot.user,
+      first_name: snapshot.user.first_name || undefined,
+      username: snapshot.user.username || undefined,
+      language_code: languageCode,
+      avatar_id: avatarId,
+    },
+    environment: snapshot.environment,
+    features: snapshot.features,
+    community_url: snapshot.community_url,
+    wallet: {
+      ...snapshot.wallet,
+      tank: snapshot.wallet.tank || 0,
+      tank_capacity: snapshot.wallet.tank_capacity || 0,
+      tank_autofill: snapshot.wallet.tank_autofill || false,
+    },
+    bots: snapshot.bots,
+    deposits: [],
+    withdrawals: [],
+    recovery_cases: [],
+    ledger: snapshot.ledger,
+    engine: [],
+    alerts: snapshot.alerts,
+    notifications: {},
+    whitelist: [],
+    demo: null,
+    popup_ttl_seconds: 0,
+    notices: [],
+    referral: { count: 0, accrued_usd: 0, bot_username: "" },
+    tier_config: [],
+    referral_rates: [],
+    quotes: {},
+    quote_age: 0,
+    quote_fresh: false,
+  };
+}
+
+function currentDashboardSnapshotScope(): string | null {
+  return typeof document === "undefined"
+    ? null
+    : readSessionCacheScope(document.cookie);
+}
+
+function persistDashboardSnapshot(dashboard: LiveDashboard): void {
+  if (dashboard.environment !== "mainnet") return;
+  const scope = currentDashboardSnapshotScope();
+  if (!scope || typeof window === "undefined") return;
+  try {
+    writeDashboardSnapshot(window.localStorage, scope, dashboard);
+  } catch {
+    // The verified dashboard remains available in memory if storage is blocked.
+  }
+}
+
+function clearDashboardSnapshot(scope = currentDashboardSnapshotScope()): void {
+  if (!scope || typeof window === "undefined") return;
+  try {
+    removeDashboardSnapshot(window.localStorage, scope);
+  } catch {
+    // Clearing an optional cache must not block sign-out or auth recovery.
+  }
+}
+
 type LiveTradePulseAdmin = {
   environment: string;
   stale?: boolean;
@@ -6751,12 +6826,21 @@ function LiveTradePulse() {
     (state: DeskState) => state.resources.dashboard as LiveDashboard | null,
   );
   const liveDeskEnabled = data?.features?.live_desk_enabled !== false;
+  const verifiedDashboardRef = useRef(false);
+  const activeDashboardSnapshotScopeRef = useRef<string | null>(null);
   const updateDashboard = useCallback((update: LiveDashboard | null | ((current: LiveDashboard | null) => LiveDashboard | null)) => {
     const current = deskStore.getState().resources.dashboard as LiveDashboard | null;
     const next = typeof update === "function"
       ? (update as (current: LiveDashboard | null) => LiveDashboard | null)(current)
       : update;
     deskStore.applyResource("dashboard", next);
+    if (next && verifiedDashboardRef.current) persistDashboardSnapshot(next);
+    if (!next) {
+      verifiedDashboardRef.current = false;
+      clearDashboardSnapshot(activeDashboardSnapshotScopeRef.current);
+      clearDashboardSnapshot();
+      activeDashboardSnapshotScopeRef.current = null;
+    }
   }, [deskStore]);
   const authenticatedUserRef = useRef<number | null>(null);
   const telegramHandoffSessionRef = useRef(false);
@@ -6790,6 +6874,34 @@ function LiveTradePulse() {
   const [sessionBootstrapComplete, setSessionBootstrapComplete] = useState(false);
   const [sessionHandoffRequired, setSessionHandoffRequired] = useState(false);
   const dashboardAuthenticationRejectedRef = useRef(false);
+  useEffect(() => {
+    const userAgent = navigator.userAgent || "";
+    if (
+      openedInsideTelegram()
+      || /Telegram/i.test(userAgent)
+      || hasTelegramWebAppLaunchParams(window.location.search, window.location.hash)
+    ) return;
+    const scope = currentDashboardSnapshotScope();
+    if (!scope) return;
+    try {
+      const snapshot = readDashboardSnapshot(window.localStorage, scope);
+      if (!snapshot || snapshot.environment !== "mainnet") {
+        removeDashboardSnapshot(window.localStorage, scope);
+        return;
+      }
+      const cachedDashboard = dashboardFromSnapshot(snapshot);
+      activeDashboardSnapshotScopeRef.current = scope;
+      authenticatedUserRef.current = cachedDashboard.user.id;
+      languageRef.current = cachedDashboard.user.language_code || "en";
+      persistedLanguageRef.current = languageRef.current;
+      setUiLanguage(languageRef.current);
+      updateDashboard(cachedDashboard);
+      setLoading(false);
+      setSessionBootstrapComplete(true);
+    } catch {
+      // Storage is optional; the normal authenticated bootstrap remains active.
+    }
+  }, [updateDashboard]);
   useEffect(() => {
     setTelegramLaunchContext(openedInsideTelegram());
   }, []);
@@ -7207,6 +7319,13 @@ function LiveTradePulse() {
       }
       next.user.language_code = languageRef.current;
       setUiLanguage(languageRef.current);
+      const previousSnapshotScope = activeDashboardSnapshotScopeRef.current;
+      const snapshotScope = currentDashboardSnapshotScope();
+      if (previousSnapshotScope && previousSnapshotScope !== snapshotScope) {
+        clearDashboardSnapshot(previousSnapshotScope);
+      }
+      activeDashboardSnapshotScopeRef.current = snapshotScope;
+      verifiedDashboardRef.current = true;
       authenticatedUserRef.current = next.user.id;
       setSessionHandoffRequired(false);
       updateDashboard(next);

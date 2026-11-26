@@ -125,3 +125,34 @@ test("forwards a Mini App session cookie from an ordinary platform response", as
     }
   }
 });
+
+test("forwards auth and non-authorizing cache-scope cookies separately", async () => {
+  const previousOrigin = process.env.TRADEPULSE_API_ORIGIN;
+  const previousFetch = globalThis.fetch;
+  const sessionCookie = "tradepulse_browser_session=signed-session; Max-Age=2592000; Path=/; HttpOnly; Secure; SameSite=Lax";
+  const scopeCookie = "tradepulse_session_cache_scope=opaque-scope; Max-Age=2592000; Path=/; Secure; SameSite=Lax";
+  process.env.TRADEPULSE_API_ORIGIN = "https://api.example.test";
+  globalThis.fetch = async () => {
+    const headers = new Headers({ "content-type": "application/json" });
+    headers.append("set-cookie", sessionCookie);
+    headers.append("set-cookie", scopeCookie);
+    return new Response(JSON.stringify({ user: { id: 42 } }), { headers });
+  };
+
+  try {
+    const request = new NextRequest("https://web.example.test/api/v1/dashboard");
+    const response = await proxyPlatformRequest(request, "/v1/dashboard");
+    const responseHeaders = response.headers as Headers & { getSetCookie?: () => string[] };
+    const cookies = typeof responseHeaders.getSetCookie === "function"
+      ? responseHeaders.getSetCookie()
+      : (response.headers.get("set-cookie") || "").split(/,\s*(?=[^;,]+=)/);
+    assert.deepEqual(cookies, [sessionCookie, scopeCookie]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousOrigin === undefined) {
+      delete process.env.TRADEPULSE_API_ORIGIN;
+    } else {
+      process.env.TRADEPULSE_API_ORIGIN = previousOrigin;
+    }
+  }
+});

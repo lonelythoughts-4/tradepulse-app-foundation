@@ -62,8 +62,11 @@ export async function proxyPlatformRequest(request: NextRequest, upstreamPath: s
     response.headers.set('x-tradepulse-request-id', upstream.headers.get('x-tradepulse-request-id') || requestId)
     // The upstream API issues the browser session. Re-emit it from this first-
     // party Vercel route so the browser reliably stores it for this web domain.
-    const sessionCookie = upstream.headers.get('set-cookie')
-    if (sessionCookie) response.headers.set('set-cookie', sessionCookie)
+    const cookieHeaders = upstream.headers as Headers & { getSetCookie?: () => string[] }
+    const sessionCookies = typeof cookieHeaders.getSetCookie === 'function'
+      ? cookieHeaders.getSetCookie()
+      : (upstream.headers.get('set-cookie') || '').split(/,\s*(?=[^;,]+=)/).filter(Boolean)
+    for (const cookie of sessionCookies) response.headers.append('set-cookie', cookie)
     return response
   } catch {
     return NextResponse.json(
