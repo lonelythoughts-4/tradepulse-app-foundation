@@ -172,7 +172,7 @@ export function useResourcePoller<T>(
       ? window.setInterval(() => void poller.tick(), intervalMs)
       : null;
     return () => {
-      poller.invalidate();
+      void poller.setVisible(false);
       if (timer !== null) window.clearInterval(timer);
     };
   }, [

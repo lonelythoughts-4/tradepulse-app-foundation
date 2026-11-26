@@ -7252,13 +7252,17 @@ function LiveTradePulse() {
   };
   useEffect(() => {
     if (tab !== "Bots" || !data || !isDocumentVisible) return;
+    let active = true;
     const refresh = () => {
-      if (document.visibilityState !== "visible") return;
+      if (!active || document.visibilityState !== "visible") return;
       void dashboardRefreshRef.current(webEnvironment);
     };
     refresh();
     const timer = window.setInterval(refresh, 30_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [data?.user.id, isDocumentVisible, tab, webEnvironment]);
   useEffect(() => {
     if (!telegramIdentityPending) return;

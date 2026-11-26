@@ -131,6 +131,8 @@ test("aborts hidden polling and refreshes when visibility returns", async () => 
   await Promise.resolve();
   await poller.setVisible(false);
   assert.equal(signal?.aborted, true);
+  await poller.tick();
+  assert.equal(polls, 1);
   const visible = poller.setVisible(true);
   resolvePoll();
   await Promise.all([first, visible]);
