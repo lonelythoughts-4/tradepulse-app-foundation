@@ -5895,6 +5895,13 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
         <div className="section-heading">
           <div>
             <h2>Referral earning rates</h2>
+            <p className="referral-fee-explanation">
+              Your commission comes from the eligible performance fee on a
+              referral&apos;s profitable trade — not from their deposited capital
+              or gross trading profit. It is recorded when that fee settles.
+              The levels below also apply to people invited by your referral
+              chain.
+            </p>
           </div>
         </div>
         {data.referral_rates.map((rate, index) => (
@@ -5902,7 +5909,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
             <b>0{index + 1}</b>
             <span>
               {index === 0 ? "Direct referrals" : `Level ${index + 1}`}
-              <small>Eligible fee share</small>
+              <small>{index === 0 ? "Their eligible performance fees" : "Eligible fees from your downline"}</small>
             </span>
             <strong>{rate}%</strong>
           </div>

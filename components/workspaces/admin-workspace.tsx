@@ -1578,8 +1578,9 @@ export function AdminWorkspace({
           </div>
         )}
       </details>
-      <section className="admin-table signer-control" aria-labelledby="signer-control-title">
-        <div className="signer-control-header">
+      <details className="admin-table signer-control" aria-labelledby="signer-control-title">
+        <summary className="signer-control-reserve-summary">
+          <div className="signer-control-header">
           <div className="signer-control-title">
             <h3 id="signer-control-title">Protected signer</h3>
             <p>
@@ -1601,7 +1602,9 @@ export function AdminWorkspace({
                   ? "Unlocked"
                   : "Locked"}
           </span>
-        </div>
+          </div>
+        </summary>
+        <div className="signer-control-body">
         {signerStatus === "locked" && (
           <form className="signer-control-form" onSubmit={(event) => void unlockSigner(event)}>
             <label className="amount-field">
@@ -1660,7 +1663,8 @@ export function AdminWorkspace({
         {signerError && signerStatus !== "unavailable" && (
           <p className="signer-control-note" role="status">{signerError}</p>
         )}
-      </section>
+        </div>
+      </details>
       <details className="admin-table signer-control" aria-labelledby="gas-reserves-title">
         <summary className="signer-control-reserve-summary">
           <div className="signer-control-header">

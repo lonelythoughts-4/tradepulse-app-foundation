@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("the admin workspace exposes the protected signer state and explicit lock controls", async () => {
+test("the admin workspace exposes a retractable protected signer control", async () => {
   const source = await readFile(
     new URL("../components/workspaces/admin-workspace.tsx", import.meta.url),
     "utf8",
@@ -17,6 +17,10 @@ test("the admin workspace exposes the protected signer state and explicit lock c
   assert.match(source, /setSignerPin\(""\)/);
   assert.match(source, /Unlock signer/);
   assert.match(source, /Lock signer/);
+  assert.match(source, /<details className="admin-table signer-control" aria-labelledby="signer-control-title">/);
+  assert.match(source, /<summary className="signer-control-reserve-summary">/);
+  assert.match(source, /<div className="signer-control-body">/);
+  assert.doesNotMatch(source, /<details className="admin-table signer-control"[^>]*open/);
   assert.match(source, /request\("\/v1\/admin\/gas-vaults", \{\}, environment, 60_000\)/);
   assert.match(source, /actionKey\.startsWith\("sweep:"\) \? 58_000 : 15_000/);
   assert.match(source, /Network gas reserves/);
