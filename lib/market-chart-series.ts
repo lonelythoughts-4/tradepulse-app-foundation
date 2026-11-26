@@ -11,6 +11,16 @@ export type MarketChartCandle = {
   timestamp?: number;
 };
 
+export function shouldShowMarketCloseTrace(candles: MarketChartCandle[], domain: number, plotHeight: number) {
+  if (candles.length < 4 || !Number.isFinite(domain) || domain <= 0 || !Number.isFinite(plotHeight) || plotHeight <= 0) {
+    return false;
+  }
+  const compressedBodies = candles.filter((candle) =>
+    Math.abs(candle.close - candle.open) * plotHeight / domain < 0.8,
+  ).length;
+  return compressedBodies >= Math.ceil(candles.length * 0.6);
+}
+
 export function formatMarketPrice(value: number) {
   const absolute = Math.abs(value);
   if (absolute >= 1000) return value.toFixed(2);

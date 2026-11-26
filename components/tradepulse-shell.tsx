@@ -26,7 +26,7 @@ import {
 import { createInFlightRequestCache } from "../lib/in-flight-request-cache";
 import { reconcileSyntheticTicks, type SyntheticTick } from "../lib/synthetic-ticks";
 import { formatMarketChartTime } from "../lib/market-chart-time";
-import { formatMarketPrice, makeMarketCandles, type MarketChartCandle, type MarketChartPoint } from "../lib/market-chart-series";
+import { formatMarketPrice, makeMarketCandles, shouldShowMarketCloseTrace, type MarketChartCandle, type MarketChartPoint } from "../lib/market-chart-series";
 import { memecoinMarketDisplayName } from "../lib/market-display";
 import {
   shouldApplyEnvironmentProjection,
@@ -5513,6 +5513,7 @@ function MarketChart({
     if (pointers.current.has(event.pointerId)) clearGesture();
   };
   const sourceCandles = chartCandles(points, ohlcCandles);
+  const candleLabel = sourceLabel || "Synthetic";
   const baseVisibleCount = Math.min(42, sourceCandles.length);
   const visibleCount = Math.max(12, Math.min(sourceCandles.length, Math.round(baseVisibleCount / zoom)));
   const maxOffset = Math.max(0, sourceCandles.length - visibleCount);
@@ -5564,6 +5565,10 @@ function MarketChart({
   const xStep = chartWidth / candles.length;
   const bodyWidth = Math.max(2, Math.min(10, xStep * 0.62));
   const y = (value: number) => 10 + ((paddedHigh - value) / domain) * (chartHeight - 20);
+  const showCloseTrace = shouldShowMarketCloseTrace(candles, domain, chartHeight - 20);
+  const closeTrace = showCloseTrace
+    ? candles.map((candle, index) => `${index ? "L" : "M"} ${index * xStep + xStep / 2} ${y(candle.close)}`).join(" ")
+    : "";
   const priceLabels = Array.from({ length: 5 }, (_, index) => paddedHigh - (domain * index) / 4);
   const rsi = rsiValues(candles.map((candle) => candle.close));
   const rsiPath = rsi
@@ -5594,7 +5599,7 @@ function MarketChart({
       style={{ touchAction: "none" }}
     >
       <div className={`market-chart-status ${feedError ? "market-chart-status-stale" : ""}`} role="status">
-        {feedError ? "Feed reconnecting" : `Showing ${sourceLabel || "1-minute"} candles`}
+        {feedError ? "Feed reconnecting" : `Showing ${candleLabel} candles`}
       </div>
       <div className="market-chart-main" style={{ gridTemplateColumns: `minmax(0, 1fr) ${priceAxisWidth}px` }}>
         <svg ref={priceSvgRef} viewBox="0 0 560 204" preserveAspectRatio="none" role="img" aria-label={`${market} price candles. Latest visible close ${formatMarketPrice(candles[candles.length - 1].close)}, low ${formatMarketPrice(low)}, high ${formatMarketPrice(high)}.`}>
@@ -5617,6 +5622,7 @@ function MarketChart({
                 : <rect x={center - bodyWidth / 2} y={top} width={bodyWidth} height={bodyHeight} fill={rising ? `${color}B3` : color} stroke={color} strokeWidth="0.8" />}
             </g>;
           })}
+          {closeTrace && <path d={closeTrace} fill="none" stroke="#aeb7ff" strokeWidth="1.5" opacity="0.85" />}
         </svg>
         <div className="market-price-axis" aria-hidden="true">
           {priceLabelPositions.map(({ label, top }, index) => (

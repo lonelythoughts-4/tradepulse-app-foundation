@@ -1211,7 +1211,7 @@ export function BotsWorkspace({
                 key={syntheticMarket}
                 points={syntheticChartPoints}
                 market={syntheticMarket}
-                sourceLabel="Synthetic index"
+                sourceLabel="Synthetic"
                 emptyMessage={!syntheticChartEnvironment
                   ? "Synthetic market data is unavailable for this account environment."
                   : syntheticChartFeedError
