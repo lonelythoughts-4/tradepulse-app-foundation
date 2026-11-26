@@ -152,7 +152,7 @@ test("activity detail titles retain the market-specific presentation", async () 
   assert.doesNotMatch(dialog, /activityLabel\(entry\.kind/);
 });
 
-test("keeps Memecoin P&L in its bot workspace instead of the dashboard", async () => {
+test("shows realized product P&L on dashboard bot cards and retains workspace detail", async () => {
   const shell = await readFile(
     new URL("../components/tradepulse-shell.tsx", import.meta.url),
     "utf8",
@@ -162,11 +162,26 @@ test("keeps Memecoin P&L in its bot workspace instead of the dashboard", async (
     "utf8",
   );
 
-  assert.doesNotMatch(shell, /ProductPnlSummary product="Memecoin"/);
+  assert.match(shell, /pnl24h:\s+bot\.product === "memecoin"\s+\?\s+data\.memecoin\?\.pnl_summary\?\.last_24h_usd/);
+  assert.match(shell, /24H NET P&amp;L/);
   assert.match(
     bots,
     /ProductPnlSummary product="Memecoin" summary=\{data\.memecoin\?\.pnl_summary\}/,
   );
+});
+
+test("referral copy falls back when native clipboard access is unavailable", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+  const helperStart = shell.indexOf("async function copyTextToClipboard");
+  const helperEnd = shell.indexOf("\nfunction activityAmountTone", helperStart);
+  const helper = shell.slice(helperStart, helperEnd);
+
+  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+  assert.match(helper, /navigator\.clipboard\?\.writeText/);
+  assert.match(helper, /document\.execCommand\("copy"\)/);
 });
 
 test("withdrawal failures show the safe API reason when one is available", async () => {

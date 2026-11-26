@@ -22,6 +22,13 @@ export class DeskApiError extends Error {
   }
 }
 
+export function isRetryableDashboardReadError(error: unknown): boolean {
+  return (
+    (error instanceof DeskApiError && error.status === 503) ||
+    (error instanceof Error && (error.name === "TimeoutError" || error.name === "NetworkError"))
+  );
+}
+
 export function logDeskFailure(operation: string, error: unknown): void {
   console.error("TradeMemo operation failed", {
     operation,

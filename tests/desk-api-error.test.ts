@@ -2,7 +2,20 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { DeskApi, DeskApiError, logDeskFailure } from "../lib/desk-api.ts";
+import { DeskApi, DeskApiError, isRetryableDashboardReadError, logDeskFailure } from "../lib/desk-api.ts";
+
+test("dashboard retry classification excludes authorization and permanent server failures", () => {
+  const timeout = new Error("");
+  timeout.name = "TimeoutError";
+  const network = new Error("");
+  network.name = "NetworkError";
+
+  assert.equal(isRetryableDashboardReadError(new DeskApiError("", 503)), true);
+  assert.equal(isRetryableDashboardReadError(timeout), true);
+  assert.equal(isRetryableDashboardReadError(network), true);
+  assert.equal(isRetryableDashboardReadError(new DeskApiError("", 401)), false);
+  assert.equal(isRetryableDashboardReadError(new DeskApiError("", 500)), false);
+});
 
 test("API errors retain diagnostics without exposing customer-facing error copy", async () => {
   const error = new DeskApiError(

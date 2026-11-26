@@ -24,7 +24,7 @@ type SyntheticSnapshots = Record<string, Snapshot | undefined>;
 type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
 type Account = Pick<LiveDashboard, "user" | "wallet" | "bots" | "ledger" | "memecoin" | "synthetic">;
 type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "testnet", timeoutMs?: number) => Promise<Record<string, any>>;
-export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; store: DeskStore };
+export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; reload: () => Promise<void>; store: DeskStore };
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
 const capacityValue = (value: number | null | undefined, pending: boolean, fallback?: number) => {
@@ -186,7 +186,7 @@ export function SyntheticSettlementList({ settlements, titleId = "synthetic-sett
   </section>;
 }
 
-export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, request, store }: SyntheticWorkspaceProps) {
+export function SyntheticWorkspace({ account, environment, marketChart: MarketChart, onDashboardPatch, onNotice, onPickStrategy, request, reload, store }: SyntheticWorkspaceProps) {
   const [market, setMarket] = useState<Market>("SYN-25");
   const marketRef = useRef(market);
   const resourceKey = syntheticResourceKey(environment, market);
@@ -306,21 +306,32 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     logDeskFailure("synthetic.quotes", error);
     setQuoteError(true);
   }, "Synthetic");
+  const inFlightActionKeysRef = useRef(new Set<ActionKey>());
   const actionKey = (path: string, payload: Record<string, unknown>) => {
     const position = path.match(/^\/v1\/synthetic\/positions\/([^/]+)\/close$/); const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
-    if (path === "/v1/synthetic/actions") return ("synthetic-testnet:" + String(payload.action || "action")) as ActionKey;
+    if (path === "/v1/synthetic/actions") {
+      const action = String(payload.action || "action");
+      const key = action === "open"
+        ? `synthetic-testnet:open:${String(payload.market || "")}:${String(payload.direction || "")}`
+        : `synthetic-testnet:${action}`;
+      return key as ActionKey;
+    }
     if (position) return ("synthetic-position:" + position[1] + ":close") as ActionKey;
     if (bot) return ("bot:" + bot[1] + ":" + String(payload.action || "action")) as ActionKey;
     return (path + ":action") as ActionKey;
   };
   const act = async (path: string, payload: Record<string, unknown>) => {
-    const key = actionKey(path, payload); if (pendingFor(key)) return false;
+    const key = actionKey(path, payload);
+    if (inFlightActionKeysRef.current.has(key) || pendingFor(key)) return false;
+    inFlightActionKeysRef.current.add(key);
     // These actions are attached to the engine's durable 30-second execution
     // window. Keep the browser attached long enough to receive that outcome
     // instead of aborting at the generic 15-second desk timeout.
     const durableAction = /^\/v1\/synthetic\/positions\/[^/]+\/close$/.test(path);
+    const shouldReconcile = durableAction || (path === "/v1/synthetic/actions" && payload.action === "open");
     const actionLabel = durableAction ? "Submitting close request…" : null;
     if (actionLabel) onNotice(actionLabel);
+    let succeeded = false;
     try {
       const response = await store.runAction(key, () => request(path, { method: "POST", body: JSON.stringify(payload) }, environment, durableAction ? 40_000 : undefined));
       if (response.position || (path === "/v1/synthetic/actions" && payload.action === "open")) setHasStartedTradeThisSession(true);
@@ -349,10 +360,19 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       }
       const bot = path.match(/^\/v1\/bots\/(\d+)\/actions$/);
       if (bot && payload.action === "topup") onDashboardPatch((current) => current ? { ...current, wallet: response.wallet ? { ...current.wallet, ...response.wallet } : current.wallet, bots: current.bots.map((item) => item.id === bot[1] ? { ...item, ...(response.bot || {}) } : item) } : current);
-      onNotice(response.message || "Your changes were saved."); return true;
+      onNotice(response.message || "Your changes were saved.");
+      succeeded = true;
+      return true;
     } catch (error) {
       logDeskFailure("synthetic.action", error);
+      if (durableAction) onNotice("");
       throw error;
+    } finally {
+      inFlightActionKeysRef.current.delete(key);
+      if (shouldReconcile) {
+        if (!succeeded && durableAction) onNotice("");
+        void reload().catch((error) => logDeskFailure("synthetic.dashboard-reconcile", error));
+      }
     }
   };
   const syntheticBot = account.bots.find((bot) => bot.product === "synthetic");
@@ -381,6 +401,12 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     : !snapshot.partial && snapshot.execution?.daily_goal_reached
       ? "Today's Auto goal is reached. New entries are paused until the next session."
       : "";
+  const testnetLongPayload = { action: "open", market, direction: "long", amount: 20 };
+  const testnetShortPayload = { action: "open", market, direction: "short", amount: 20 };
+  const testnetResetPayload = { action: "reset" };
+  const testnetLongKey = actionKey("/v1/synthetic/actions", testnetLongPayload);
+  const testnetShortKey = actionKey("/v1/synthetic/actions", testnetShortPayload);
+  const testnetResetKey = actionKey("/v1/synthetic/actions", testnetResetPayload);
   return <DeskLocalized><div className="desk-screen"><div className="gradient-panel synthetic-pilot">
     <div className="synthetic-market-header">
       <div className="synthetic-market-title-region"><h2>{market}</h2><MemoizedQuoteStatus environment={environment} error={quoteError} market={market} store={store} /></div>
@@ -407,7 +433,11 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
           {syntheticAutoOn && dailyExecutionPause && <p className="synthetic-auto-hint" role="status">{dailyExecutionPause}</p>}
         </section>
         <SyntheticSignalList signals={signals} />
-      </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
+      </> : account.user.is_admin ? <div className="button-row">
+        <button className="small-action" disabled={pendingFor(testnetLongKey)} aria-busy={pendingFor(testnetLongKey)} onClick={() => void act("/v1/synthetic/actions", testnetLongPayload).catch(() => undefined)}>{pendingFor(testnetLongKey) ? "Opening…" : "Open $20 long"}</button>
+        <button className="small-action" disabled={pendingFor(testnetShortKey)} aria-busy={pendingFor(testnetShortKey)} onClick={() => void act("/v1/synthetic/actions", testnetShortPayload).catch(() => undefined)}>{pendingFor(testnetShortKey) ? "Opening…" : "Open $20 short"}</button>
+        <button className="danger-action" disabled={pendingFor(testnetResetKey)} aria-busy={pendingFor(testnetResetKey)} onClick={() => void act("/v1/synthetic/actions", testnetResetPayload).catch(() => undefined)}>{pendingFor(testnetResetKey) ? "Resetting…" : "Reset virtual balance"}</button>
+      </div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       <SyntheticPositionList positions={snapshot.positions} pending={snapshotPending || snapshot.positions_stale === true} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
       <SyntheticSettlementList settlements={account.synthetic?.recent_settlements || []} />
       {snapshot.positions_available === false && <p role="status">Position data is unavailable. The list may be incomplete; the Synthetic allocation remains protected until current positions are confirmed.</p>}

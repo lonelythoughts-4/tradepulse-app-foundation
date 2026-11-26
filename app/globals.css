@@ -983,6 +983,12 @@ html,body{overflow-x:clip}
   }
 }
 
+html:not([data-theme="light"]) .sync-time{color:var(--tp-supporting-text)}
+.empty-bots-action{height:44px}
+@media(min-width:861px){
+  html:not([data-theme="light"]) .sidebar .nav-item.active{color:var(--tp-accent)}
+}
+
 /* Flashback can expose two independently timed contracts at once. */
 .flashback-session-selector{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
 .flashback-history-list{display:grid;gap:8px}.flashback-history-list>button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:56px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--foreground);text-align:left}.flashback-history-list>button:hover{border-color:var(--primary)}.flashback-history-list>button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}.flashback-history-list>button>span{display:grid;gap:3px}.flashback-history-list>button b{font:600 12px var(--font-space-grotesk),sans-serif}.flashback-history-list>button small{color:var(--tp-supporting-text);font-size:11px}.flashback-history-list>button>strong{font:600 12px var(--font-jetbrains-mono),monospace}.flashback-history-list>button>strong.up{color:var(--positive)}.flashback-history-list>button>strong.down{color:var(--danger)}.flashback-direction-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:8px 10px;border:1px solid var(--border);border-radius:8px}.flashback-direction-summary b{font:600 12px var(--font-space-grotesk),sans-serif}.flashback-direction-summary .ghost-action{min-height:36px;margin:0;padding:7px 10px}.flashback-direction-step h3:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:2px}@media(max-width:520px){.flashback-history-list>button{min-height:64px}.flashback-direction-summary{align-items:flex-start;flex-direction:column}.flashback-direction-summary .ghost-action{width:100%;justify-content:center}}

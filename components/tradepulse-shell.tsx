@@ -44,7 +44,7 @@ import {
 import { reconcileCreatedBot } from "../lib/financial-flow-reconciliation";
 import { describeActivity, formatActivityExitReason, formatActivityStatus } from "../lib/activity-presentation";
 import { translateDesk, translateDeskPhrase, type DeskMessageKey, type LanguageCode } from "../lib/desk-i18n";
-import { DeskApiError } from "../lib/desk-api";
+import { DeskApiError, isRetryableDashboardReadError } from "../lib/desk-api";
 import { DeskLanguageProvider, DeskLocalized, useDeskLanguage } from "./desk-language";
 import {
   DESK_THEME_STORAGE_KEY,
@@ -1023,6 +1023,7 @@ type Bot = {
   equity: string;
   percent: number;
   gain: string;
+  pnl24h?: number | null;
   state: BotState;
   compound: string;
   truth?: {
@@ -1089,12 +1090,19 @@ function BotCard({
   bot,
   onOpen,
 }: {
-  bot: (typeof bots)[number];
+  bot: Bot;
   onOpen?: () => void;
 }) {
   const factual = bot.truth;
   const factualTone = factual?.status === "running" ? "running" : "paused";
   const paused = factual ? factualTone === "paused" : bot.state === "paused";
+  const pnlValue = typeof bot.pnl24h === "number" && Number.isFinite(bot.pnl24h)
+    ? bot.pnl24h
+    : null;
+  const pnlLabel = pnlValue === null
+    ? "—"
+    : `${pnlValue > 0 ? "+" : pnlValue < 0 ? "−" : ""}${money(Math.abs(pnlValue))}`;
+  const pnlTone = pnlValue === null ? "" : pnlValue > 0 ? "up" : pnlValue < 0 ? "down" : "";
   return (
     <DeskLocalized>
     <GradientPanel
@@ -1138,6 +1146,12 @@ function BotCard({
               <span className={bot.state === "paused" ? "down" : "up"}>
                 {bot.gain}
               </span>
+            </div>
+          )}
+          {factual && (
+            <div className="bot-equity">
+              <span>24H NET P&amp;L</span>
+              <strong className={pnlTone}>{pnlLabel}</strong>
             </div>
           )}
         </div>
@@ -5390,6 +5404,49 @@ export function money(value: number) {
   }).format(Number(value || 0));
 }
 
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    let fallbackTimer: number | null = null;
+    try {
+      const copied = await Promise.race([
+        navigator.clipboard.writeText(text).then(() => true, () => false),
+        new Promise<boolean>((resolve) => {
+          fallbackTimer = window.setTimeout(() => resolve(false), 1500);
+        }),
+      ]);
+      if (copied) return true;
+    } catch {
+      // Fall back to the selection-based copy path below.
+    } finally {
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  const activeElement = document.activeElement;
+  try {
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+    if (activeElement instanceof HTMLElement && activeElement !== document.body && activeElement.isConnected) {
+      activeElement.focus({ preventScroll: true });
+    }
+  }
+}
+
 function activityAmountTone(amount: number) {
   return amount > 0 ? "up" : amount < 0 ? "down" : undefined;
 }
@@ -5651,20 +5708,47 @@ function MarketChart({
   );
 }
 function LiveEarnScreen({ data }: { data: LiveDashboard }) {
-  const [copied, setCopied] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<"copied" | "failed" | null>(null);
+  const [copyPending, setCopyPending] = useState(false);
+  const copyPendingRef = useRef(false);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
   const link = `https://t.me/${data.referral.bot_username}?start=ref_${data.user.id}`;
-  const share = async () => {
+  const showCopyFeedback = (success: boolean) => {
+    setCopyFeedback(success ? "copied" : "failed");
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+    copyFeedbackTimerRef.current = window.setTimeout(
+      () => setCopyFeedback(null),
+      success ? 1200 : 2400,
+    );
+  };
+  useEffect(() => () => {
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+  }, []);
+  const copyLink = async () => {
+    if (copyPendingRef.current) return;
+    copyPendingRef.current = true;
+    setCopyPending(true);
     try {
-      if (navigator.share) {
+      showCopyFeedback(await copyTextToClipboard(link));
+    } finally {
+      copyPendingRef.current = false;
+      setCopyPending(false);
+    }
+  };
+  const share = async () => {
+    if (navigator.share) {
+      try {
         await navigator.share({ title: "TradeMemo", url: link });
         return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
       }
-      await navigator.clipboard?.writeText(link);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      // Closing a native share sheet is not an application error.
     }
+    showCopyFeedback(await copyTextToClipboard(link));
   };
   return (
     <DeskLocalized>
@@ -5677,7 +5761,7 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
           className="share-action"
           onClick={() => void share()}
         >
-          {copied ? "Copied" : "Share"}
+          {copyFeedback === "copied" ? "Copied" : "Share"}
         </button>
       </div>
       <GradientPanel className="invite-card">
@@ -5687,18 +5771,19 @@ function LiveEarnScreen({ data }: { data: LiveDashboard }) {
         </div>
         <button
           className="earn-copy-link"
-          onClick={() => {
-            navigator.clipboard?.writeText(link);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1200);
-          }}
+          disabled={copyPending}
+          aria-busy={copyPending}
+          aria-label={copyFeedback === "failed" ? "Copy failed. Try again." : "Copy referral link"}
+          title={copyFeedback === "failed" ? "Could not copy. Try again." : undefined}
+          onClick={() => void copyLink()}
         >
           <StateSwapIcon
-            name={copied ? "check" : "copy"}
-            swapKey={copied ? "referral-copied" : "referral-copy"}
+            name={copyFeedback === "copied" ? "check" : "copy"}
+            swapKey={copyFeedback === "copied" ? "referral-copied" : "referral-copy"}
           />
-          {copied ? "Copied" : "Copy link"}
+          {copyPending ? "Copying…" : copyFeedback === "copied" ? "Copied" : copyFeedback === "failed" ? "Try again" : "Copy link"}
         </button>
+        {copyFeedback === "failed" && <span className="sr-only" role="status">Could not copy the referral link. Try again.</span>}
       </GradientPanel>
       <div className="earn-grid">
         <GradientPanel>
@@ -6936,13 +7021,64 @@ function LiveTradePulse() {
         if (!(options.body instanceof FormData) && !Object.keys(requestHeaders).some((name) => name.toLowerCase() === "content-type")) {
           requestHeaders["Content-Type"] = "application/json";
         }
-        const response = await fetch(`/api${path}`, {
-          ...options,
-          signal: controller.signal,
-          headers: requestHeaders,
-          credentials: "same-origin",
-        });
-        const body = await response.json();
+        let response: Response;
+        try {
+          response = await fetch(`/api${path}`, {
+            ...options,
+            signal: controller.signal,
+            headers: requestHeaders,
+            credentials: "same-origin",
+          });
+        } catch (error) {
+          if (timedOut) {
+            console.error("TradeMemo API request timed out", { path, requestId });
+            const timeoutError = new Error("");
+            timeoutError.name = "TimeoutError";
+            throw timeoutError;
+          }
+          if (callerSignal?.aborted) throw new DOMException("", "AbortError");
+          console.error("TradeMemo API transport failed", {
+            path,
+            requestId,
+            errorType: error instanceof Error ? error.name : "UnknownError",
+          });
+          const networkError = new Error("");
+          networkError.name = "NetworkError";
+          throw networkError;
+        }
+        let body: Record<string, any> = {};
+        try {
+          const parsed: unknown = await response.json();
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            body = parsed as Record<string, any>;
+          } else if (response.ok) {
+            throw new TypeError("Expected an object response.");
+          }
+        } catch (error) {
+          if (timedOut) {
+            console.error("TradeMemo API request timed out", { path, requestId });
+            const timeoutError = new Error("");
+            timeoutError.name = "TimeoutError";
+            throw timeoutError;
+          }
+          if (callerSignal?.aborted) throw new DOMException("", "AbortError");
+          if (response.ok) {
+            console.error("TradeMemo API processing failed", {
+              path,
+              requestId,
+              errorType: error instanceof Error ? error.name : "UnknownError",
+            });
+            const responseError = new Error("");
+            responseError.name = "ResponseError";
+            throw responseError;
+          }
+          console.error("TradeMemo API error response could not be read", {
+            path,
+            status: response.status,
+            requestId,
+            errorType: error instanceof Error ? error.name : "UnknownError",
+          });
+        }
         if (!response.ok) {
           const responseMessage = typeof body.error === "string" ? body.error : "";
           const reference = typeof body.request_id === "string"
@@ -6973,25 +7109,6 @@ function LiveTradePulse() {
           throw new DeskApiError("", response.status, reference, responseMessage, responseBody);
         }
         return body;
-      } catch (error) {
-        if (error instanceof DeskApiError) throw error;
-        if (timedOut) {
-          console.error("TradeMemo API request timed out", { path, requestId });
-          const timeoutError = new Error("");
-          timeoutError.name = "TimeoutError";
-          throw timeoutError;
-        }
-        if (callerSignal?.aborted) throw new DOMException("", "AbortError");
-        if (error instanceof TypeError) {
-          console.error("TradeMemo API transport failed", { path, requestId });
-          throw new Error("");
-        }
-        console.error("TradeMemo API processing failed", {
-          path,
-          requestId,
-          errorType: error instanceof Error ? error.name : "UnknownError",
-        });
-        throw new Error("");
       } finally {
         window.clearTimeout(timeout);
         callerSignal?.removeEventListener("abort", abortFromCaller);
@@ -7048,7 +7165,25 @@ function LiveTradePulse() {
       setTelegramIdentityPending(false);
       // Keep the first-load wait bounded so a slow API produces a retry state
       // instead of leaving the user on an indefinite full-screen loader.
-      const next = await request("/v1/dashboard", {}, targetEnvironment, 15_000);
+      let next: Record<string, any> | null = null;
+      let retryCount = 0;
+      while (!next) {
+        try {
+          next = await request("/v1/dashboard", {}, targetEnvironment, 15_000);
+        } catch (error) {
+          if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
+            return false;
+          }
+          if (!isRetryableDashboardReadError(error)) throw error;
+          setNotice("");
+          const retryDelay = Math.min(8_000, 1_000 * (2 ** Math.min(retryCount, 3)));
+          retryCount += 1;
+          await new Promise<void>((resolve) => window.setTimeout(resolve, retryDelay));
+          if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
+            return false;
+          }
+        }
+      }
       if (!shouldApplyEnvironmentProjection(targetEnvironment, selectedEnvironmentRef.current)) {
         return false;
       }
@@ -7570,6 +7705,9 @@ function LiveTradePulse() {
     equity: money(bot.capital_usd),
     percent: 0,
     gain: "",
+    pnl24h: bot.product === "memecoin"
+      ? data.memecoin?.pnl_summary?.last_24h_usd ?? null
+      : data.synthetic?.pnl_summary?.last_24h_usd ?? null,
     state: bot.state === "paused" ? "paused" : "running",
     compound: `COMPOUND ${bot.compound_percent}%`,
     truth: {
@@ -8015,6 +8153,7 @@ function LiveTradePulse() {
               onNotice={setNotice}
               onPickStrategy={openBotStrategyPicker}
               request={request}
+              reload={reloadDashboard}
               store={deskStore}
             />
           )}

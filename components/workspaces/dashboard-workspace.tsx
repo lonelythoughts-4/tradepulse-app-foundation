@@ -29,7 +29,7 @@ export function DashboardWorkspace<T>({ store, poll, onPollError, ...dashboardPr
       return poll(signal);
     },
     (next) => applyResourceIfUnchanged(store, "dashboard", next, pollRevision.current),
-    30_000,
+    7_000,
     true,
     "dashboard",
     onPollError,

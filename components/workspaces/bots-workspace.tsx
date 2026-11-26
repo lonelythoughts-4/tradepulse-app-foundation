@@ -192,6 +192,7 @@ export function BotsWorkspace({
   // one bot must never make another bot, position, or Flashback control look
   // like it is processing.
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
+  const inFlightActionKeysRef = useRef(new Set<string>());
   const [compoundErrors, setCompoundErrors] = useState<Record<string, string>>({});
   const [reviewError, setReviewError] = useState("");
   const [topUpFeedback, setTopUpFeedback] = useState<BotTopUpFeedback | null>(null);
@@ -544,17 +545,18 @@ export function BotsWorkspace({
   const isActionPending = (key: string) => Boolean(pendingActions[key]);
   const run = async (path: string, payload: Record<string, unknown>) => {
     const actionKey = actionKeyFor(path, payload);
-    if (isActionPending(actionKey)) return false;
-    // Bot creation moves allocation and activation together, so wait for its
-    // durable result rather than surfacing a browser abort as a refusal.
-    const durableAction = path === "/v1/bots";
+    if (inFlightActionKeysRef.current.has(actionKey) || isActionPending(actionKey)) return false;
+    inFlightActionKeysRef.current.add(actionKey);
+    // Create and close can include durable settlement work; keep the request
+    // attached long enough to receive the authoritative outcome.
+    const waitForDurableResult = path === "/v1/bots" || payload.action === "close" || path.endsWith("/close");
     setReviewError("");
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       const response = await request(path, {
         method: "POST",
         body: JSON.stringify(payload),
-      }, undefined, durableAction ? 40_000 : undefined);
+      }, undefined, waitForDurableResult ? 40_000 : undefined);
       const isTopUp = payload.action === "topup" && /^\/v1\/bots\/\d+\/actions$/.test(path);
       const isCompound = payload.action === "compound" && /^\/v1\/bots\/\d+\/actions$/.test(path);
       if (!isTopUp && !isCompound) onNotice(response.message || "Your changes were saved.");
@@ -568,7 +570,7 @@ export function BotsWorkspace({
       }
       // The immediate mutation result is used first, so this control never
       // waits behind a screen-wide reload.
-      if (durableAction || !hasAuthoritativeResult) {
+      if (waitForDurableResult || !hasAuthoritativeResult) {
         void reload().catch((error) => logDeskFailure("bots.dashboard-reconcile", error));
       }
       return true;
@@ -610,15 +612,15 @@ export function BotsWorkspace({
           }));
         }
       }
-      const closeError = error instanceof DeskApiError ? error.responseMessage.trim() : "";
       setReviewError(
         payload.action === "close"
-          ? closeError || "Close status is not confirmed yet. Your allocation remains protected until the bot state is verified."
+          ? "Close status is not confirmed yet. Your allocation remains protected until the bot state is verified."
           : "",
       );
       void reload().catch((reloadError) => logDeskFailure("bots.dashboard-reconcile", reloadError));
       return false;
     } finally {
+      inFlightActionKeysRef.current.delete(actionKey);
       setPendingActions((current) => {
         const next = { ...current };
         delete next[actionKey];
