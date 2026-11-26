@@ -7228,7 +7228,6 @@ function LiveTradePulse() {
           if (response.status === 401) {
             if (path === "/v1/dashboard" || path === "/v1/auth/miniapp/verify") {
               dashboardAuthenticationRejectedRef.current = true;
-              updateDashboard(null);
               setTelegramIdentityPending(false);
               setTelegramLaunchContext(false);
               setSessionHandoffRequired(true);

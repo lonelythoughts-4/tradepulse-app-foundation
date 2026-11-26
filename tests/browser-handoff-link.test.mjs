@@ -115,8 +115,9 @@ test("an endpoint-specific 401 cannot discard the signed-in desk", async () => {
 
   assert.match(
     request,
-    /if \(path === "\/v1\/dashboard" \|\| path === "\/v1\/auth\/miniapp\/verify"\) \{\s*dashboardAuthenticationRejectedRef\.current = true;\s*updateDashboard\(null\);\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
+    /if \(path === "\/v1\/dashboard" \|\| path === "\/v1\/auth\/miniapp\/verify"\) \{\s*dashboardAuthenticationRejectedRef\.current = true;\s*setTelegramIdentityPending\(false\);\s*setTelegramLaunchContext\(false\);\s*setSessionHandoffRequired\(true\);\s*setSessionBootstrapComplete\(true\);\s*\} else \{\s*sessionValidationRef\.current\?\.\(targetEnvironment\);\s*\}/,
   );
+  assert.doesNotMatch(request, /updateDashboard\(null\)/);
   assert.match(pollErrorHandler, /setTimeout\(poll/);
   assert.match(pollErrorHandler, /current code remains visible/);
   assert.doesNotMatch(pollErrorHandler, /setState\("preparing"\)/);
