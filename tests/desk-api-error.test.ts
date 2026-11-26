@@ -137,8 +137,18 @@ test("the language rollback preserves locale without exposing API error copy", a
   );
 
   assert.match(shell, /throw new DeskApiError\("", response\.status, reference, responseMessage, responseBody\)/);
-  assert.match(shell, /if \(error instanceof DeskApiError\) throw error;/);
   assert.match(shell, /setNotice\(""\);\s*throw error;/);
+});
+
+test("dashboard retries transient reads while preserving the 401 handoff", async () => {
+  const shell = await readFile(
+    new URL("../components/tradepulse-shell.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(shell, /if \(response\.status === 401\) \{/);
+  assert.match(shell, /setSessionHandoffRequired\(true\)/);
+  assert.match(shell, /if \(!isRetryableDashboardReadError\(error\)\) throw error;/);
 });
 
 test("withdrawal errors use the safe server message when available", async () => {

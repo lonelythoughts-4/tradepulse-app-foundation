@@ -103,9 +103,9 @@ test("the chart retains same-market cached ticks and rejects a late market respo
   assert.match(source, /snapshot\.positions_available === false && <p role="status">Position data is unavailable\./);
 });
 
-test("bot close errors preserve safe backend guidance", () => {
-  assert.match(botsSource, /const closeError = error instanceof DeskApiError \? error\.responseMessage\.trim\(\) : "";/);
-  assert.match(botsSource, /closeError \|\| "Close status is not confirmed yet\. Your allocation remains protected/);
+test("bot close errors use safe guidance without exposing raw backend copy", () => {
+  assert.match(botsSource, /payload\.action === "close"\s*\?\s*"Close status is not confirmed yet\. Your allocation remains protected until the bot state is verified\."/);
+  assert.doesNotMatch(botsSource, /const closeError = error instanceof DeskApiError/);
 });
 
 test("a partial Memecoin refresh merges cached owner-scoped positions", () => {
