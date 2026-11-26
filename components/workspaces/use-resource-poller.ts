@@ -136,6 +136,7 @@ export function useResourcePoller<T>(
   resourceKey: string,
   onError: (error: unknown) => void,
   workspace: string,
+  pollImmediately = true,
 ): void {
   const pollRef = useRef(poll);
   const applyRef = useRef(apply);
@@ -167,7 +168,7 @@ export function useResourcePoller<T>(
         return value;
       },
     });
-    void poller.tick();
+    if (pollImmediately) void poller.tick();
     const timer = intervalMs > 0
       ? window.setInterval(() => void poller.tick(), intervalMs)
       : null;
@@ -181,6 +182,7 @@ export function useResourcePoller<T>(
     pollingState.activeWorkspace,
     pollingState.isActive,
     pollingState.isVisible,
+    pollImmediately,
     resourceKey,
     workspace,
   ]);

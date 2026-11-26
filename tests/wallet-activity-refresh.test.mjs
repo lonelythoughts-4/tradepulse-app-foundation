@@ -10,6 +10,10 @@ const dashboardSource = await readFile(
   new URL("../components/workspaces/dashboard-workspace.tsx", import.meta.url),
   "utf8",
 );
+const noticeCenterSource = await readFile(
+  new URL("../components/notice-center.tsx", import.meta.url),
+  "utf8",
+);
 
 test("Wallet activity refreshes the dashboard ledger while Wallet is active", () => {
   const pollerStart = source.indexOf("useResourcePoller(");
@@ -33,7 +37,7 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.match(activityView, /View settlement.*View event/);
 });
 
-test("Dashboard polls the full account projection every seven seconds", () => {
+test("Dashboard avoids an immediate duplicate projection poll and refreshes every seven seconds", () => {
   const pollerStart = dashboardSource.indexOf("useResourcePoller(");
   const pollerEnd = dashboardSource.indexOf("\n  );", pollerStart);
   assert.notEqual(pollerStart, -1);
@@ -42,4 +46,13 @@ test("Dashboard polls the full account projection every seven seconds", () => {
   const pollerCall = dashboardSource.slice(pollerStart, pollerEnd);
   assert.match(pollerCall, /,\s*7_000,\s*true,/);
   assert.match(pollerCall, /"Dashboard"/);
+  assert.match(pollerCall, /"Dashboard",\s*false/);
+});
+
+test("initial notices use the dashboard payload and refresh only when opened", () => {
+  assert.doesNotMatch(
+    noticeCenterSource,
+    /refreshRef\.current = \(\) => \{ void refresh\(\); \};\s*void refresh\(\);/,
+  );
+  assert.match(noticeCenterSource, /setOpen\(true\);\s*refreshRef\.current\(\);/);
 });

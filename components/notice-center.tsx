@@ -41,7 +41,7 @@ export function useNoticeCenter(scope: string, initial: WebNotice[], load: (sign
       } finally { inFlight = false; }
     };
     refreshRef.current = () => { void refresh(); };
-    void refresh();
+    // The full dashboard response already contains the initial notices.
     return () => {
       cancelled = true;
       controller.abort();

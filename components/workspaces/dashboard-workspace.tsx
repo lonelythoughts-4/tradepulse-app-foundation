@@ -23,6 +23,7 @@ export function DashboardWorkspace<T>({ store, poll, onPollError, ...dashboardPr
   const dashboard = useDeskSelector(store, dashboardSelector) as T | null;
   const pollRevision = useRef(-1);
 
+  // The shell owns the first fetch; avoid repeating the full projection on mount.
   useResourcePoller(
     async (_token, signal) => {
       pollRevision.current = store.getState().revisions.dashboard ?? -1;
@@ -34,6 +35,7 @@ export function DashboardWorkspace<T>({ store, poll, onPollError, ...dashboardPr
     "dashboard",
     onPollError,
     "Dashboard",
+    false,
   );
 
   return dashboard ? <Dashboard {...dashboardProps} /> : null;
