@@ -30,7 +30,7 @@ test("dashboard startup retries are bounded and requests fail promptly", () => {
   timeout.name = "TimeoutError";
 
   assert.equal(DASHBOARD_REQUEST_TIMEOUT_MS, 8_000);
-  assert.equal(DASHBOARD_MAX_TRANSIENT_RETRIES, 1);
+  assert.equal(DASHBOARD_MAX_TRANSIENT_RETRIES, 3);
   assert.equal(shouldRetryDashboardRead(timeout, 0), true);
   assert.equal(shouldRetryDashboardRead(timeout, 1), false);
   assert.equal(shouldRetryDashboardRead(new DeskApiError("", 401), 0), false);

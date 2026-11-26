@@ -7404,10 +7404,10 @@ function LiveTradePulse() {
       if (checkingSession && !dashboardAuthenticationRejectedRef.current) {
         setNotice(
           error instanceof DeskApiError && error.status === 503
-            ? "The desk is temporarily busy. Please retry."
+            ? "The desk is temporarily busy. Retrying your secure connection…"
             : error instanceof Error && error.name === "TimeoutError"
-              ? "The desk is taking longer than expected. Please retry."
-              : "The desk could not connect. Check your connection and retry.",
+              ? "The desk is taking longer than expected. Retrying your secure connection…"
+              : "The desk is reconnecting securely. Please wait a moment.",
         );
       } else {
         setNotice("");

@@ -23,7 +23,10 @@ export class DeskApiError extends Error {
 }
 
 export const DASHBOARD_REQUEST_TIMEOUT_MS = 8_000;
-export const DASHBOARD_MAX_TRANSIENT_RETRIES = 1;
+// A recovered browser session must not be abandoned after one congested
+// database read. Keep this bounded so a genuinely unavailable service still
+// exposes a manual retry, but absorb the short connection drain after a burst.
+export const DASHBOARD_MAX_TRANSIENT_RETRIES = 3;
 
 export function isRetryableDashboardReadError(error: unknown): boolean {
   return (
