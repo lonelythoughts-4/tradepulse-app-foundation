@@ -11,31 +11,19 @@ const admin = fs.readFileSync(path.join(root, "components", "workspaces", "admin
 const wallet = fs.readFileSync(path.join(root, "components", "workspaces", "wallet-workspace.tsx"), "utf8");
 const shell = fs.readFileSync(path.join(root, "components", "tradepulse-shell.tsx"), "utf8");
 
-test("support ticket mutations update the visible thread before background reconciliation", () => {
-  const createStart = help.indexOf('const result = await request("/v1/support/tickets"');
-  const createEnd = help.indexOf("} finally {", createStart);
-  const createAction = help.slice(createStart, createEnd);
-  assert.ok(createStart >= 0);
-  assert.match(createAction, /setActiveTicket\(ticket\)/);
-  assert.match(createAction, /setTicketMessages\(\[firstMessage\]\)/);
-  assert.match(help, /maxLength=\{1500\}/);
-  assert.match(createAction, /void loadTickets\(\)/);
-  assert.doesNotMatch(createAction, /await Promise\.all/);
-
-  const replyStart = help.indexOf('await request(`/v1/support/tickets/${ticket.id}/messages`');
-  const replyEnd = help.indexOf("} finally { endTicketReply", replyStart);
-  const replyAction = help.slice(replyStart, replyEnd);
-  assert.ok(replyStart >= 0);
-  assert.match(replyAction, /setTicketMessages\(\(current\) => \[\.\.\.current, reply\]\)/);
-  assert.match(replyAction, /void loadTickets\(\)/);
-  assert.doesNotMatch(replyAction, /await Promise\.all/);
+test("Help directs general support questions to the administrator on Telegram", () => {
+  assert.match(help, /href="https:\/\/t\.me\/thetessaractadmin"/);
+  assert.match(help, /target="_blank"[\s\S]*?rel="noopener noreferrer"/);
+  assert.match(help, /Message @thetessaractadmin on Telegram/);
+  assert.match(help, /Need a hand with your account, bots, deposits, or anything else\?/);
+  assert.match(help, /Never share passwords, login codes, recovery phrases, or private keys\./);
+  assert.doesNotMatch(help, /\/v1\/support\/tickets|Support request details|SUPPORT THREAD/);
 });
 
-test("ticket opening and reply pending states are keyed to their ticket", () => {
-  assert.match(help, /ticketOpeningIds\.has\(ticket\.id\)/);
-  assert.match(help, /ticketReplyPendingIds\.has\(activeTicket\.id\)/);
-  assert.match(help, /ticketOpeningRef\.current\.has\(ticketId\)/);
-  assert.match(help, /ticketReplyPendingRef\.current\.has\(ticketId\)/);
+test("Help Telegram support copy is translated in all supported app languages", () => {
+  const i18n = fs.readFileSync(path.join(root, "lib", "desk-i18n.ts"), "utf8");
+  assert.match(i18n, /"Need a hand with your account, bots, deposits, or anything else\? Message us directly on Telegram\.": \[[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+\]/);
+  assert.match(i18n, /"Message @thetessaractadmin on Telegram": \[[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+,\s*[^\]]+\]/);
 });
 
 test("alert actions have independent pending keys and reconcile returned state", () => {

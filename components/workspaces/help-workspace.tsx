@@ -1,34 +1,16 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { DeskLocalized } from "../desk-language";
 import { logDeskFailure } from "../../lib/desk-api";
 import {
-  ChevronRight,
   GradientPanel,
-  Send,
   StateIcon,
 } from "./shared-ui";
-import { useWorkspacePollingState } from "./use-resource-poller";
 
 export type HelpDashboard = {
   community_url: string;
   recovery_cases?: Array<{ id: string | number; asset: string; network: string; status: string }>;
-};
-
-type SupportTicket = {
-  id: string;
-  topic?: string;
-  body: string;
-  status: string;
-  message_count?: number;
-};
-
-type SupportMessage = {
-  id: number;
-  author_role: "user" | "admin";
-  body: string;
-  created_at: number;
 };
 
 export function HelpWorkspace({
@@ -48,132 +30,9 @@ export function HelpWorkspace({
   const [recoveryPending, setRecoveryPending] = useState(false);
   const [recoveryCases, setRecoveryCases] = useState(data.recovery_cases || []);
   const fieldId = useId();
-  const [supportMessage, setSupportMessage] = useState("");
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [activeTicket, setActiveTicket] = useState<{ id: string; topic?: string; status: string } | null>(null);
-  const [ticketMessages, setTicketMessages] = useState<SupportMessage[]>([]);
-  const [ticketReply, setTicketReply] = useState("");
-  const [ticketOpeningIds, setTicketOpeningIds] = useState<Set<string>>(new Set());
-  const [ticketCreatePending, setTicketCreatePending] = useState(false);
-  const [ticketReplyPendingIds, setTicketReplyPendingIds] = useState<Set<string>>(new Set());
-  const ticketOpeningRef = useRef(new Set<string>());
-  const ticketReplyPendingRef = useRef(new Set<string>());
-  const ticketCreatePendingRef = useRef(false);
-  const selectedTicketIdRef = useRef<string | null>(null);
-  const ticketThreadRequestRef = useRef(0);
-  const ticketListRequestRef = useRef(0);
-  const pollingState = useWorkspacePollingState("Help");
-  const loadTickets = async (signal?: AbortSignal) => {
-    const requestId = ++ticketListRequestRef.current;
-    const response = await request("/v1/support/tickets", { signal });
-    if (requestId === ticketListRequestRef.current) {
-      const nextTickets = Array.isArray(response.tickets)
-        ? response.tickets.map((ticket: SupportTicket) => ({ ...ticket, id: String(ticket.id) }))
-        : [];
-      setTickets(nextTickets);
-    }
-  };
-  const beginTicketOpen = (ticketId: string) => {
-    if (ticketOpeningRef.current.has(ticketId)) return false;
-    const next = new Set(ticketOpeningRef.current);
-    next.add(ticketId);
-    ticketOpeningRef.current = next;
-    setTicketOpeningIds(next);
-    return true;
-  };
-  const endTicketOpen = (ticketId: string) => {
-    const next = new Set(ticketOpeningRef.current);
-    next.delete(ticketId);
-    ticketOpeningRef.current = next;
-    setTicketOpeningIds(next);
-  };
-  const beginTicketReply = (ticketId: string) => {
-    if (ticketReplyPendingRef.current.has(ticketId)) return false;
-    const next = new Set(ticketReplyPendingRef.current);
-    next.add(ticketId);
-    ticketReplyPendingRef.current = next;
-    setTicketReplyPendingIds(next);
-    return true;
-  };
-  const endTicketReply = (ticketId: string) => {
-    const next = new Set(ticketReplyPendingRef.current);
-    next.delete(ticketId);
-    ticketReplyPendingRef.current = next;
-    setTicketReplyPendingIds(next);
-  };
-  const openTicket = async (
-    ticket: { id: string; topic?: string; status: string },
-    managePending = true,
-    resetReply = true,
-    signal?: AbortSignal,
-  ) => {
-    const requestId = ++ticketThreadRequestRef.current;
-    if (managePending) {
-      if (!beginTicketOpen(ticket.id)) return;
-      selectedTicketIdRef.current = ticket.id;
-      if (activeTicket?.id !== ticket.id) {
-        setActiveTicket(null);
-        setTicketMessages([]);
-        setTicketReply("");
-      }
-    }
-    try {
-      const response = await request(`/v1/support/tickets/${ticket.id}`, { signal });
-      if (requestId === ticketThreadRequestRef.current && selectedTicketIdRef.current === ticket.id) {
-        const responseTicket = response.ticket
-          ? { ...response.ticket, id: String(response.ticket.id ?? ticket.id) }
-          : ticket;
-        setActiveTicket(responseTicket);
-        setTicketMessages(Array.isArray(response.messages) ? response.messages : []);
-        if (resetReply) setTicketReply("");
-      }
-    } catch (error) {
-      if (!signal?.aborted) logDeskFailure("support.ticket-open", error);
-    } finally {
-      if (managePending) endTicketOpen(ticket.id);
-    }
-  };
-  useEffect(() => {
-    if (
-      !pollingState.isActive
-      || !pollingState.isVisible
-      || document.visibilityState !== "visible"
-    ) return;
-    const controller = new AbortController();
-    loadTickets(controller.signal)
-      .catch((error) => {
-        if (!controller.signal.aborted) logDeskFailure("support.ticket-list", error);
-      });
-    return () => controller.abort();
-  }, [pollingState.isActive, pollingState.isVisible]);
   useEffect(() => {
     setRecoveryCases(data.recovery_cases || []);
   }, [data.recovery_cases]);
-  useEffect(() => {
-    if (
-      !activeTicket
-      || activeTicket.status === "closed"
-      || !pollingState.isActive
-      || !pollingState.isVisible
-      || document.visibilityState !== "visible"
-    ) return;
-    let cancelled = false;
-    let refreshInFlight = false;
-    const controller = new AbortController();
-    const refreshThread = () => {
-      if (cancelled || refreshInFlight) return;
-      refreshInFlight = true;
-      void openTicket(activeTicket, false, false, controller.signal).finally(() => {
-        refreshInFlight = false;
-      });
-    };
-    const timer = window.setInterval(refreshThread, 15_000);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      window.clearInterval(timer);
-    };
-  }, [activeTicket?.id, activeTicket?.status, pollingState.isActive, pollingState.isVisible]);
   return (
     <DeskLocalized>
     <div className="account-screen">
@@ -338,150 +197,17 @@ export function HelpWorkspace({
       <GradientPanel className="flow-card">
         <span className="eyebrow">SUPPORT</span>
         <h2>Need help with something else?</h2>
-        <p>
-          Open a tracked request for account, bot, deposit, or withdrawal help.
-        </p>
-        {tickets.length > 0 && (
-          <div className="support-ticket-list">
-            {tickets.slice(0, 5).map((ticket) => (
-              <button className="activity-row support-ticket-row" type="button" key={ticket.id} onClick={() => void openTicket(ticket)} disabled={ticketOpeningIds.has(ticket.id)} aria-busy={ticketOpeningIds.has(ticket.id)}>
-                <div className="activity-info">
-                  <strong>TP-{ticket.id} · {ticket.topic || "General"}</strong>
-                  <small>{ticket.status.replace("_", " ")} · {ticket.message_count || 1} message{(ticket.message_count || 1) === 1 ? "" : "s"}</small>
-                </div>
-                <ChevronRight />
-              </button>
-            ))}
-          </div>
-        )}
-        <label className="amount-field" htmlFor={`${fieldId}-support`}>Support request details</label>
-        <textarea
-          id={`${fieldId}-support`}
-          value={supportMessage}
-          onChange={(event) => setSupportMessage(event.target.value)}
-          aria-label="Support request details"
-          placeholder="Describe the issue without sharing a security code or private key."
-          maxLength={1500}
-          rows={3}
-        />
-        <button
-          className="primary-action"
-          disabled={supportMessage.trim().length < 10 || ticketCreatePending}
-          onClick={async () => {
-            if (ticketCreatePendingRef.current) return;
-            ticketCreatePendingRef.current = true;
-            setTicketCreatePending(true);
-            const message = supportMessage.trim();
-            try {
-              const result = await request("/v1/support/tickets", {
-                method: "POST",
-                body: JSON.stringify({
-                  topic: "Web help center",
-                  message,
-                }),
-              });
-              const ticketId = String(result?.ticket_id ?? "");
-              if (!/^[1-9]\d*$/.test(ticketId)) {
-                throw new Error("The request may have been created, but its ticket number could not be confirmed. Refresh support tickets before retrying.");
-              }
-              const ticket = { id: ticketId, topic: "Web help center", status: "open" };
-              const firstMessage: SupportMessage = {
-                id: -Date.now(),
-                author_role: "user",
-                body: message,
-                created_at: Math.floor(Date.now() / 1000),
-              };
-              setSupportMessage("");
-              selectedTicketIdRef.current = ticket.id;
-              ticketThreadRequestRef.current += 1;
-              setActiveTicket(ticket);
-              setTicketMessages([firstMessage]);
-              setTicketReply("");
-              ticketListRequestRef.current += 1;
-              setTickets((current) => [
-                { ...ticket, body: message, message_count: 1 },
-                ...current.filter((item) => item.id !== ticket.id),
-              ]);
-              onNotice(`Support ticket #${result.ticket_id} opened.`);
-              void loadTickets().catch((error) => logDeskFailure("support.ticket-list", error));
-              void openTicket(ticket, false, false);
-            } catch (error) {
-              logDeskFailure("support.ticket-create", error);
-              void loadTickets().catch((refreshError) => logDeskFailure("support.ticket-list", refreshError));
-            } finally {
-              ticketCreatePendingRef.current = false;
-              setTicketCreatePending(false);
-            }
-          }}
+        <p>Need a hand with your account, bots, deposits, or anything else? Message us directly on Telegram.</p>
+        <a
+          className="primary-action support-contact-link"
+          href="https://t.me/thetessaractadmin"
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          {ticketCreatePending ? "Opening…" : "Open support ticket"} <Send />
-        </button>
+          Message @thetessaractadmin on Telegram <StateIcon name="arrow-up-right" />
+        </a>
+        <small className="support-contact-safety">Never share passwords, login codes, recovery phrases, or private keys.</small>
       </GradientPanel>
-      {activeTicket && (
-        <GradientPanel className="flow-card support-thread" aria-live="polite">
-          <div className="section-heading support-thread-heading">
-            <div className="support-thread-title">
-              <span className="eyebrow">SUPPORT THREAD</span>
-              <h2>TP-{activeTicket.id} · {activeTicket.topic || "General"}</h2>
-            </div>
-            <div className="support-thread-meta">
-              <span className={`status-chip ${activeTicket.status === "closed" ? "paused" : "running"}`}>{activeTicket.status === "closed" ? "Closed" : "Open"}</span>
-              <button type="button" className="small-action" onClick={() => {
-                selectedTicketIdRef.current = null;
-                ticketThreadRequestRef.current += 1;
-                setActiveTicket(null);
-                setTicketMessages([]);
-              }}>Hide thread</button>
-            </div>
-          </div>
-          <div className="support-thread-messages" aria-label={`Messages for support ticket ${activeTicket.id}`}>
-            {ticketMessages.map((message) => (
-              <div className={`support-message ${message.author_role}`} key={message.id}>
-                <strong>{message.author_role === "admin" ? "TradeMemo support" : "You"}</strong>
-                <p>{message.body}</p>
-              </div>
-            ))}
-          </div>
-          {activeTicket.status === "closed" ? (
-            <p>This request is closed. Open a new request if you need further help.</p>
-          ) : (
-            <>
-              <label className="amount-field" htmlFor={`${fieldId}-reply`}>Reply to support</label>
-              <textarea id={`${fieldId}-reply`} value={ticketReply} onChange={(event) => setTicketReply(event.target.value)} placeholder="Add details without sharing a security code or private key." maxLength={1500} rows={4} />
-              <button className="primary-action" disabled={ticketReply.trim().length < 2 || ticketReplyPendingIds.has(activeTicket.id)} onClick={async () => {
-                const ticket = activeTicket;
-                const message = ticketReply.trim();
-                if (!beginTicketReply(ticket.id)) return;
-                try {
-                  await request(`/v1/support/tickets/${ticket.id}/messages`, { method: "POST", body: JSON.stringify({ message }) });
-                  ticketThreadRequestRef.current += 1;
-                  const reply: SupportMessage = {
-                    id: -Date.now(),
-                    author_role: "user",
-                    body: message,
-                    created_at: Math.floor(Date.now() / 1000),
-                  };
-                  if (selectedTicketIdRef.current === ticket.id) {
-                    setTicketMessages((current) => [...current, reply]);
-                    setTicketReply("");
-                  }
-                  ticketListRequestRef.current += 1;
-                  setTickets((current) => current.map((item) => item.id === ticket.id
-                    ? { ...item, message_count: (item.message_count || 1) + 1 }
-                    : item));
-                  onNotice("Reply sent to support.");
-                  void loadTickets().catch((error) => logDeskFailure("support.ticket-list", error));
-                  void openTicket(ticket, false, false);
-                } catch (error) {
-                  logDeskFailure("support.ticket-reply", error);
-                  void loadTickets().catch((refreshError) => logDeskFailure("support.ticket-list", refreshError));
-                  void openTicket(ticket, false, false);
-                } finally { endTicketReply(ticket.id); }
-              }}>{ticketReplyPendingIds.has(activeTicket.id) ? "Sending…" : "Send reply"} <Send /></button>
-            </>
-          )}
-        </GradientPanel>
-      )}
     </div>
     </DeskLocalized>
   );
