@@ -7235,17 +7235,7 @@ function LiveTradePulse() {
       || !isDocumentVisible
       || document.visibilityState !== "visible"
     ) return;
-    const active = [
-      ...new Set(
-        data.bots
-          .filter(
-            (bot) =>
-              bot.product === "memecoin" &&
-              ["running", "paused"].includes(bot.state),
-          )
-          .map((bot) => bot.product),
-      ),
-    ];
+    const chartProducts = ["memecoin"] as const;
     let cancelled = false;
     let inFlight = false;
     const controller = new AbortController();
@@ -7253,7 +7243,7 @@ function LiveTradePulse() {
       if (cancelled || inFlight) return;
       inFlight = true;
       const chartRequests: Array<Promise<{ product: string; value: any } | { product: string; error: string } | null>> = [
-        ...active.map((product) =>
+        ...chartProducts.map((product) =>
           request(`/v1/charts/${product}`, { signal: controller.signal })
             .then((value) => {
               const points = Array.isArray(value.points) ? value.points : [];
