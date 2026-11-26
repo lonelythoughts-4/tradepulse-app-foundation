@@ -18,7 +18,7 @@ import { ChevronRight, ProductPnlSummary, type ProductPnlSummaryData } from "./s
 export const SYNTHETIC_MARKETS = ["SYN-10", "SYN-25", "SYN-50", "SYN-75", "SYN-100"] as const;
 type Market = (typeof SYNTHETIC_MARKETS)[number];
 type Signal = { id: string; market: string; direction: string; reference_price: number; expires_at: number };
-type Snapshot = { market: string; partial?: boolean; history_available?: boolean; history_stale?: boolean; positions_stale?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; execution?: { auto_allocation_usd?: number; auto_available_usd?: number; auto_locked_usd?: number; manual_available_usd?: number; auto_margin_usd?: number; capacity_refresh_required?: boolean; daily_outcome?: "win" | "loss" | null; daily_goal_percent?: number | null; daily_goal_usd?: number | null; daily_settled_net_pnl_usd?: number; daily_open_net_pnl_usd?: number; daily_net_pnl_usd?: number; daily_loss_target_usd?: number | null; daily_loss_target_reached?: boolean; daily_goal_reached?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number } };
+type Snapshot = { market: string; partial?: boolean; history_available?: boolean; history_stale?: boolean; positions_stale?: boolean; positions_available?: boolean; latest: { market?: string; price?: number; reference?: number; sequence?: number; timestamp?: number; created_at?: number }; ticks: Array<{ market?: string; sequence?: number; price?: number; reference?: number; timestamp?: number; created_at?: number }>; positions: Array<{ id: string; market: string; direction: string; margin_usd: number; status: string; clearing_type?: string; spread_charged_usd?: number; tier_fee_usd?: number; user_net_unrealized_pnl_usd?: number; signal_id?: string; contract_type?: string; contract_expires_at?: number; maximum_loss_percent?: number; manual_stop_loss_percent?: number; contract_reason?: string }>; execution?: { auto_allocation_usd?: number | null; auto_available_usd?: number | null; auto_locked_usd?: number | null; manual_available_usd?: number | null; auto_margin_usd?: number | null; capacity_refresh_required?: boolean; daily_outcome?: "win" | "loss" | null; daily_goal_percent?: number | null; daily_goal_usd?: number | null; daily_settled_net_pnl_usd?: number; daily_open_net_pnl_usd?: number; daily_net_pnl_usd?: number; daily_loss_target_usd?: number | null; daily_loss_target_reached?: boolean; daily_goal_reached?: boolean }; auto_activity?: Array<{ timestamp: number; event_type: string; reason?: string; market?: string }>; settings?: Record<string, string>; allocation?: { available_usd: number; manual_available_usd?: number | null } };
 type SyntheticQuote = { market: string; latest: Snapshot["latest"]; ticks: Snapshot["ticks"]; history_available?: boolean; history_stale?: boolean; received_at: number; server_updated_at: number };
 type SyntheticSnapshots = Record<string, Snapshot | undefined>;
 type SyntheticQuotes = Record<string, SyntheticQuote | undefined>;
@@ -27,7 +27,7 @@ type Request = (path: string, options?: RequestInit, environment?: "mainnet" | "
 export type SyntheticWorkspaceProps = { account: Account; environment: "mainnet" | "testnet"; marketChart: ComponentType<{ points: Array<{ market?: string; sequence?: number; price: number; timestamp?: number }>; market: string }>; onDashboardPatch: (patch: (current: LiveDashboard | null) => LiveDashboard | null) => void; onNotice: (message: string) => void; onPickStrategy: () => void; request: Request; store: DeskStore };
 const money = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0));
 const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${money(Math.abs(value))}`;
-const capacityValue = (value: number | undefined, pending: boolean, fallback?: number) => {
+const capacityValue = (value: number | null | undefined, pending: boolean, fallback?: number) => {
   if (pending) return "Checking";
   const amount = typeof value === "number" && Number.isFinite(value) ? value : fallback;
   return typeof amount === "number" && Number.isFinite(amount) ? money(amount) : "Unavailable";
@@ -196,6 +196,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const snapshot = storedSnapshot?.market === market ? storedSnapshot : fallbackSnapshot;
   const snapshotPositionCount = snapshot.positions.length;
   const [snapshotCheckedKey, setSnapshotCheckedKey] = useState<string | null>(null);
+  const [snapshotRefreshFailed, setSnapshotRefreshFailed] = useState(false);
   const [hasStartedTradeThisSession, setHasStartedTradeThisSession] = useState(false);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [quoteError, setQuoteError] = useState(false);
@@ -242,7 +243,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
     else delete updatedSnapshots[resourceKey];
     store.applyResource("syntheticSnapshots", updatedSnapshots);
   }, [fallbackSnapshot, resourceKey, store]);
-  useEffect(() => { setQuoteError(false); }, [environment, market]);
+  useEffect(() => {
+    setQuoteError(false);
+    setSnapshotRefreshFailed(false);
+  }, [environment, market]);
   useResourcePoller<Snapshot>(async (_token, signal) => {
     try {
       return await request("/v1/synthetic/" + market + "?view=trading", { signal }, environment) as Snapshot;
@@ -251,14 +255,17 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       if (signal.aborted) throw error;
       logDeskFailure("synthetic.snapshot", error);
       if (marketRef.current === market) {
-        setSnapshotCheckedKey(resourceKey);
+        setSnapshotRefreshFailed(true);
       }
       return undefined;
     }
   }, (next) => {
     if (next.market !== marketRef.current) return;
     setSnapshotCheckedKey(resourceKey);
-    update(next);
+    setSnapshotRefreshFailed(false);
+    update((current) => next.positions_available === false && current?.market === market
+      ? { ...next, positions: current.positions }
+      : next);
   }, 5000, true, `synthetic:${environment}:${market}`, (error) => logDeskFailure("synthetic.snapshot", error), "Synthetic");
   useResourcePoller<Signal[]>(async (_token, signal) => {
     const result = await request("/v1/synthetic/signals?market=" + market + "&limit=10", { signal });
@@ -353,7 +360,10 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
   const syntheticClosing = syntheticBot?.state === "closing";
   const executionStatus = syntheticBot?.state === "paused" ? "Paused" : syntheticClosing ? "Closing allocation" : syntheticAutoOn ? "Auto on" : "Waiting for funding";
   const executionLabel = syntheticBot?.state === "paused" ? "PAUSED" : syntheticClosing ? "CLOSING" : syntheticAutoOn ? "AUTO" : "WAITING";
-  const snapshotPending = snapshot.partial === true && snapshotCheckedKey !== resourceKey;
+  const snapshotPending = (snapshot.partial === true && snapshotCheckedKey !== resourceKey)
+    || snapshotRefreshFailed
+    || snapshot.positions_available === false
+    || snapshot.positions_stale === true;
   const hasTradeHistory = account.ledger.some((entry) => Boolean(entry.trade_detail))
     || Boolean(account.memecoin?.recent_settlements?.length)
     || Boolean(account.synthetic?.recent_settlements?.length)
@@ -400,7 +410,7 @@ export function SyntheticWorkspace({ account, environment, marketChart: MarketCh
       </> : account.user.is_admin ? <div className="button-row"><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "long", amount: 20 }).catch(() => undefined)}>Open $20 long</button><button className="small-action" onClick={() => void act("/v1/synthetic/actions", { action: "open", market, direction: "short", amount: 20 }).catch(() => undefined)}>Open $20 short</button><button className="danger-action" onClick={() => void act("/v1/synthetic/actions", { action: "reset" }).catch(() => undefined)}>Reset virtual balance</button></div> : <p>Testnet is reserved for administrator testing. Switch to mainnet for live synthetic access.</p>}
       <SyntheticPositionList positions={snapshot.positions} pending={snapshotPending || snapshot.positions_stale === true} pendingFor={pendingFor} onClose={(positionId) => void act("/v1/synthetic/positions/" + positionId + "/close", {}).catch(() => undefined)} />
       <SyntheticSettlementList settlements={account.synthetic?.recent_settlements || []} />
-      {account.user.is_admin && snapshot.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable. Open and close requests are checked against the current server state.</p>}
+      {snapshot.positions_available === false && <p role="status">Position data is unavailable. The list may be incomplete; the Synthetic allocation remains protected until current positions are confirmed.</p>}
     </div>
   </div>
   {helpOpen && <AccessibleDialog label="How Synthetic quotes work" onClose={() => setHelpOpen(false)}><span className="eyebrow">SYNTHETIC QUOTES</span><h2>How quotes work</h2><p>Each index uses TradeMemo’s shared model feed. The displayed reference updates about once a second; it is not an external spot-market price.</p><div className="fact-block"><span>ORDER PRICE <b>Checked again at execution</b></span><span>SPREAD <b>Shown before review</b></span><span>TIER FEE <b>Applied at execution</b></span></div><p>A stale or unavailable quote prevents a new order. Existing positions remain unchanged until a valid close can be priced.</p><button type="button" className="primary-action" onClick={() => setHelpOpen(false)}>Back to market</button></AccessibleDialog>}

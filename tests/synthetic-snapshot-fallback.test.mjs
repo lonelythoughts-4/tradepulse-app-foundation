@@ -25,8 +25,11 @@ test("a delayed account snapshot keeps its last verified value and logs refresh 
   assert.match(source, /logDeskFailure\("synthetic\.snapshot", error\);[\s\S]*?return undefined;/);
   assert.match(source, /useResourcePoller<Snapshot>/);
   assert.match(source, /const snapshot = storedSnapshot\?\.market === market \? storedSnapshot : fallbackSnapshot;/);
-  assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotCheckedKey\(resourceKey\);/);
-  assert.match(source, /const capacityValue = \(value: number \| undefined, pending: boolean, fallback\?: number\)/);
+  assert.match(source, /if \(marketRef\.current === market\) \{\s+setSnapshotRefreshFailed\(true\);/);
+  assert.match(source, /snapshot\.positions_available === false/);
+  assert.match(source, /next\.positions_available === false && current\?\.market === market/);
+  assert.match(source, /The list may be incomplete; the Synthetic allocation remains protected until current positions are confirmed/);
+  assert.match(source, /const capacityValue = \(value: number \| null \| undefined, pending: boolean, fallback\?: number\)/);
   assert.doesNotMatch(source, /snapshot\.partial \? "Unavailable"/);
   assert.match(source, /syntheticResourceKey\(environment, market\)/);
   assert.doesNotMatch(source, /execution-mode|MANUAL|Enable Auto|Turn Auto off/);
@@ -97,7 +100,12 @@ test("the chart retains same-market cached ticks and rejects a late market respo
   assert.match(source, /latest\?\.market && latest\.market !== market/);
   assert.match(source, /Chart history is delayed\. The latest available quote is shown\./);
   assert.match(source, /Chart history is delayed\. Showing the last verified ticks and current quote\./);
-  assert.match(source, /account\.user\.is_admin && snapshot\.positions_stale && <p role="status">Position data is delayed; recent positions may be stale or unavailable\./);
+  assert.match(source, /snapshot\.positions_available === false && <p role="status">Position data is unavailable\./);
+});
+
+test("bot close errors preserve safe backend guidance", () => {
+  assert.match(botsSource, /const closeError = error instanceof DeskApiError \? error\.responseMessage\.trim\(\) : "";/);
+  assert.match(botsSource, /closeError \|\| "Close status is not confirmed yet\. Your allocation remains protected/);
 });
 
 test("a partial Memecoin refresh merges cached owner-scoped positions", () => {

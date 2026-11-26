@@ -610,9 +610,10 @@ export function BotsWorkspace({
           }));
         }
       }
+      const closeError = error instanceof DeskApiError ? error.responseMessage.trim() : "";
       setReviewError(
         payload.action === "close"
-          ? "Close status is not confirmed yet. Refresh the bot state before retrying."
+          ? closeError || "Close status is not confirmed yet. Your allocation remains protected until the bot state is verified."
           : "",
       );
       void reload().catch((reloadError) => logDeskFailure("bots.dashboard-reconcile", reloadError));
