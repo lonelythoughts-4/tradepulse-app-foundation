@@ -59,7 +59,7 @@ test("a dashboard outage does not send an existing browser session to sign-in", 
   assert.ok(dashboardRequest >= 0);
   assert.ok(catchStart >= 0);
   assert.match(load, /request\("\/v1\/dashboard", \{\}, targetEnvironment, DASHBOARD_REQUEST_TIMEOUT_MS\)/);
-  assert.match(loadCatch, /if \(checkingSession && !dashboardAuthenticationRejectedRef\.current\) \{[\s\S]*?The desk is temporarily unavailable\./);
+  assert.match(loadCatch, /if \(checkingSession && !dashboardAuthenticationRejectedRef\.current\) \{[\s\S]*?The desk (?:is temporarily busy|is taking longer than expected|could not connect)\./);
   assert.match(shellSource, /status=\{notice \|\| "Opening your desk…"\}/);
   assert.match(shellSource, /onRetry=\{notice \? \(\) => \{ void load\(\); \} : undefined\}/);
   assert.doesNotMatch(loadCatch, /setSessionHandoffRequired\(true\)/);
