@@ -33,13 +33,13 @@ test("Wallet activity refreshes the dashboard ledger while Wallet is active", ()
   assert.match(activityView, /View settlement.*View event/);
 });
 
-test("Dashboard polls the full account projection every thirty seconds", () => {
+test("Dashboard polls the full account projection every seven seconds", () => {
   const pollerStart = dashboardSource.indexOf("useResourcePoller(");
   const pollerEnd = dashboardSource.indexOf("\n  );", pollerStart);
   assert.notEqual(pollerStart, -1);
   assert.notEqual(pollerEnd, -1);
 
   const pollerCall = dashboardSource.slice(pollerStart, pollerEnd);
-  assert.match(pollerCall, /,\s*30_000,\s*true,/);
+  assert.match(pollerCall, /,\s*7_000,\s*true,/);
   assert.match(pollerCall, /"Dashboard"/);
 });
