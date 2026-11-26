@@ -50,6 +50,7 @@ import {
   shouldRetryDashboardRead,
 } from "../lib/desk-api";
 import {
+  hasDashboardSnapshot,
   readDashboardSnapshot,
   readSessionCacheScope,
   removeDashboardSnapshot,
@@ -7213,7 +7214,7 @@ function LiveTradePulse() {
               requestId: reference || requestId,
           });
           if (response.status === 401) {
-            if (path === "/v1/dashboard") {
+            if (path === "/v1/dashboard" || path === "/v1/auth/miniapp/verify") {
               dashboardAuthenticationRejectedRef.current = true;
               updateDashboard(null);
               setTelegramIdentityPending(false);
@@ -7282,6 +7283,55 @@ function LiveTradePulse() {
         return false;
       }
       setTelegramIdentityPending(false);
+      if (checkingSession && telegramContext && telegramInitData()) {
+        let candidateScope: string | null = null;
+        let hasCandidateSnapshot = false;
+        try {
+          candidateScope = currentDashboardSnapshotScope();
+          hasCandidateSnapshot = Boolean(
+            candidateScope && hasDashboardSnapshot(window.localStorage, candidateScope),
+          );
+        } catch {
+          // Local snapshot storage is optional; signed API bootstrap remains authoritative.
+        }
+        if (candidateScope && hasCandidateSnapshot) {
+          const verified = await request(
+            "/v1/auth/miniapp/verify",
+            {},
+            targetEnvironment,
+            DASHBOARD_REQUEST_TIMEOUT_MS,
+          );
+          const verifiedUserId = Number(verified.user_id);
+          if (!Number.isSafeInteger(verifiedUserId) || verifiedUserId <= 0) {
+            throw new TypeError("Telegram session verification returned an invalid account.");
+          }
+          const snapshotScope = currentDashboardSnapshotScope();
+          let snapshot: DashboardSnapshot | null = null;
+          try {
+            snapshot = readDashboardSnapshot(window.localStorage, candidateScope);
+          } catch {
+            // Local snapshot storage is optional; signed API bootstrap remains authoritative.
+          }
+          activeDashboardSnapshotScopeRef.current = snapshotScope;
+          authenticatedUserRef.current = verifiedUserId;
+          if (snapshot && snapshot.user.id === verifiedUserId && snapshot.environment === "mainnet") {
+            const cachedDashboard = dashboardFromSnapshot(snapshot);
+            optimisticSnapshotHydratedRef.current = true;
+            languageRef.current = cachedDashboard.user.language_code || "en";
+            persistedLanguageRef.current = languageRef.current;
+            setUiLanguage(languageRef.current);
+            updateDashboard(cachedDashboard);
+            setLoading(false);
+            setSessionBootstrapComplete(true);
+          } else {
+            try {
+              removeDashboardSnapshot(window.localStorage, candidateScope);
+            } catch {
+              // The mismatched snapshot will not be rendered or reused here.
+            }
+          }
+        }
+      }
       // Bound automatic retries so a transient API failure cannot strand
       // first-time visitors on the full-screen loader.
       let next: Record<string, any> | null = null;

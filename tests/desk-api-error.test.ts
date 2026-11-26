@@ -170,10 +170,12 @@ test("dashboard retries are bounded, expose manual recovery, and preserve the 40
   );
 
   assert.match(shell, /if \(response\.status === 401\) \{/);
+  assert.match(shell, /path === "\/v1\/dashboard" \|\| path === "\/v1\/auth\/miniapp\/verify"/);
   assert.match(shell, /setSessionHandoffRequired\(true\)/);
   assert.match(shell, /if \(!shouldRetryDashboardRead\(error, retryCount\)\) throw error;/);
   assert.match(shell, /DASHBOARD_REQUEST_TIMEOUT_MS/);
   assert.match(shell, /onRetry=\{notice \? \(\) => \{ void load\(\); \} : undefined\}/);
+  assert.match(shell, /request\(\s*"\/v1\/auth\/miniapp\/verify"[\s\S]*?snapshot\.user\.id === verifiedUserId/);
   assert.match(loading, /Retry connection/);
 });
 
@@ -183,7 +185,7 @@ test("saved browser dashboards hydrate before background auth and never bypass T
     "utf8",
   );
   const cacheHydration = shell.indexOf("const snapshot = readDashboardSnapshot(window.localStorage, scope)");
-  const dashboardLoad = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, 15_000)');
+  const dashboardLoad = shell.indexOf('request("/v1/dashboard", {}, targetEnvironment, DASHBOARD_REQUEST_TIMEOUT_MS)');
 
   assert.ok(cacheHydration >= 0);
   assert.ok(dashboardLoad > cacheHydration);

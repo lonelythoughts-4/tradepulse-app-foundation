@@ -150,6 +150,10 @@ export function dashboardSnapshotStorageKey(scope: string): string {
   return `tradepulse.dashboard-snapshot:v${DASHBOARD_SNAPSHOT_VERSION}:${scope}`;
 }
 
+export function hasDashboardSnapshot(storage: StorageLike, scope: string): boolean {
+  return storage.getItem(dashboardSnapshotStorageKey(scope)) !== null;
+}
+
 export function readSessionCacheScope(cookieHeader: string): string | null {
   const prefix = `${SESSION_CACHE_COOKIE}=`;
   const value = cookieHeader

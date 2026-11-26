@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   dashboardSnapshotStorageKey,
+  hasDashboardSnapshot,
   readDashboardSnapshot,
   readSessionCacheScope,
   removeDashboardSnapshot,
@@ -76,7 +77,9 @@ test("dashboard snapshots are read only under their active session scope", () =>
   const otherScope = "b".repeat(64);
   writeDashboardSnapshot(storage, scope, dashboard, 10_000);
 
+  assert.equal(hasDashboardSnapshot(storage, scope), true);
   assert.deepEqual(readDashboardSnapshot(storage, scope, 11_000), dashboard);
+  assert.equal(hasDashboardSnapshot(storage, otherScope), false);
   assert.equal(readDashboardSnapshot(storage, otherScope, 11_000), null);
   assert.notEqual(dashboardSnapshotStorageKey(scope), dashboardSnapshotStorageKey(otherScope));
 });
