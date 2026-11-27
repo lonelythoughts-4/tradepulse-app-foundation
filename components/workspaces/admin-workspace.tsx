@@ -61,7 +61,13 @@ function autouserScheduleLabel(item: AutouserScheduleItem) {
 
 export type AdminOverview = {
   environment: string;
-  members: Array<{ user_id: number; first_name?: string; username?: string }>;
+  members: Array<{
+    user_id: number;
+    first_name?: string;
+    username?: string;
+    new_user_alerts_enabled?: number | boolean;
+    new_user_alerts_mute_reason?: string;
+  }>;
   engine: Array<{
     event_key: string;
     bot_name: string;
@@ -2486,12 +2492,37 @@ export function AdminWorkspace({
         <GradientPanel className="admin-table">
           <span className="eyebrow">ADMIN MEMBERS</span>
           <h2>Current access</h2>
+          <p>New-user alerts are muted automatically if Telegram reports that an admin blocked the bot. This does not change admin access.</p>
           {admin.members.map((member) => (
-            <div className="admin-row" key={member.user_id}>
-              <strong>{member.first_name || "Telegram user"}</strong>
-              <small className="mono">
-                {member.username ? `@${member.username}` : member.user_id}
-              </small>
+            <div className="admin-row admin-member-row" key={member.user_id}>
+              <div>
+                <strong>{member.first_name || "Telegram user"}</strong>
+                <small className="mono">
+                  {member.username ? `@${member.username}` : member.user_id}
+                  {" · New-user alerts "}
+                  {member.new_user_alerts_enabled === false || member.new_user_alerts_enabled === 0 ? "muted" : "on"}
+                </small>
+              </div>
+              <button
+                className="small-action"
+                disabled={isAdminActionPending(`admin:member:${member.user_id}:new-user-alerts`)}
+                aria-busy={isAdminActionPending(`admin:member:${member.user_id}:new-user-alerts`)}
+                onClick={() => {
+                  const enabled = member.new_user_alerts_enabled === false || member.new_user_alerts_enabled === 0;
+                  void post(
+                    `/v1/admin/members/${member.user_id}/new-user-alerts`,
+                    { enabled },
+                    enabled ? "New-user alerts enabled." : "New-user alerts muted.",
+                    `admin:member:${member.user_id}:new-user-alerts`,
+                  );
+                }}
+              >
+                {isAdminActionPending(`admin:member:${member.user_id}:new-user-alerts`)
+                  ? "Saving…"
+                  : member.new_user_alerts_enabled === false || member.new_user_alerts_enabled === 0
+                    ? "Enable alerts"
+                    : "Mute alerts"}
+              </button>
             </div>
           ))}
           <input

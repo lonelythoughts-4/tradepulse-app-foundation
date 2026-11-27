@@ -1087,3 +1087,4 @@ html[data-theme="light"] .synthetic-demo-panel .status-chip.running{color:var(--
 @media(max-width:520px){.admin-table .withdrawal-review-row{grid-template-columns:minmax(0,1fr)}.admin-table .withdrawal-review-actions{grid-column:1;justify-content:flex-start}.admin-table .withdrawal-review-actions .small-action{flex:1 1 100px;min-height:40px;white-space:normal}}
 .bot-detail .detail-actions .bot-close-action{grid-column:1/-1;justify-self:center;width:min(100%,260px)}
 .bot-detail .detail-actions .bot-topup-available{grid-column:1/-1}
+@media(max-width:520px){.admin-member-row{flex-wrap:wrap}.admin-member-row>div{flex:1 1 160px}.admin-member-row>.small-action{flex:0 0 auto;min-height:38px;white-space:normal}}
