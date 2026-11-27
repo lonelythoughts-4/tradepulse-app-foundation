@@ -201,7 +201,7 @@ export function HelpWorkspace({
         <p>Need a hand with your account, bots, deposits, or anything else? Message us directly on Telegram.</p>
         <a
           className="primary-action support-contact-link"
-          href="https://t.me/thetessaractadmin"
+          href="https://t.me/helpdeskmemo"
           target="_blank"
           rel="noopener noreferrer"
         >

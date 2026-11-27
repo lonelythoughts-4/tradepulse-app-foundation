@@ -14,7 +14,7 @@ const styles = fs.readFileSync(path.join(root, "app", "globals.css"), "utf8");
 
 test("Help directs general support questions to the administrator on Telegram", () => {
   assert.match(help, /import \{[\s\S]*?\bSend\b[\s\S]*?\} from "\.\/shared-ui"/);
-  assert.match(help, /href="https:\/\/t\.me\/thetessaractadmin"/);
+  assert.match(help, /href="https:\/\/t\.me\/helpdeskmemo"/);
   assert.match(help, /target="_blank"[\s\S]*?rel="noopener noreferrer"/);
   assert.match(help, /Message us on Telegram/);
   assert.match(help, /className="flow-card support-contact-panel"/);
