@@ -1,0 +1,7 @@
+{
+  "name": "tradepulse-app-foundation",
+  "compatibility_date": "2026-11-27",
+  "assets": {
+    "directory": "./dist"
+  }
+}
