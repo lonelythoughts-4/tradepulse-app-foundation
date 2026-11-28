@@ -107,6 +107,12 @@ export type AdminOverview = {
     chain: string;
     status: string;
   }>;
+  deposit_detections?: Array<{
+    id: string;
+    asset: string;
+    chain: string;
+    status: string;
+  }>;
   chains: Array<{ id: string; name: string; watcher_ready: boolean }>;
   autousers: {
     totals: { total_events?: number; scheduled_events?: number; completed_events?: number; blocked_events?: number; credited_usd?: number; total_actions?: number; scheduled_actions?: number; completed_actions?: number; blocked_actions?: number; completed_flashback_actions?: number; failed_imports?: number };
@@ -1868,6 +1874,27 @@ export function AdminWorkspace({
             ))
           ) : (
             <p>No queued deposits.</p>
+          )}
+        </GradientPanel>
+        <GradientPanel className="admin-table">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">DETECTED BELOW MINIMUM</span>
+              <h2>Awaiting customer remainder</h2>
+            </div>
+            <span className="mono">{admin.deposit_detections?.length ?? 0} ROWS</span>
+          </div>
+          {admin.deposit_detections?.length ? (
+            admin.deposit_detections.map((row) => (
+              <div className="admin-row" key={row.id}>
+                <div>
+                  <strong>{row.asset} / {row.chain}</strong>
+                  <small className="mono">{row.id.slice(0, 8)} / awaiting remainder</small>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p>No below-minimum deposits detected.</p>
           )}
         </GradientPanel>
         <GradientPanel className="admin-table">
